@@ -14,7 +14,7 @@ The wavelet codec in GPR is not new, but has been a SMPTE® standard under the n
 
 Following file types are discussed in this document:
 
-* `RAW or CFA RAW` - The Bayer RAW format is typically composed of 50% green, 25% red and 25% blue samples captured from sensor, e.g. RGGB and GBRG. The RAW image doesn't directly carry metadata about image development e.g. exposure, white balance or noise etc, thus cannot easily be turned into a well developed image.
+* `RAW or CFA RAW` - The Bayer RAW format is typically composed of 50% green, 25% red and 25% blue samples captured from sensor, e.g. RGGB and GBRG. The RAW image doesn't carry metadata about image development e.g. exposure, white balance or noise etc, thus cannot easily be turned into a well developed image.
 
 * `DNG` - Widely regarded as a defacto standard, a DNG file can be opened natively on most operating systems and image development tools. As mentioned earlier, DNG stores compressed or uncompressed RAW sensor data along with accompanying metadata that is needed to properly develop image.
 
@@ -169,15 +169,15 @@ The `app` folder is made up of following folders:
 
 Here are some important compile time definitions:
 
-* ```GPR_TIMING``` enables timing code that prints out time spent (in milliseconds) in different functions. In production builds, applications should define  ```TIMING=0```. Set to a higher value to output greater timing information.
+* `GPR_TIMING` enables timing code that prints out time spent (in milliseconds) in different functions. In production builds, applications should define  `GPR_TIMING=0`. Set to a higher value to output greater timing information.
 
-* ```GPR_WRITING``` enables all code that writes GPR files. If application does not need to write GPR, set ```GPR_WRITING=0``` to reduce code size.
+* `GPR_WRITING` enables all code that writes GPR files. If application does not need to write GPR, set `GPR_WRITING=0` to reduce code size.
 
-* ```GPR_READING``` enables all code that reads GPR files. If application does not need to read GPR, set ```GPR_READING=0``` to reduce code size.
+* `GPR_READING` enables all code that reads GPR files. If application does not need to read GPR, set `GPR_READING=0` to reduce code size.
 
-* ```GPR_JPEG_AVAILABLE``` enables lightweight jpeg encoder located in `source/lib/tiny_jpeg`. This is used to write a small thumbnail inside GPR file. If ```GPR_JPEG_AVAILABLE=0```, thumnail is not written, although you can still set pre-encoded jpeg file as thumbnail, by using -P, -W and -H command line options in `gpr_tools`.
+* `GPR_JPEG_AVAILABLE` enables lightweight jpeg encoder located in `source/lib/tiny_jpeg`. This is used to write a small thumbnail inside GPR file. If `GPR_JPEG_AVAILABLE=0`, thumbnail is not written, although you can still set pre-encoded jpeg file as thumbnail, by using -P, -W and -H command line options in `gpr_tools`.
 
-* ```NEON``` enables arm neon intrinsics (disabled by default). This can be enabled from CMake by ```-DNEON=1``` switch.
+* `NEON` enables arm neon intrinsics (disabled by default). This can be enabled from CMake by `-DNEON=1` switch.
 
 ### GPR-SDK API
 
