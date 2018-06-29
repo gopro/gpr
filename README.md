@@ -75,6 +75,12 @@ $ cmake ../
 
 For Xcode, use command line switch `-G Xcode`. On Windows, CMake should automatically figure out installed version of Visual Studio and generate corresponding project files.
 
+Mac build instructions, after running the above:
+```
+$ make .
+$ ./source/app/gpr_tools/gpr_tools
+```
+
 ## Using gpr_tools
 
 Some example commands are shown below:
