@@ -83,6 +83,7 @@ CODEC_ERROR PrepareCodebooks(const gpr_allocator *allocator, ENCODER_CODESET *cs
 	mags_table_size = mags_table_length * sizeof(VLE) + sizeof(MAGS_TABLE);
 	mags_table = allocator->Alloc(mags_table_size);
 	if (mags_table == NULL) {
+		allocator->Free( (void *)runs_table);
 		return CODEC_ERROR_OUTOFMEMORY;
 	}
 
@@ -92,6 +93,7 @@ CODEC_ERROR PrepareCodebooks(const gpr_allocator *allocator, ENCODER_CODESET *cs
 	error = ComputeRunLengthCodeTable(allocator,
 		old_codes, old_length, new_codes, new_length);
 	if (error != CODEC_ERROR_OKAY) {
+		allocator->Free( (void *)runs_table);
 		return error;
 	}
 
@@ -101,6 +103,7 @@ CODEC_ERROR PrepareCodebooks(const gpr_allocator *allocator, ENCODER_CODESET *cs
 
 	error = FillMagnitudeEncodingTable(cs->codebook, mags_table_entries, mags_table_length, cs->flags);
 	if (error != CODEC_ERROR_OKAY) {
+		allocator->Free( (void *)runs_table);
 		return error;
 	}
 
