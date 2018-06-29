@@ -42,6 +42,7 @@ int read_from_file(gpr_buffer* buffer, const char* file_path, gpr_malloc malloc_
     if ( buffer->buffer == NULL)
     {
         fputs ("Memory error", stderr);
+        fclose(fIN);
         return -1;
     }
     
@@ -50,6 +51,7 @@ int read_from_file(gpr_buffer* buffer, const char* file_path, gpr_malloc malloc_
     {
         free_function(buffer->buffer);
         fputs ("Reading error", stderr);
+        fclose(fIN);
         return -1;
     }
     
@@ -73,6 +75,7 @@ int write_to_file(const gpr_buffer* buffer, const char* file_path)
     if( bytes_written != buffer->size ) {
         fputs("Could not write bytes \n", stderr);
         perror("fwrite()");
+        fclose(fOUT);
         return -2;
     }
 
