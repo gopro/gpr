@@ -34,7 +34,7 @@ int read_from_file(gpr_buffer* buffer, const char* file_path, gpr_malloc malloc_
     }
     
     fseek (fIN, 0, SEEK_END);
-    buffer->size = (int32_t) ftell(fIN);
+    buffer->size = (size_t) ftell(fIN);
     rewind (fIN);
     
     buffer->buffer = malloc_function(buffer->size);
