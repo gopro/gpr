@@ -81,6 +81,12 @@ $ make .
 $ ./source/app/gpr_tools/gpr_tools
 ```
 
+Linux build instructions, after running the above:
+```
+$ make 
+$ ./source/app/gpr_tools/gpr_tools
+```
+
 ## Using gpr_tools
 
 Some example commands are shown below:
