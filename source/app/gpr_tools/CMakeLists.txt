@@ -41,11 +41,6 @@ endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/tiny_jpeg")
 # add executable
 add_executable( ${EXE_NAME} ${GPRTOOLS_SRC_FILES} ${GPRTOOLS_INC_FILES} )
 
-install(TARGETS gpr_tools
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib/static)
-
 # Linked libraries
 target_link_libraries( ${EXE_NAME} gpr_sdk )
 
