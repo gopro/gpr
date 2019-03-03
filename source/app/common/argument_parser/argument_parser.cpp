@@ -56,10 +56,9 @@ void argument_parser::set_options()
 
 int argument_parser::parse(int argc, char *argv [], const char* application_text, const char* prefix_text)
 {
-    application_path = argv[0];
     argument_count = argc;
     
-    for (int i = 0; i < argc; i++)
+    for (int i = 0; i < argument_count; i++)
         arguments[i] = argv[i];
     
     set_options();
