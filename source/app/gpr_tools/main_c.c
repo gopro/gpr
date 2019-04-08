@@ -94,7 +94,7 @@ static FILE_TYPE GetFileType( const char* file_path )
     return FILE_TYPE_UNKNOWN;
 }
 
-int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, const char* input_pixel_format,
+int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, size_t input_header_skip, const char* input_pixel_format,
                      const char*  output_file_path, const char*  metadata_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits,
                      const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height )
 {
@@ -159,7 +159,7 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
             if( input_pitch == -1 )
                 input_pitch = input_width * 2;
         }
-        if( strcmp(input_pixel_format, "rggb12p") == 0 )
+        else if( strcmp(input_pixel_format, "rggb12p") == 0 )
         {
             params.tuning_info.pixel_format = PIXEL_FORMAT_RGGB_12P;
             
@@ -189,6 +189,15 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
             if( input_pitch == -1 )
                 input_pitch = (input_width * 3 / 4) * 2;
         }
+		else if (strcmp(input_pixel_format, "gbrg14") == 0)
+		{
+			params.tuning_info.pixel_format = PIXEL_FORMAT_GBRG_14;
+
+			saturation_level = (1 << 14) - 1;
+
+			if (input_pitch == -1)
+				input_pitch = input_width * 2;
+		}
         
         params.tuning_info.dgain_saturation_level.level_red         = saturation_level;
         params.tuning_info.dgain_saturation_level.level_green_even  = saturation_level;
@@ -203,10 +212,14 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     
     gpr_buffer output_buffer = { NULL, 0 };
 
-    if( input_skip_rows > 0 )
-    {
-        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_rows * input_pitch);
-    }
+	if (input_skip_rows > 0)
+	{
+		input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_rows * input_pitch);
+	}
+	if (input_header_skip > 0)
+	{
+		input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_header_skip);
+	}
     
     gpr_buffer preview = { NULL, 0 };
 
@@ -328,12 +341,7 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     {
         write_to_file( &output_buffer, output_file_path );
     }
-    
-    if( input_skip_rows > 0 )
-    {
-		input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_rows * input_pitch);
-    }
-    
+        
     if( preview.buffer )
     {
         allocator.Free( preview.buffer );

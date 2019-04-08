@@ -872,8 +872,9 @@ CODEC_ERROR ImageRepackingProcess(const UNPACKED_IMAGE *unpacked_image,
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 14, output_format );
             break;
-            
-        case PIXEL_FORMAT_RAW_RGGB_16:
+
+		case PIXEL_FORMAT_RAW_RGGB_16:
+		case PIXEL_FORMAT_RAW_GBRG_16:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 16, output_format );
             break;

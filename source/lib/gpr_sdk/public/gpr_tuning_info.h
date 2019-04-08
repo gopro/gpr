@@ -44,13 +44,19 @@
     {
         PIXEL_FORMAT_RGGB_12 = 0,                           // RGGB 12bit pixels packed into 16bits
 
-        PIXEL_FORMAT_RGGB_12P = 1,                          // RGGB 12bit pixels packed into 12bits
-        
-        PIXEL_FORMAT_RGGB_14 = 2,                           // RGGB 14bit pixels packed into 16bits
-        
-        PIXEL_FORMAT_GBRG_12 = 3,                           // GBRG 12bit pixels packed into 16bits
-        
-        PIXEL_FORMAT_GBRG_12P = 4,                          // GBRG 12bit pixels packed into 12bits
+        PIXEL_FORMAT_RGGB_12P,                          // RGGB 12bit pixels packed into 12bits
+
+		PIXEL_FORMAT_RGGB_14,                           // RGGB 14bit pixels packed into 16bits
+
+		PIXEL_FORMAT_RGGB_16,                           // RGGB 16bit pixels packed into 16bits
+
+        PIXEL_FORMAT_GBRG_12,                           // GBRG 12bit pixels packed into 16bits
+
+		PIXEL_FORMAT_GBRG_12P,                          // GBRG 12bit pixels packed into 12bits
+
+		PIXEL_FORMAT_GBRG_14,                           // GBRG 14bit pixels packed into 16bits
+
+		PIXEL_FORMAT_GBRG_16,                           // GBRG 16bit pixels packed into 16bits
         
     } GPR_PIXEL_FORMAT;
 

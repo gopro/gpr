@@ -743,9 +743,11 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
     case PIXEL_FORMAT_RAW_RGGB_12:
     case PIXEL_FORMAT_RAW_RGGB_12P:
     case PIXEL_FORMAT_RAW_RGGB_14:
+    case PIXEL_FORMAT_RAW_RGGB_16:
     case PIXEL_FORMAT_RAW_GBRG_12:
     case PIXEL_FORMAT_RAW_GBRG_12P:
-    case PIXEL_FORMAT_RAW_RGGB_16:
+	case PIXEL_FORMAT_RAW_GBRG_14:
+	case PIXEL_FORMAT_RAW_GBRG_16:
         channel_count = 4;
         max_channel_width = input->width / 2;
         max_channel_height = input->height / 2;
@@ -766,25 +768,30 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
     // The configuration of component arrays is determined by the image format
     switch (input->format)
     {
-        case PIXEL_FORMAT_RAW_RGGB_14:
-            UnpackImage_14(input, output, enabled_parts, true );
+
+        case PIXEL_FORMAT_RAW_RGGB_12P:
+            UnpackImage_12P(input, output, enabled_parts, true );
             break;
 
         case PIXEL_FORMAT_RAW_RGGB_12:
             UnpackImage_12(input, output, enabled_parts, true );
             break;
 
-        case PIXEL_FORMAT_RAW_GBRG_12:
-            UnpackImage_12(input, output, enabled_parts, false );
-            break;
-
-        case PIXEL_FORMAT_RAW_RGGB_12P:
-            UnpackImage_12P(input, output, enabled_parts, true );
+        case PIXEL_FORMAT_RAW_RGGB_14:
+            UnpackImage_14(input, output, enabled_parts, true );
             break;
 
         case PIXEL_FORMAT_RAW_GBRG_12P:
             UnpackImage_12P(input, output, enabled_parts, false );
             break;
+
+        case PIXEL_FORMAT_RAW_GBRG_12:
+            UnpackImage_12(input, output, enabled_parts, false );
+            break;
+
+		case PIXEL_FORMAT_RAW_GBRG_14:
+			UnpackImage_14(input, output, enabled_parts, false);
+			break;
             
         default:
             assert(0);

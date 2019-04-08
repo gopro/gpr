@@ -34,13 +34,17 @@
      */
     typedef enum
     {
-        VC5_DECODER_PIXEL_FORMAT_RGGB_12 = 0,               // RGGB 14bit pixels packed into 16bits
+        VC5_DECODER_PIXEL_FORMAT_RGGB_12 = 0,           // RGGB 14bit pixels packed into 16bits
 
-        VC5_DECODER_PIXEL_FORMAT_RGGB_14 = 1,               // RGGB 14bit pixels packed into 16bits
+		VC5_DECODER_PIXEL_FORMAT_RGGB_14,               // RGGB 14bit pixels packed into 16bits
+
+		VC5_DECODER_PIXEL_FORMAT_RGGB_16,               // RGGB 16bit pixels packed into 16bits
         
-        VC5_DECODER_PIXEL_FORMAT_GBRG_12 = 2,               // GBRG 12bit pixels packed into 16bits
+        VC5_DECODER_PIXEL_FORMAT_GBRG_12,               // GBRG 12bit pixels packed into 16bits
         
-        VC5_DECODER_PIXEL_FORMAT_GBRG_14 = 3,               // GBRG 12bit pixels packed into 16bits
+		VC5_DECODER_PIXEL_FORMAT_GBRG_14,               // GBRG 14bit pixels packed into 16bits
+        
+		VC5_DECODER_PIXEL_FORMAT_GBRG_16,               // GBRG 16bit pixels packed into 16bits
         
         VC5_DECODER_PIXEL_FORMAT_DEFAULT = VC5_DECODER_PIXEL_FORMAT_RGGB_14,
         

@@ -102,10 +102,14 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
         case VC5_ENCODER_PIXEL_FORMAT_RGGB_12P:
             image.format = PIXEL_FORMAT_RAW_RGGB_12P;
             break;
-            
-        case VC5_ENCODER_PIXEL_FORMAT_RGGB_14:
-            image.format = PIXEL_FORMAT_RAW_RGGB_14;
-            break;
+
+		case VC5_ENCODER_PIXEL_FORMAT_RGGB_14:
+			image.format = PIXEL_FORMAT_RAW_RGGB_14;
+			break;
+
+		case VC5_ENCODER_PIXEL_FORMAT_RGGB_16:
+			image.format = PIXEL_FORMAT_RAW_RGGB_16;
+			break;
             
         case VC5_ENCODER_PIXEL_FORMAT_GBRG_12:
             image.format = PIXEL_FORMAT_RAW_GBRG_12;
@@ -114,6 +118,15 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
         case VC5_ENCODER_PIXEL_FORMAT_GBRG_12P:
             image.format = PIXEL_FORMAT_RAW_GBRG_12P;
             break;
+
+		case VC5_ENCODER_PIXEL_FORMAT_GBRG_14:
+			image.format = PIXEL_FORMAT_RAW_GBRG_14;
+			break;
+
+		case VC5_ENCODER_PIXEL_FORMAT_GBRG_16:
+			image.format = PIXEL_FORMAT_RAW_GBRG_16;
+			break;
+
             
         default:
             assert(0);

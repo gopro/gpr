@@ -52,6 +52,8 @@ public:
     int     input_pitch;
     
     int     input_skip_rows;
+
+	int     input_skip_bytes;
     
     string  log_curve_file_path;
     
@@ -71,23 +73,17 @@ public:
     {
         command_options.addOptions()
         /* long and short name */                           /* variable to update */                    /* default value */     /* help text */
-        ("help",                                            help,                                       false,                  "Prints this help text")
-        ("verbose",                                         verbose,                                    false,                  "Verbosity of the output")
-        
-        ("InputFilePath,i",                                 input_file_path,                            string(""),             "Input file path")
-        
-        ("InputWidth,w",                                    input_width,                                4000,                   "Input image width in pixel samples e.g. 4000")
-        
-        ("InputHeight,h",                                   input_height,                               3000,                   "Input image height in pixel samples e.g. 3000")
-        
-        ("InputPitch,p",                                    input_pitch,                                -1,                     "Input image pitch in bytes e.g. 8000")
-        
-        ("InputPixelFormat,x",                              input_pixel_format,                         string("rggb14"),       "Input pixel format [rggb12, rggb12p, rggb14, gbrg12, gbrg12p]")
-        
-        ("OutputFilePath,o",                                output_file_path,                           string(""),             "Output file path")
-        
-        ("PrintLogCurve,l",                                 log_curve_file_path,                        string(""),             "File for encoding log curve output");
-        ;
+			("help", help, false, "Prints this help text")
+			("verbose", verbose, false, "Verbosity of the output")
+			("InputFilePath,i", input_file_path, string(""), "Input file path")
+			("InputWidth,w", input_width, 4000, "Input image width in pixel samples e.g. 4000")
+			("InputHeight,h", input_height, 3000, "Input image height in pixel samples e.g. 3000")
+			("InputPitch,p", input_pitch, -1, "Input image pitch in bytes e.g. 8000")
+			("InputSkip,s", input_skip_bytes, -1, "Skip any raw header in bytes e.g. 256")
+			("InputPixelFormat,x", input_pixel_format, string("rggb14"), "Input pixel format [rggb12, rggb12p, rggb14, gbrg12, gbrg12p]")
+			("OutputFilePath,o", output_file_path, string(""), "Output file path")
+			("PrintLogCurve,l", log_curve_file_path, string(""), "File for encoding log curve output");
+		;
     }
 };
 
@@ -135,20 +131,27 @@ int main(int argc, char *argv[])
         if( args.input_pitch == -1 )
             vc5_encoder_params.input_pitch = args.input_width * 2;
     }
-    if( strcmp(args.input_pixel_format.c_str(), "rggb12p") == 0 )
+    else if( strcmp(args.input_pixel_format.c_str(), "rggb12p") == 0 )
     {
         vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_RGGB_12P;
         
         if( args.input_pitch == -1 )
             vc5_encoder_params.input_pitch = (args.input_width * 3 / 4) * 2;
     }
-    else if( strcmp(args.input_pixel_format.c_str(), "rggb14") == 0 )
-    {
-        vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_RGGB_14;
+	else if (strcmp(args.input_pixel_format.c_str(), "rggb14") == 0)
+	{
+		vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_RGGB_14;
 
-        if( args.input_pitch == -1 )
-            args.input_pitch = args.input_width * 2;
-    }
+		if (args.input_pitch == -1)
+			args.input_pitch = args.input_width * 2;
+	}
+	else if (strcmp(args.input_pixel_format.c_str(), "rggb16") == 0)
+	{
+		vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_RGGB_16;
+
+		if (args.input_pitch == -1)
+			args.input_pitch = args.input_width * 2;
+	}
     else if( strcmp(args.input_pixel_format.c_str(), "gbrg12") == 0 )
     {
         vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_GBRG_12;
@@ -163,9 +166,23 @@ int main(int argc, char *argv[])
         if( args.input_pitch == -1 )
             args.input_pitch = (args.input_width * 3 / 4) * 2;
     }
+	else if (strcmp(args.input_pixel_format.c_str(), "gbrg14") == 0)
+	{
+		vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_GBRG_14;
+
+		if (args.input_pitch == -1)
+			args.input_pitch = args.input_width * 2;
+	}
+	else if (strcmp(args.input_pixel_format.c_str(), "gbrg16") == 0)
+	{
+		vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_GBRG_16;
+
+		if (args.input_pitch == -1)
+			args.input_pitch = args.input_width * 2;
+	}
     else
     {
-        LogPrint("Invalid input format: %s", args.input_pixel_format.c_str());
+        LogPrint("Invalid input format: \"%s\"", args.input_pixel_format.c_str());
         return -1;
     }
     

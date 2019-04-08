@@ -100,7 +100,7 @@ void gpr_read_image::ReadTile (dng_host &host,
                 }
                 else
                 {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_12;
+                    pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_14;
                 }
                 
                 if( DecodeVC5( image, *_vc5_buffer, pixel_format ) )

@@ -55,6 +55,8 @@ public:
     int     input_pitch;
     
     int     input_skip_rows;
+
+	int		input_header_skip;
     
     string  input_pixel_format;
     
@@ -98,8 +100,10 @@ public:
         
         ("InputHeight,h",                                   input_height,                               3000,                   "Input image height in pixel samples [3000]")
 
-        ("InputPitch,p",                                    input_pitch,                                8000,                   "Input image pitch in bytes [8000]")
-        
+		("InputPitch,p",									input_pitch,								8000,					"Input image pitch in bytes [8000]")
+
+		("InputHeaderSkip,b",								input_header_skip,							-1,						"Skip any raw header in bytes e.g. 256")
+
         ("InputPixelFormat,x",                              input_pixel_format,                         string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p)")
         
         ("ApplyGprParameters,a",                            apply_gpr_parameters,                       string(""),             "Parameters to use for GPR or DNG file.")
@@ -152,7 +156,7 @@ int main(int argc, char *argv [])
     char line[MAX_STDOUT_LINE];
     sprintf( line, "GPR Tools Version %d.%d.%d [%s @ %s] ", GPR_VERSION_MAJOR, GPR_VERSION_MINOR, GPR_VERSION_REVISION, GIT_BRANCH, GIT_COMMIT_HASH );
     
-    if( args.parse(argc, argv, line, zerotag) )
+    if( argc == 1 || args.parse(argc, argv, line, zerotag) )
     {
         printf("\n");
         printf("-- Example Commnads (please see data/tests/run_tests.sh for more examples) --\n");
@@ -193,7 +197,7 @@ int main(int argc, char *argv [])
 
     if( args.output_file_path != "" )
     {
-        return dng_convert_main(args.input_file_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_pixel_format.c_str(),
+        return dng_convert_main(args.input_file_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_header_skip, args.input_pixel_format.c_str(),
                                 args.output_file_path.c_str(), args.apply_gpr_parameters.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits,
                                 args.jpg_preview_file_path.c_str(), args.jpg_preview_file_width, args.jpg_preview_file_height );
     }
