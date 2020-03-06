@@ -315,3 +315,12 @@ Demosaicing has a higher complexity than GPR decoding, so numbers for RGB output
 GoPro and CineForm are trademarks of GoPro, Inc.
 DNG, Photoshop and Lightroom is trademarks of Adobe Inc.
 ```
+```
+GoPro and CineForm are trademarks of GoPro, Inc.
+DNG, Photoshop and Lightroom is trademarks of Adobe Inc.
+```
+
+```
+GoPro and CineForm are trademarks of GoPro, Inc.
+DNG, Photoshop and Lightroom is trademarks of Adobe Inc.
+```
