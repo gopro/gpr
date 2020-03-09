@@ -7,7 +7,7 @@ Want to contribute to GPR? Please take a moment to review this document in order
 The [issue tracker](https://www.github.com/gopro/gpr/issues) is the best place to report a bug. Please make sure to check the following guide on how to use the issue tracker :
 
 ### Reporting a bug
- 
+ cccccccccccccc
 - If you really think it is a bug, consult the list of issues and make sure nobody has reported it yet. This will avoid duplication of effort.
 - If it hasn't been reported yet, submit a new issue.
 
