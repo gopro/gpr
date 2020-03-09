@@ -99,6 +99,11 @@ $ gpr_tools -i INPUT.GPR -o OUTPUT.DNG
 
 Extract RAW from GPR: 
 
+DNG allows storage of RAW sensor data in three main formats: uncompressed, lossless JPEG or lossy JPEG. Lossless mode typically achieves 2:1 compression that is clearly not enough in the mobile-first age. Lossy mode uses the 8x8 DCT transform that was developed for JPEG more than 25 years ago (when photo resolutions were much smaller), achieving compression ratios around 4:1. In comparison, GPR achieves typical compression ratios between 10:1 and 4:1. This is due to Full-Frame Wavelet Transform (FFWT). FFWT has a few nice properties compared to DCT:
+  - The compression performance increases as image resolutions go up - making it more future proof 
+  - Better image quality as it does not suffer from ringing or blocky artifacts observed in JPEG files.
+
+The wavelet codec in GPR is not new, but h
 ```
 $ gpr_tools -i INPUT.GPR -o OUTPUT.RAW
 ```
