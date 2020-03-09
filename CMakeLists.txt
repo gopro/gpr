@@ -15,7 +15,9 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
     OUTPUT_VARIABLE GIT_BRANCH
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-
+add_subdirectory( "source/app/common/cJSON" )
+add_subdirectory( "source/app/common/argument_parser" )
+add_subdirectory( "source/app/gpr_tools" )
   execute_process(
     COMMAND git log -1 --format=%h
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
