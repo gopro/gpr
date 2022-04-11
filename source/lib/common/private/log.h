@@ -25,13 +25,13 @@
 extern "C" {
 #endif
         
-    bool LogInit();
+    bool LogInit(void);
 
     #ifndef LogPrint
     int  LogPrint(const char* format, ... );
     #endif
 
-    bool LogUninit();
+    bool LogUninit(void);
 
     #define TIMESTAMP(x, y) TIMESTAMP_##y(x)
     

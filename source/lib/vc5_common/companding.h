@@ -28,7 +28,7 @@ extern "C" {
 
     int32_t CompandedValue(int32_t value);
    
-    uint32_t CompandingParameter();
+    uint32_t CompandingParameter(void);
 
     CODEC_ERROR ComputeCubicTable(int16_t cubic_table[], int cubic_table_length, int16_t maximum_value);
 

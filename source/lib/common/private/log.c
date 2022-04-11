@@ -23,7 +23,7 @@
 
 TIMER LogTimer;
 
-bool LogInit()
+bool LogInit(void)
 {
     InitTimer(&LogTimer);
 
@@ -54,7 +54,7 @@ int LogPrint(const char* format, ... )
 }
 #endif // LogPrint
 
-bool LogUninit()
+bool LogUninit(void)
 {
     return true;
 }

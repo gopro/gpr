@@ -1254,6 +1254,7 @@ int tje_encode_with_func(tje_write_func* func,
         break;
     case 2:
         qt_factor = 10;
+        __attribute__((fallthrough));
         // don't break. fall through.
     case 1:
         for ( i = 0; i < 64; ++i ) {
