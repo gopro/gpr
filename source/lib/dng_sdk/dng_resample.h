@@ -95,7 +95,7 @@ class dng_resample_coords
 			return fCoords->Buffer_int32 () + (index - fOrigin);
 			}
 						 
-		const int32 Pixel (int32 index) const
+		int32 Pixel (int32 index) const
 			{
 			return Coords (index) [0] >> kResampleSubsampleBits;
 			}

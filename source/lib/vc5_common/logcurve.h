@@ -31,9 +31,9 @@ extern "C" {
 	
 	extern uint16_t DecoderLogCurve[];
 
-	void SetupDecoderLogCurve();
+	void SetupDecoderLogCurve(void);
 
-    void SetupEncoderLogCurve();
+    void SetupEncoderLogCurve(void);
 
 #ifdef __cplusplus
 }

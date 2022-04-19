@@ -423,7 +423,7 @@ CODEC_ERROR GetBlockFile(STREAM *stream, void *buffer, size_t size, size_t offse
 	}
 
 	// Seek to the specified offset
-	assert(0 <= offset && offset <= LONG_MAX);
+	assert(offset <= LONG_MAX);
 	if (fseek(file, (long)offset, SEEK_SET) != 0) {
 		return CODEC_ERROR_FILE_SEEK;
 	}
@@ -492,7 +492,7 @@ CODEC_ERROR PutBlockFile(STREAM *stream, void *buffer, size_t size, size_t offse
 	}
 
 	// Seek to the specified offset and write to the file
-	assert(0 <= offset && offset <= LONG_MAX);
+	assert(offset <= LONG_MAX);
 	if (fseek(file, (long)offset, SEEK_SET) != 0) {
 		return CODEC_ERROR_FILE_SEEK;
 	}

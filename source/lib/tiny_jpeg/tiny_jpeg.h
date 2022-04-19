@@ -90,6 +90,12 @@ extern "C"
 #pragma GCC diagnostic ignored "-Wpadded"
 #endif
 
+#if defined(__GNUC__) && __GNUC__ >= 7 || defined(__clang__) && __clang_major__ >= 10
+#define FALL_THROUGH __attribute__ ((fallthrough))
+#else
+#define FALL_THROUGH ((void)0)
+#endif
+
 // ============================================================
 // Public interface:
 // ============================================================
@@ -1254,6 +1260,7 @@ int tje_encode_with_func(tje_write_func* func,
         break;
     case 2:
         qt_factor = 10;
+        FALL_THROUGH;
         // don't break. fall through.
     case 1:
         for ( i = 0; i < 64; ++i ) {

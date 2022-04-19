@@ -222,6 +222,17 @@ struct normal_encoding {
  E ## isInvalid3, \
  E ## isInvalid4
 
+#define EMPTY_VTABLE \
+ NULL, \
+ NULL, \
+ NULL, \
+ NULL, \
+ NULL, \
+ NULL, \
+ NULL, \
+ NULL, \
+ NULL
+
 static int FASTCALL checkCharRefNumber(int);
 
 #include "xmltok_impl.h"
@@ -467,7 +478,7 @@ static const struct normal_encoding latin1_encoding_ns = {
 #include "asciitab.h"
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(sb_)
+  STANDARD_VTABLE(sb_) EMPTY_VTABLE
 };
 
 #endif
@@ -480,7 +491,7 @@ static const struct normal_encoding latin1_encoding = {
 #undef BT_COLON
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(sb_)
+  STANDARD_VTABLE(sb_) EMPTY_VTABLE
 };
 
 static void PTRCALL
@@ -500,7 +511,7 @@ static const struct normal_encoding ascii_encoding_ns = {
 #include "asciitab.h"
 /* BT_NONXML == 0 */
   },
-  STANDARD_VTABLE(sb_)
+  STANDARD_VTABLE(sb_) EMPTY_VTABLE
 };
 
 #endif
@@ -513,7 +524,7 @@ static const struct normal_encoding ascii_encoding = {
 #undef BT_COLON
 /* BT_NONXML == 0 */
   },
-  STANDARD_VTABLE(sb_)
+  STANDARD_VTABLE(sb_) EMPTY_VTABLE
 };
 
 static int PTRFASTCALL
@@ -557,6 +568,7 @@ E ## toUtf8(const ENCODING *enc, \
         *(*toP)++ = lo; \
         break; \
       } \
+      __attribute((fallthrough)); \
       /* fall through */ \
     case 0x1: case 0x2: case 0x3: \
     case 0x4: case 0x5: case 0x6: case 0x7: \
@@ -726,7 +738,7 @@ static const struct normal_encoding little2_encoding_ns = {
 #include "asciitab.h"
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(little2_)
+  STANDARD_VTABLE(little2_) EMPTY_VTABLE
 };
 
 #endif
@@ -745,7 +757,7 @@ static const struct normal_encoding little2_encoding = {
 #undef BT_COLON
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(little2_)
+  STANDARD_VTABLE(little2_) EMPTY_VTABLE
 };
 
 #if BYTEORDER != 4321
@@ -758,7 +770,7 @@ static const struct normal_encoding internal_little2_encoding_ns = {
 #include "iasciitab.h"
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(little2_)
+  STANDARD_VTABLE(little2_) EMPTY_VTABLE
 };
 
 #endif
@@ -771,7 +783,7 @@ static const struct normal_encoding internal_little2_encoding = {
 #undef BT_COLON
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(little2_)
+  STANDARD_VTABLE(little2_) EMPTY_VTABLE
 };
 
 #endif
@@ -867,7 +879,7 @@ static const struct normal_encoding big2_encoding_ns = {
 #include "asciitab.h"
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(big2_)
+  STANDARD_VTABLE(big2_) EMPTY_VTABLE
 };
 
 #endif
@@ -886,7 +898,7 @@ static const struct normal_encoding big2_encoding = {
 #undef BT_COLON
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(big2_)
+  STANDARD_VTABLE(big2_) EMPTY_VTABLE
 };
 
 #if BYTEORDER != 1234
@@ -899,7 +911,7 @@ static const struct normal_encoding internal_big2_encoding_ns = {
 #include "iasciitab.h"
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(big2_)
+  STANDARD_VTABLE(big2_) EMPTY_VTABLE
 };
 
 #endif
@@ -912,7 +924,7 @@ static const struct normal_encoding internal_big2_encoding = {
 #undef BT_COLON
 #include "latin1tab.h"
   },
-  STANDARD_VTABLE(big2_)
+  STANDARD_VTABLE(big2_) EMPTY_VTABLE
 };
 
 #endif
@@ -1528,6 +1540,7 @@ initScan(const ENCODING * const *encodingTable,
       if (INIT_ENC_INDEX(enc) == ISO_8859_1_ENC
           && state == XML_CONTENT_STATE)
         break;
+      __attribute((fallthrough));
       /* fall through */
     case 0x00:
     case 0x3C:

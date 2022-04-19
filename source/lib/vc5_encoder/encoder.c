@@ -1153,9 +1153,9 @@ static void ForwardWaveletTransformRecursive(RECURSIVE_TRANSFORM_DATA *transform
     
     int32_t     prescale            = transform_data[wavelet_stage].prescale;
     
-    int bottom_input_row = ((input_height % 2) == 0) ? input_height - 2 : input_height - 1;
+    uint32_t    bottom_input_row    = ((input_height % 2) == 0) ? input_height - 2 : input_height - 1;
     
-	uint32_t last_middle_row = bottom_input_row - 2;
+    uint32_t    last_middle_row     = bottom_input_row - 2;
     
     end_row = minimum( last_middle_row, end_row);
     
@@ -2346,14 +2346,13 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
 	// The encoder uses the codebooks for magnitudes and runs of zeros
 	const MAGS_TABLE *mags_table = codeset->mags_table;
 	const RUNS_TABLE *runs_table = codeset->runs_table;
-    int runs_table_length = runs_table->length;
+	uint32_t runs_table_length = runs_table->length;
 	RLC *rlc = (RLC *)((uint8_t *)runs_table + sizeof(RUNS_TABLE));
 
 	// The band is terminated by the band end codeword in the codebook
 	const CODEBOOK *codebook = codeset->codebook;
 
 	PIXEL *rowptr = data;
-	int count = 0;
 
 	// Convert the pitch to units of pixels
 	assert((pitch % sizeof(PIXEL)) == 0);
@@ -2379,15 +2378,16 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
     uint8_t* stream_buffer      = (uint8_t *)bit_stream->location.memory.buffer + bit_stream->byte_count;
     uint8_t* stream_buffer_orig = stream_buffer;
     
+	uint32_t count = 0;
 	for (row = 0; row < height; row++)
 	{
-		int index = 0;			// Start at the beginning of the row
+		uint32_t index = 0;			// Start at the beginning of the row
 
 		// Search the row for runs of zeros and nonzero values
 		while (1)
 		{
 			// Loop invariant
-			assert(0 <= index && index < width);
+			assert(index < width);
             
             {
                 PIXEL* start = rowptr + index;
@@ -2398,7 +2398,7 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
                     
                 }
                 
-                int x = start - (rowptr + index);
+                uint32_t x = start - (rowptr + index);
                     
                 index += x;
                 count += x;
@@ -2416,7 +2416,7 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
                     }
                     else
                     {
-                        int count_index = minimum(count, runs_table_length - 1);
+                        uint32_t count_index = minimum(count, runs_table_length - 1);
                         assert(count_index < runs_table->length);
                         
                         RLC rlc_val = rlc[count_index];

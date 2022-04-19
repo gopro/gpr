@@ -78,7 +78,7 @@ CODEC_ERROR PutSpecial(BITSTREAM *stream, const CODEBOOK *codebook, SPECIAL_MARK
 		}
 		
 		// Is this entry the special code for the marker?
-		if (codebook_entry[index].value == marker) {
+		if (codebook_entry[index].value == (int32_t)marker) {
 			break;
 		}
 	}
