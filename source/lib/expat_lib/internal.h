@@ -34,6 +34,12 @@
 #define PTRFASTCALL __attribute__((regparm(3)))
 #endif
 
+#if defined(__GNUC__) && __GNUC__ >= 7 || defined(__clang__) && __clang_major__ >= 10
+#define FALL_THROUGH __attribute__ ((fallthrough))
+#else
+#define FALL_THROUGH ((void)0)
+#endif
+
 /* Using __fastcall seems to have an unexpected negative effect under
    MS VC++, especially for function pointers, so we won't use it for
    now on that platform. It may be reconsidered for a future release

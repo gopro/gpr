@@ -106,28 +106,28 @@ class dng_area_spec
 
 		/// The first plane.
 		
-		const uint32 Plane () const
+		uint32 Plane () const
 			{
 			return fPlane;
 			}
 
 		/// The total number of planes.
 		
-		const uint32 Planes () const
+		uint32 Planes () const
 			{
 			return fPlanes;
 			}
 
 		/// The row pitch (i.e., stride). A pitch of 1 means all rows.
 		
-		const uint32 RowPitch () const
+		uint32 RowPitch () const
 			{
 			return fRowPitch;
 			}
 		
 		/// The column pitch (i.e., stride). A pitch of 1 means all columns.
 		
-		const uint32 ColPitch () const
+		uint32 ColPitch () const
 			{
 			return fColPitch;
 			}

@@ -382,7 +382,6 @@ CODEC_ERROR WriteComponentPermutation(COMPONENT_PERMUTATION *permutation, BITSTR
         for (i = 0; i < component_count; i++)
         {
             uint8_t value = (uint8_t)permutation->permutation_array[i];
-            assert(0 <= value && value <= UINT8_MAX);
             PutBits(stream, value, 8);
         }
         

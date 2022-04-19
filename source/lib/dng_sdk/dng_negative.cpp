@@ -2716,7 +2716,7 @@ void dng_negative::SetFujiMosaic6x6 (uint32 phase)
 	info.fCFAPattern [5] [4] = color2;
 	info.fCFAPattern [5] [5] = color1;
 
-	DNG_REQUIRE (phase >= 0 && phase < patSize * patSize,
+	DNG_REQUIRE (phase < patSize * patSize,
 				 "Bad phase in SetFujiMosaic6x6.");
 
 	if (phase > 0)

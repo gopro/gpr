@@ -24,7 +24,7 @@ uint16_t EncoderLogCurve[LOG_CURVE_TABLE_LENGTH];
 
 uint16_t DecoderLogCurve[LOG_CURVE_TABLE_LENGTH];
 
-void SetupDecoderLogCurve()
+void SetupDecoderLogCurve(void)
 {
     int i;
     const int log_table_size = sizeof(DecoderLogCurve) / sizeof(DecoderLogCurve[0]);
@@ -41,7 +41,7 @@ void SetupDecoderLogCurve()
     }
 }
 
-void SetupEncoderLogCurve()
+void SetupEncoderLogCurve(void)
 {
     int i;
     const int max_input_val = LOG_CURVE_TABLE_LENGTH - 1;

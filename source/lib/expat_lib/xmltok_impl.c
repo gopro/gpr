@@ -47,6 +47,7 @@
       *nextTokPtr = ptr; \
       return XML_TOK_INVALID; \
     } \
+    __attribute((fallthrough)); \
   case BT_NMSTRT: \
   case BT_HEX: \
   case BT_DIGIT: \
@@ -75,6 +76,7 @@
       *nextTokPtr = ptr; \
       return XML_TOK_INVALID; \
     } \
+    __attribute((fallthrough)); \
   case BT_NMSTRT: \
   case BT_HEX: \
     ptr += MINBPC(enc); \
@@ -158,6 +160,7 @@ PREFIX(scanDecl)(const ENCODING *enc, const char *ptr,
         *nextTokPtr = ptr;
         return XML_TOK_INVALID;
       }
+      FALL_THROUGH;
       /* fall through */
     case BT_S: case BT_CR: case BT_LF:
       *nextTokPtr = ptr;
@@ -272,6 +275,7 @@ PREFIX(scanPi)(const ENCODING *enc, const char *ptr,
         *nextTokPtr = ptr + MINBPC(enc);
         return tok;
       }
+      FALL_THROUGH;
       /* fall through */
     default:
       *nextTokPtr = ptr;
@@ -570,7 +574,8 @@ PREFIX(scanAtts)(const ENCODING *enc, const char *ptr, const char *end,
           return XML_TOK_INVALID;
         }
       }
-    /* fall through */
+      FALL_THROUGH;
+      /* fall through */
     case BT_EQUALS:
       {
         int open;
@@ -859,6 +864,7 @@ PREFIX(contentTok)(const ENCODING *enc, const char *ptr, const char *end,
            return XML_TOK_INVALID;
          }
       }
+      FALL_THROUGH;
       /* fall through */
     case BT_AMP:
     case BT_LT:
@@ -1017,6 +1023,7 @@ PREFIX(prologTok)(const ENCODING *enc, const char *ptr, const char *end,
       /* indicate that this might be part of a CR/LF pair */
       return -XML_TOK_PROLOG_S;
     }
+    FALL_THROUGH;
     /* fall through */
   case BT_S: case BT_LF:
     for (;;) {
@@ -1030,6 +1037,7 @@ PREFIX(prologTok)(const ENCODING *enc, const char *ptr, const char *end,
         /* don't split CR/LF pair */
         if (ptr + MINBPC(enc) != end)
           break;
+        FALL_THROUGH;
         /* fall through */
       default:
         *nextTokPtr = ptr;
@@ -1136,6 +1144,7 @@ PREFIX(prologTok)(const ENCODING *enc, const char *ptr, const char *end,
       tok = XML_TOK_NMTOKEN;
       break;
     }
+    FALL_THROUGH;
     /* fall through */
   default:
     *nextTokPtr = ptr;
@@ -1407,6 +1416,7 @@ PREFIX(isPublicId)(const ENCODING *enc, const char *ptr, const char *end,
     case BT_NMSTRT:
       if (!(BYTE_TO_ASCII(enc, ptr) & ~0x7f))
         break;
+      FALL_THROUGH;
     default:
       switch (BYTE_TO_ASCII(enc, ptr)) {
       case 0x24: /* $ */
@@ -1627,7 +1637,11 @@ PREFIX(sameName)(const ENCODING *enc, const char *ptr1, const char *ptr2)
     case BT_LEAD ## n: \
       if (*ptr1++ != *ptr2++) \
         return 0;
-    LEAD_CASE(4) LEAD_CASE(3) LEAD_CASE(2)
+    LEAD_CASE(4)
+    FALL_THROUGH;
+    LEAD_CASE(3)
+    FALL_THROUGH;
+    LEAD_CASE(2)
 #undef LEAD_CASE
       /* fall through */
       if (*ptr1++ != *ptr2++)
