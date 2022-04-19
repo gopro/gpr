@@ -1502,7 +1502,7 @@ XML_Parse(XML_Parser parser, const char *s, int len, int isFinal)
       errorCode = XML_ERROR_NO_MEMORY;
       return XML_STATUS_ERROR;
     }
-    __attribute__((fallthrough));
+    FALL_THROUGH;
   default:
     ps_parsing = XML_PARSING;
   }
@@ -1529,7 +1529,7 @@ XML_Parse(XML_Parser parser, const char *s, int len, int isFinal)
       case XML_INITIALIZED:
       case XML_PARSING:
         ps_parsing = XML_FINISHED;
-        __attribute__((fallthrough));
+        FALL_THROUGH;
         /* fall through */
       default:
         return XML_STATUS_OK;
@@ -1566,7 +1566,7 @@ XML_Parse(XML_Parser parser, const char *s, int len, int isFinal)
           ps_parsing = XML_FINISHED;
           return XML_STATUS_OK;
         }
-        __attribute__((fallthrough));
+        FALL_THROUGH;
         /* fall through */
       default:
         result = XML_STATUS_OK;
@@ -1631,7 +1631,7 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal)
       errorCode = XML_ERROR_NO_MEMORY;
       return XML_STATUS_ERROR;
     }
-    __attribute__((fallthrough));
+    FALL_THROUGH;
   default:
     ps_parsing = XML_PARSING;
   }
@@ -3897,7 +3897,7 @@ doProlog(XML_Parser parser,
         handleDefault = XML_FALSE;
         goto alreadyChecked;
       }
-      __attribute__((fallthrough));
+      FALL_THROUGH;
       /* fall through */
     case XML_ROLE_ENTITY_PUBLIC_ID:
       if (!XmlIsPublicId(enc, s, next, eventPP))
@@ -4200,7 +4200,7 @@ doProlog(XML_Parser parser,
           return XML_ERROR_NO_MEMORY;
         declEntity->publicId = NULL;
       }
-      __attribute__((fallthrough));
+      FALL_THROUGH;
       /* fall through */
 #endif /* XML_DTD */
     case XML_ROLE_ENTITY_SYSTEM_ID:
@@ -4981,7 +4981,7 @@ appendAttributeValue(XML_Parser parser, const ENCODING *enc, XML_Bool isCdata,
       break;
     case XML_TOK_TRAILING_CR:
       next = ptr + enc->minBytesPerChar;
-      __attribute__((fallthrough));
+      FALL_THROUGH;
       /* fall through */
     case XML_TOK_ATTRIBUTE_VALUE_S:
     case XML_TOK_DATA_NEWLINE:
@@ -5186,7 +5186,7 @@ storeEntityValue(XML_Parser parser,
       break;
     case XML_TOK_TRAILING_CR:
       next = entityTextPtr + enc->minBytesPerChar;
-      __attribute__((fallthrough));
+      FALL_THROUGH;
       /* fall through */
     case XML_TOK_DATA_NEWLINE:
       if (pool->end == pool->ptr && !poolGrow(pool)) {

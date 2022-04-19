@@ -160,7 +160,7 @@ PREFIX(scanDecl)(const ENCODING *enc, const char *ptr,
         *nextTokPtr = ptr;
         return XML_TOK_INVALID;
       }
-      __attribute__((fallthrough));
+      FALL_THROUGH;
       /* fall through */
     case BT_S: case BT_CR: case BT_LF:
       *nextTokPtr = ptr;
@@ -275,7 +275,7 @@ PREFIX(scanPi)(const ENCODING *enc, const char *ptr,
         *nextTokPtr = ptr + MINBPC(enc);
         return tok;
       }
-      __attribute__((fallthrough));
+      FALL_THROUGH;
       /* fall through */
     default:
       *nextTokPtr = ptr;
@@ -574,7 +574,7 @@ PREFIX(scanAtts)(const ENCODING *enc, const char *ptr, const char *end,
           return XML_TOK_INVALID;
         }
       }
-      __attribute__((fallthrough));
+      FALL_THROUGH;
       /* fall through */
     case BT_EQUALS:
       {
@@ -864,7 +864,7 @@ PREFIX(contentTok)(const ENCODING *enc, const char *ptr, const char *end,
            return XML_TOK_INVALID;
          }
       }
-      __attribute__((fallthrough));
+      FALL_THROUGH;
       /* fall through */
     case BT_AMP:
     case BT_LT:
@@ -1023,7 +1023,7 @@ PREFIX(prologTok)(const ENCODING *enc, const char *ptr, const char *end,
       /* indicate that this might be part of a CR/LF pair */
       return -XML_TOK_PROLOG_S;
     }
-    __attribute__((fallthrough));
+    FALL_THROUGH;
     /* fall through */
   case BT_S: case BT_LF:
     for (;;) {
@@ -1037,7 +1037,7 @@ PREFIX(prologTok)(const ENCODING *enc, const char *ptr, const char *end,
         /* don't split CR/LF pair */
         if (ptr + MINBPC(enc) != end)
           break;
-        __attribute__((fallthrough));
+        FALL_THROUGH;
         /* fall through */
       default:
         *nextTokPtr = ptr;
@@ -1144,7 +1144,7 @@ PREFIX(prologTok)(const ENCODING *enc, const char *ptr, const char *end,
       tok = XML_TOK_NMTOKEN;
       break;
     }
-    __attribute__((fallthrough));
+    FALL_THROUGH;
     /* fall through */
   default:
     *nextTokPtr = ptr;
@@ -1416,7 +1416,7 @@ PREFIX(isPublicId)(const ENCODING *enc, const char *ptr, const char *end,
     case BT_NMSTRT:
       if (!(BYTE_TO_ASCII(enc, ptr) & ~0x7f))
         break;
-      __attribute__((fallthrough));
+      FALL_THROUGH;
     default:
       switch (BYTE_TO_ASCII(enc, ptr)) {
       case 0x24: /* $ */
@@ -1638,9 +1638,9 @@ PREFIX(sameName)(const ENCODING *enc, const char *ptr1, const char *ptr2)
       if (*ptr1++ != *ptr2++) \
         return 0;
     LEAD_CASE(4)
-    __attribute__((fallthrough));
+    FALL_THROUGH;
     LEAD_CASE(3)
-    __attribute__((fallthrough));
+    FALL_THROUGH;
     LEAD_CASE(2)
 #undef LEAD_CASE
       /* fall through */
