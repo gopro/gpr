@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
             
             file.fill( '0' );
             file.width( 4 );
-            file << (DecoderLogCurve[i] >> 4);
+            file << (DecoderLogCurve12[i] >> 4);
             
             file << endl;
         }

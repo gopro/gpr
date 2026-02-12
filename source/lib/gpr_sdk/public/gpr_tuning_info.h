@@ -51,6 +51,10 @@
         PIXEL_FORMAT_GBRG_12 = 3,                           // GBRG 12bit pixels packed into 16bits
         
         PIXEL_FORMAT_GBRG_12P = 4,                          // GBRG 12bit pixels packed into 12bits
+
+        PIXEL_FORMAT_RGGB_16 = 5,                           // RGGB 16bit pixels packed into 16bits
+
+        PIXEL_FORMAT_GBRG_16 = 6,                           // GBRG 16bit pixels packed into 16bits
         
     } GPR_PIXEL_FORMAT;
 
@@ -133,8 +137,14 @@
         double                  warp_blue_coefficient;
         
         gpr_gain_map            gain_map;
-        
+
         GPR_PIXEL_FORMAT        pixel_format;
+
+        uint32_t                default_crop_origin_h;
+        uint32_t                default_crop_origin_v;
+
+        uint32_t                default_crop_size_h;
+        uint32_t                default_crop_size_v;
 
     } gpr_tuning_info;
 

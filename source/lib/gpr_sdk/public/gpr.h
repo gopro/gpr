@@ -53,7 +53,9 @@
             unsigned int        input_pitch;                   /* Pitch of input source in pixels (only applies to raw input) */
 
             bool                fast_encoding;
-            
+
+            int                 quality;        /* Quality setting (0-5), or -1 for auto */
+
             bool                compute_md5sum;
             
             gpr_buffer          gpmf_payload;   /* GPMF payload of image file */
@@ -67,7 +69,7 @@
             gpr_profile_info    profile_info;   /* Camera color profile info object */
             
             gpr_tuning_info     tuning_info;    /* Camera tuning info object */
-            
+
         } gpr_parameters;
         
         void gpr_parameters_set_defaults(gpr_parameters* x);
