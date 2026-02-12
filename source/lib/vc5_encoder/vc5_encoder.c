@@ -41,11 +41,18 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
 {
     CODEC_ERROR error = CODEC_ERROR_OKAY;
     IMAGE image;
+    memset(&image, 0, sizeof(IMAGE));
     ENCODER_PARAMETERS parameters;
     
     STREAM bitstream_file;
     
-    const int max_vc5_buffer_size = 10000000;
+    // Allocate a conservative buffer for VC5 bitstream: 1.5x raw size + 1MB
+    size_t base_size = image.size;
+    if (base_size == 0)
+    {
+        base_size = (size_t)encoding_parameters->input_width * encoding_parameters->input_height * sizeof(uint16_t);
+    }
+const size_t max_vc5_buffer_size = base_size + (base_size >> 1) + (1 << 20);
 
     // Initialize the data structure for passing parameters to the encoder
     InitEncoderParameters(&parameters);
@@ -57,12 +64,16 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
             {1, 24, 24, 12, 32, 32, 24, 128, 128, 192}, // CineForm High
             {1, 24, 24, 12, 24, 24, 12, 96, 96, 144},   // CineForm Filmscan-1
             {1, 24, 24, 12, 24, 24, 12, 64, 64, 96},    // CineForm Filmscan-X
-            {1, 24, 24, 12, 24, 24, 12, 32, 32, 48}     // CineForm Filmscan-2
+            {1, 24, 24, 12, 24, 24, 12, 32, 32, 48},    // CineForm Filmscan-2
+            {1, 12, 12,  6, 12, 12,  6, 16, 16, 24},    // CineForm Filmscan-3 (Edit-Safe)
+            {1,  6,  6,  4, 12, 12,  6, 16, 16, 24},    // CineForm Filmscan-4 (Near-Lossless)
+            {1,  4,  4,  2, 10, 10,  6, 16, 16, 24}     // CineForm Filmscan-5 (Virtually Lossless)
         };
         
-        if( encoding_parameters->quality_setting < VC5_ENCODER_QUALITY_SETTING_COUNT )
+        int quality = encoding_parameters->quality_setting;
+        if( quality < VC5_ENCODER_QUALITY_SETTING_COUNT )
         {
-            memcpy(parameters.quant_table, quant_table[encoding_parameters->quality_setting], sizeof(parameters.quant_table));
+            memcpy(parameters.quant_table, quant_table[quality], sizeof(parameters.quant_table));
         }
     }
     
@@ -114,6 +125,14 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
         case VC5_ENCODER_PIXEL_FORMAT_GBRG_12P:
             image.format = PIXEL_FORMAT_RAW_GBRG_12P;
             break;
+
+        case VC5_ENCODER_PIXEL_FORMAT_RGGB_16:
+            image.format = PIXEL_FORMAT_RAW_RGGB_16;
+            break;
+
+        case VC5_ENCODER_PIXEL_FORMAT_GBRG_16:
+            image.format = PIXEL_FORMAT_RAW_GBRG_16;
+            break;
             
         default:
             assert(0);
@@ -134,6 +153,10 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
 #endif
     
     vc5_buffer->buffer = encoding_parameters->mem_alloc( max_vc5_buffer_size );
+    if (vc5_buffer->buffer == NULL)
+    {
+        return CODEC_ERROR_OUTOFMEMORY;
+    }
     
     // Open a stream to the output file
     error = CreateStreamBuffer(&bitstream_file, vc5_buffer->buffer, max_vc5_buffer_size );

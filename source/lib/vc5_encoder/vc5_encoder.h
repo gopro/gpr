@@ -43,6 +43,10 @@
         VC5_ENCODER_PIXEL_FORMAT_GBRG_12 = 3,           // GBRG 12bit pixels packed into 16bits
         
         VC5_ENCODER_PIXEL_FORMAT_GBRG_12P = 4,          // GBRG 12bit pixels packed into 12bits
+
+        VC5_ENCODER_PIXEL_FORMAT_RGGB_16 = 5,           // RGGB 16bit pixels packed into 16bits
+
+        VC5_ENCODER_PIXEL_FORMAT_GBRG_16 = 6,           // GBRG 16bit pixels packed into 16bits
         
         VC5_ENCODER_PIXEL_FORMAT_DEFAULT = VC5_ENCODER_PIXEL_FORMAT_RGGB_14,
         
@@ -60,10 +64,13 @@
         VC5_ENCODER_QUALITY_SETTING_HIGH        = 2,		// High
         VC5_ENCODER_QUALITY_SETTING_FS1         = 3,		// Film Scan 1
         VC5_ENCODER_QUALITY_SETTING_FSX         = 4,		// Film Scan X
-        VC5_ENCODER_QUALITY_SETTING_FS2         = 5,		// Film Scan 2 (Highest Quality)
-        
-        VC5_ENCODER_QUALITY_SETTING_COUNT       = 6,
-        
+        VC5_ENCODER_QUALITY_SETTING_FS2         = 5,		// Film Scan 2
+        VC5_ENCODER_QUALITY_SETTING_FS3         = 6,		// Film Scan 3 (Edit-Safe)
+        VC5_ENCODER_QUALITY_SETTING_FS4         = 7,		// Film Scan 4 (Near-Lossless)
+        VC5_ENCODER_QUALITY_SETTING_FS5         = 8,		// Film Scan 5 (Virtually Lossless)
+
+        VC5_ENCODER_QUALITY_SETTING_COUNT       = 9,
+
         VC5_ENCODER_QUALITY_SETTING_DEFAULT     = VC5_ENCODER_QUALITY_SETTING_FSX,
         
     } VC5_ENCODER_QUALITY_SETTING;
@@ -74,19 +81,19 @@
     typedef struct
     {
         ENABLED_PARTS               enabled_parts;
-        
+
         unsigned int                input_width;            // Image Width in Components (Default: 4000)
         unsigned int                input_height;           // Image Height in Components (Default: 3000)
         int                         input_pitch;            // Image Buffer Stride in Components (Default: 4000)
-        
+
         VC5_ENCODER_PIXEL_FORMAT    pixel_format;         // Bayer Ordering Pattern (Default: VC5_ENCODER_BAYER_ORDERING_RGGB)
-        
+
         VC5_ENCODER_QUALITY_SETTING quality_setting;        // Quality setting of the encoder (Default: VC5_ENCODER_QUALITY_SETTING_FS2)
-        
+
         gpr_malloc                  mem_alloc;              // Callback function to allocate memory
-        
+
         gpr_free                    mem_free;               // Callback function to free memory
-        
+
     } vc5_encoder_parameters;
 
     void vc5_encoder_parameters_set_default(vc5_encoder_parameters* encoding_parameters);

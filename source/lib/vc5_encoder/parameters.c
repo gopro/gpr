@@ -83,4 +83,3 @@ CODEC_ERROR InitEncoderParameters(ENCODER_PARAMETERS *parameters)
     
 	return CODEC_ERROR_OKAY;
 }
-

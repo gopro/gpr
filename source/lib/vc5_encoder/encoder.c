@@ -36,6 +36,12 @@
 #if ENABLED(NEON)
 #include <arm_neon.h>
 #endif
+#include <pthread.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <limits.h>
+
 
 /*!
 	@brief Align the bitstream to a byte boundary
@@ -351,6 +357,7 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 	if (error != CODEC_ERROR_OKAY) {
 		return error;
 	}
+
 
 	// Initialize the bitstream data structure
 	InitBitstream(&bitstream);
@@ -738,18 +745,32 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
 	int bits_per_component;
 
 	// The configuration of component arrays is determined by the image format
-	switch (input->format)
-	{
+    switch (input->format)
+    {
     case PIXEL_FORMAT_RAW_RGGB_12:
     case PIXEL_FORMAT_RAW_RGGB_12P:
-    case PIXEL_FORMAT_RAW_RGGB_14:
     case PIXEL_FORMAT_RAW_GBRG_12:
     case PIXEL_FORMAT_RAW_GBRG_12P:
-    case PIXEL_FORMAT_RAW_RGGB_16:
         channel_count = 4;
         max_channel_width = input->width / 2;
         max_channel_height = input->height / 2;
         bits_per_component = 12;
+        break;
+
+    case PIXEL_FORMAT_RAW_RGGB_14:
+    case PIXEL_FORMAT_RAW_GBRG_14:
+        channel_count = 4;
+        max_channel_width = input->width / 2;
+        max_channel_height = input->height / 2;
+        bits_per_component = 14;
+        break;
+
+    case PIXEL_FORMAT_RAW_GBRG_16:
+    case PIXEL_FORMAT_RAW_RGGB_16:
+        channel_count = 4;
+        max_channel_width = input->width / 2;
+        max_channel_height = input->height / 2;
+        bits_per_component = 16;
         break;
             
 	default:
@@ -770,6 +791,10 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
             UnpackImage_14(input, output, enabled_parts, true );
             break;
 
+        case PIXEL_FORMAT_RAW_GBRG_14:
+            UnpackImage_14(input, output, enabled_parts, false );
+            break;
+
         case PIXEL_FORMAT_RAW_RGGB_12:
             UnpackImage_12(input, output, enabled_parts, true );
             break;
@@ -784,6 +809,14 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
 
         case PIXEL_FORMAT_RAW_GBRG_12P:
             UnpackImage_12P(input, output, enabled_parts, false );
+            break;
+
+        case PIXEL_FORMAT_RAW_RGGB_16:
+            UnpackImage_16(input, output, enabled_parts, true );
+            break;
+
+        case PIXEL_FORMAT_RAW_GBRG_16:
+            UnpackImage_16(input, output, enabled_parts, false );
             break;
             
         default:
@@ -1163,14 +1196,13 @@ static void ForwardWaveletTransformRecursive(RECURSIVE_TRANSFORM_DATA *transform
     if( input_row_index == 0 )
     {
         int row;
-        
+
         for (row = 0; row < ROW_BUFFER_COUNT; row++)
         {
             PIXEL *input_row_ptr = (PIXEL *)((uintptr_t)input_ptr + row * input_pitch);
-            
+
             FilterHorizontalRow(input_row_ptr, lowpass_buffer[row], highpass_buffer[row], input_width, prescale);
         }
-        
         // Process the first row as a special case for the boundary condition
         FilterVerticalTopRow(lowpass_buffer, highpass_buffer, output_ptr, output_width, output_pitch, midpoints, multipliers, input_row_index );
         input_row_index += 2;
@@ -1277,37 +1309,40 @@ static void ForwardWaveletTransform(TRANSFORM *transform, const COMPONENT_ARRAY 
     ForwardWaveletTransformRecursive( transform_data, 0, 0, 0xFFFF );
 }
 
+/*! Thread argument for parallel forward wavelet transforms */
+typedef struct {
+	TRANSFORM *transform;
+	const COMPONENT_ARRAY *input_component;
+	PIXEL *lowpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT];
+	PIXEL *highpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT];
+	int midpoint_prequant;
+} FORWARD_THREAD_ARG;
+
+static void *ForwardTransformThread(void *arg)
+{
+	FORWARD_THREAD_ARG *a = (FORWARD_THREAD_ARG *)arg;
+	ForwardWaveletTransform(a->transform, a->input_component,
+	                        a->lowpass_buffer, a->highpass_buffer,
+	                        a->midpoint_prequant);
+	return NULL;
+}
+
 /*!
 	@brief Encode the portion of a sample that corresponds to a single layer
-
-	Samples can be contain multiple subsamples.  Each subsample may correspond to
-	a different view.  For example, an encoded video sample may contain both the
-	left and right subsamples in a stereo pair.
-
-	Subsamples have been called tracks or channels, but this terminology can be
-	confused with separate video tracks in a multimedia container or the color
-	planes that are called channels elsewhere in this codec.
-
-	The subsamples are decoded seperately and composited to form a single frame
-	that is the output of the complete process of decoding a single video sample.
-	For this reason, the subsamples are called layers.
-
-	@todo Need to reset the codec state for each layer?
 */
 //CODEC_ERROR EncodeLayer(ENCODER *encoder, void *buffer, size_t pitch, BITSTREAM *stream)
 CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image, BITSTREAM *stream)
 {
 	CODEC_ERROR error = CODEC_ERROR_OKAY;
-    
+
 	int channel_count;
 	int channel_index;
 
 	channel_count = encoder->channel_count;
-    
+
 #if VC5_ENABLED_PART(VC5_PART_LAYERS)
 	if (IsPartEnabled(encoder->enabled_parts, VC5_PART_LAYERS))
 	{
-		// Write the tag value pairs that preceed the encoded wavelet tree
 		error = EncodeLayerHeader(encoder, stream);
 		if (error != CODEC_ERROR_OKAY) {
 			return error;
@@ -1315,43 +1350,87 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 	}
 #endif
 
-    
-    CODEC_STATE *codec = &encoder->codec;
-    
-	// Compute the wavelet transform tree for each channel
+	CODEC_STATE *codec = &encoder->codec;
+
+	/* Phase 1: Run forward wavelet transforms in parallel (one thread per channel) */
+	{
+		gpr_allocator *allocator = encoder->allocator;
+		FORWARD_THREAD_ARG thread_args[MAX_CHANNEL_COUNT];
+		pthread_t threads[MAX_CHANNEL_COUNT];
+		int thread_created[MAX_CHANNEL_COUNT];
+
+		/* Allocate per-thread scratch buffers and set up thread args */
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			thread_args[channel_index].transform = &encoder->transform[channel_index];
+			thread_args[channel_index].input_component = &image->component_array_list[channel_index];
+			thread_args[channel_index].midpoint_prequant = encoder->midpoint_prequant;
+
+			/* Allocate per-channel scratch buffers (same sizes as encoder's shared buffers) */
+			int wavelet_index;
+			for (wavelet_index = 0; wavelet_index < MAX_WAVELET_COUNT; wavelet_index++)
+			{
+				int channel_width = encoder->transform[channel_index].wavelet[wavelet_index]->width;
+				int row;
+				for (row = 0; row < ROW_BUFFER_COUNT; row++)
+				{
+					PIXEL *buf = allocator->Alloc(channel_width * sizeof(PIXEL) * 2);
+					thread_args[channel_index].lowpass_buffer[wavelet_index][row]  = buf;
+					thread_args[channel_index].highpass_buffer[wavelet_index][row] = buf ? buf + channel_width : NULL;
+				}
+			}
+
+			thread_created[channel_index] = (pthread_create(&threads[channel_index], NULL,
+			                                                 ForwardTransformThread,
+			                                                 &thread_args[channel_index]) == 0);
+			if (!thread_created[channel_index])
+			{
+				/* Fallback: run inline if thread creation fails */
+				ForwardTransformThread(&thread_args[channel_index]);
+			}
+		}
+
+		/* Wait for all transform threads to complete */
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			if (thread_created[channel_index])
+				pthread_join(threads[channel_index], NULL);
+
+			/* Free per-channel scratch buffers */
+			int wavelet_index;
+			for (wavelet_index = 0; wavelet_index < MAX_WAVELET_COUNT; wavelet_index++)
+			{
+				int row;
+				for (row = 0; row < ROW_BUFFER_COUNT; row++)
+					allocator->Free(thread_args[channel_index].lowpass_buffer[wavelet_index][row]);
+			}
+		}
+	}
+
+	/* Phase 2: Encode channels sequentially (bitstream is serial) */
 	for (channel_index = 0; channel_index < channel_count; channel_index++)
 	{
-        int channel_number;
-        
-        ForwardWaveletTransform(&encoder->transform[channel_index], &image->component_array_list[channel_index], encoder->lowpass_buffer, encoder->highpass_buffer, encoder->midpoint_prequant );
+		int channel_number = encoder->channel_order_table[channel_index];
 
-        channel_number = encoder->channel_order_table[channel_index];
-        
-        // Encode the tag value pairs in the header for this channel
-        error = EncodeChannelHeader(encoder, channel_number, stream);
-        if (error != CODEC_ERROR_OKAY) {
-            return error;
-        }
-        
-        // Encode the lowpass and highpass bands in the wavelet tree for this channel
-        error = EncodeChannelSubbands(encoder, channel_number, stream);
-        if (error != CODEC_ERROR_OKAY) {
-            return error;
-        }
-        
-        // Encode the tag value pairs in the trailer for this channel
-        error = EncodeChannelTrailer(encoder, channel_number, stream);
-        if (error != CODEC_ERROR_OKAY) {
-            return error;
-        }
-        
-        // Check that the bitstream is alligned to a segment boundary
-        assert(IsAlignedSegment(stream));
-        
-        // Update the codec state for the next channel in the bitstream
-        //codec->channel_number++;
-        codec->channel_number = (channel_number + 1);
-        codec->subband_number = 0;
+		error = EncodeChannelHeader(encoder, channel_number, stream);
+		if (error != CODEC_ERROR_OKAY) {
+			return error;
+		}
+
+		error = EncodeChannelSubbands(encoder, channel_number, stream);
+		if (error != CODEC_ERROR_OKAY) {
+			return error;
+		}
+
+		error = EncodeChannelTrailer(encoder, channel_number, stream);
+		if (error != CODEC_ERROR_OKAY) {
+			return error;
+		}
+
+		assert(IsAlignedSegment(stream));
+
+		codec->channel_number = (channel_number + 1);
+		codec->subband_number = 0;
 	}
     
 #if VC5_ENABLED_PART(VC5_PART_LAYERS)
@@ -1906,7 +1985,7 @@ CODEC_ERROR SetEncoderQuantization(ENCODER *encoder,
 	int channel_count = encoder->channel_count;
 	int channel_number;
 
-	const int quant_table_length = sizeof(parameters->quant_table)/sizeof(parameters->quant_table[0]);
+const int quant_table_length = sizeof(parameters->quant_table)/sizeof(parameters->quant_table[0]);
 
     // Set the midpoint prequant parameter
     encoder->midpoint_prequant = 2;
@@ -1914,7 +1993,31 @@ CODEC_ERROR SetEncoderQuantization(ENCODER *encoder,
 	// Set the quantization table in each channel
 	for (channel_number = 0; channel_number < channel_count; channel_number++)
 	{
-		SetTransformQuantTable(encoder, channel_number, parameters->quant_table, quant_table_length);
+        QUANT scaled_table[MAX_SUBBAND_COUNT];
+        memcpy(scaled_table, parameters->quant_table, sizeof(scaled_table));
+
+        PRECISION bits = encoder->channel[channel_number].bits_per_component;
+        double scale = 1.0;
+        if (bits > 12)
+        {
+            scale = 12.0 / (double)bits;
+        }
+
+        if (scale != 1.0)
+        {
+            int i;
+            /* Start at index 1: index 0 is the lowpass band which must
+               always keep quant=1 for correct reconstruction. */
+            for (i = 1; i < quant_table_length; ++i)
+            {
+                int scaled = (int)lrint((double)scaled_table[i] * scale);
+                if (scaled < 1) scaled = 1;
+                scaled_table[i] = (QUANT)scaled;
+            }
+        }
+
+        encoder->midpoint_prequant = (bits >= 15) ? 3 : 2;
+		SetTransformQuantTable(encoder, channel_number, scaled_table, quant_table_length);
 	}
 
 	return CODEC_ERROR_OKAY;
@@ -2110,15 +2213,16 @@ CODEC_ERROR EncodeLowpassBand(ENCODER *encoder, WAVELET *wavelet, int channel_nu
 
 	for (row = 0; row < height; row++)
 	{
-		uint16_t *lowpass = (uint16_t *)lowpass_row_ptr;
+		PIXEL *lowpass = (PIXEL *)lowpass_row_ptr;
 		int column;
 
 		for (column = 0; column < width; column++)
 		{
-			BITWORD coefficient = lowpass[column];
-			//assert(0 <= lowpass[column] && lowpass[column] <= COEFFICIENT_MAX);
-			assert(lowpass[column] <= COEFFICIENT_MAX);
-			assert(coefficient <= COEFFICIENT_MAX);
+			// Clamp the 32-bit pixel value to 16-bit range for storage
+			int32_t value = lowpass[column];
+			if (value < 0) value = 0;
+			if (value > UINT16_MAX) value = UINT16_MAX;
+			BITWORD coefficient = (BITWORD)value;
 			PutBits(stream, coefficient, lowpass_precision);
 		}
 
@@ -2552,4 +2656,3 @@ CODEC_ERROR PutVideoLowpassHeader(ENCODER *encoder, int channel_number, BITSTREA
     
     return CODEC_ERROR_OKAY;
 }
-
