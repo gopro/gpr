@@ -45,7 +45,8 @@
 //TODO: The maximum number of channels and wavelets depends on the profile
 
 //! Internal precision of the intermediate results after unpacking
-static const int default_internal_precision = 12;
+// Raised to support higher bit-depth inputs; PIXEL is widened to 32-bit.
+static const int default_internal_precision = 16;
 
 //TODO: Change the global variable from internal_precision to encoded_precision?
 

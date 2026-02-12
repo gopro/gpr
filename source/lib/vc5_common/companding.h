@@ -34,7 +34,11 @@ extern "C" {
 
     // Invert the companding curve applied to a quantized coefficient magnitude (for debugging)
     int32_t UncompandedValue(int32_t value);
-    
+
+    // Fast integer LUT-based uncompanding (no floating point)
+    void InitUncompandTable(void);
+    int32_t UncompandedValueFast(int32_t value);
+
     PIXEL UncompandedPixel(PIXEL value);
     
     CODEC_ERROR InvertCompanding(PIXEL *image, DIMENSION width, DIMENSION height, DIMENSION pitch);
