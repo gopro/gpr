@@ -78,6 +78,14 @@ CODEC_ERROR vc5_decoder_process(const vc5_decoder_parameters*   decoding_paramet
         case VC5_DECODER_PIXEL_FORMAT_GBRG_14:
             parameters.output.format = PIXEL_FORMAT_RAW_GBRG_14;
             break;
+
+        case VC5_DECODER_PIXEL_FORMAT_RGGB_16:
+            parameters.output.format = PIXEL_FORMAT_RAW_RGGB_16;
+            break;
+
+        case VC5_DECODER_PIXEL_FORMAT_GBRG_16:
+            parameters.output.format = PIXEL_FORMAT_RAW_GBRG_16;
+            break;
             
         default:
             assert(0);
