@@ -8,6 +8,32 @@ set(CMAKE_C_FLAGS "-std=c99")
 # project name
 project( gpr )
 
+# Enable link-time optimization for cross-TU inlining (GetBits, GetBuffer, etc.)
+cmake_policy(SET CMP0069 NEW)
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported OUTPUT ipo_output)
+if(ipo_supported)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+  message(STATUS "LTO/IPO enabled")
+else()
+  message(STATUS "LTO/IPO not supported: ${ipo_output}")
+endif()
+
+# Enable NEON on arm64 (Apple Silicon defaults to ON)
+set(NEON_DEFAULT OFF)
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)")
+  set(NEON_DEFAULT ON)
+endif()
+option(NEON "Enable ARM NEON intrinsics" ${NEON_DEFAULT})
+
+if(NEON)
+  add_compile_definitions(NEON=1)
+else()
+  add_compile_definitions(NEON=0)
+endif()
+
+message(STATUS "NEON enabled: ${NEON}")
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
   execute_process(
     COMMAND git rev-parse --abbrev-ref HEAD
