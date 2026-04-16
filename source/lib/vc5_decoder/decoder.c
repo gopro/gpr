@@ -2080,6 +2080,7 @@ CODEC_ERROR DecodeBandRuns(BITSTREAM *stream, CODEBOOK *codebook, PIXEL *data,
                 index += run.count;
                 column += run.count;
                 data_count -= run.count;
+                run.count = 0;
             }
             else
             {
