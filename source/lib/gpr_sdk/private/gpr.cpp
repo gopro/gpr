@@ -489,11 +489,21 @@ static void convert_dng_exif_to_dng_exif_info( gpr_exif_info* dst_exif, const dn
     dst_exif->date_time_original        = convert_to_dng_date_and_time( src_exif->fDateTimeOriginal.DateTime() );
     dst_exif->date_time_digitized       = convert_to_dng_date_and_time( src_exif->fDateTimeOriginal.DateTime() );
     
-    assert(src_exif->fSoftware.Length() < sizeof(dst_exif->software_version));
-    memcpy( dst_exif->software_version, src_exif->fSoftware.Get(), src_exif->fSoftware.Length() );
+    {
+        size_t len = src_exif->fSoftware.Length();
+        if (len >= sizeof(dst_exif->software_version))
+            len = sizeof(dst_exif->software_version) - 1;
+        memcpy( dst_exif->software_version, src_exif->fSoftware.Get(), len );
+        dst_exif->software_version[len] = '\0';
+    }
 
-    assert(src_exif->fUserComment.Length() < sizeof(dst_exif->user_comment));
-    memcpy( dst_exif->user_comment, src_exif->fUserComment.Get(), src_exif->fUserComment.Length() );
+    {
+        size_t len = src_exif->fUserComment.Length();
+        if (len >= sizeof(dst_exif->user_comment))
+            len = sizeof(dst_exif->user_comment) - 1;
+        memcpy( dst_exif->user_comment, src_exif->fUserComment.Get(), len );
+        dst_exif->user_comment[len] = '\0';
+    }
     
     // GPS Info
     gpr_gps_info& dst_gps_info = dst_exif->gps_info;
