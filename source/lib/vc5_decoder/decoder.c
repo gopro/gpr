@@ -217,7 +217,7 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
         {
             int bits = unpacked_image.component_array_list[0].bits_per_component;
             WaveletToRGB(parameters->allocator, (PIXEL*)unpacked_image.component_array_list[0].data, (PIXEL*)unpacked_image.component_array_list[1].data, (PIXEL*)unpacked_image.component_array_list[2].data,
-                         unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / 2,
+                         unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / sizeof(COMPONENT_VALUE),
                          rgb_image, bits, parameters->rgb_bits, &parameters->rgb_gain );
             break;
         }
