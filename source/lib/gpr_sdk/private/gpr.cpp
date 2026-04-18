@@ -781,7 +781,13 @@ static bool read_dng(const gpr_allocator*       allocator,
                     convert_params->profile_info.hue_sat_map_encoding = cam_profile.HueSatMapEncoding();
 
                     /* Sanity check: reject absurdly large maps */
-                    if (count64 > 8000000) count64 = 0;
+                    if (count64 > 8000000)
+                    {
+                        count64 = 0;
+                        convert_params->profile_info.hue_sat_map_dims[0] = 0;
+                        convert_params->profile_info.hue_sat_map_dims[1] = 0;
+                        convert_params->profile_info.hue_sat_map_dims[2] = 0;
+                    }
                     uint32 count = (uint32)count64;
 
                     // Copy data1 (3 floats per entry: hueShift, satScale, valScale)
@@ -882,10 +888,9 @@ static bool read_dng(const gpr_allocator*       allocator,
                         }
                         else
                         {
+                            // No GBRG_14 enum; use GBRG_16 for 14-bit and 16-bit
                             tuning_info.pixel_format = PIXEL_FORMAT_GBRG_16;
                         }
-                        
-                        
                     }
                 }
                 

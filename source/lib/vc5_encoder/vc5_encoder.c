@@ -71,7 +71,7 @@ const size_t max_vc5_buffer_size = base_size + (base_size >> 1) + (1 << 20);
         };
         
         int quality = encoding_parameters->quality_setting;
-        if( quality < VC5_ENCODER_QUALITY_SETTING_COUNT )
+        if( quality >= 0 && quality < VC5_ENCODER_QUALITY_SETTING_COUNT )
         {
             memcpy(parameters.quant_table, quant_table[quality], sizeof(parameters.quant_table));
         }
