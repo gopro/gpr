@@ -103,8 +103,11 @@ static void InitVLCTableOnce(void)
 */
 CODEC_ERROR GetRunFast(BITSTREAM *stream, CODEBOOK *codebook, RUN *run)
 {
-	/* Thread-safe one-time initialization of the lookup table */
-	vlc_init_codebook = codebook;
+	/* Thread-safe one-time initialization of the lookup table.
+	   Note: assumes a single codebook is used throughout the decode session. */
+	if (vlc_init_codebook == NULL)
+		vlc_init_codebook = codebook;
+	assert(vlc_init_codebook == codebook);
 	pthread_once(&vlc_init_once, InitVLCTableOnce);
 
 	/* Bypass fast path if disabled via VLC_NO_FAST env var */

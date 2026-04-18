@@ -145,7 +145,13 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
             case PIXEL_FORMAT_RAW_RGGB_16:
                 rggb_order = 1;
                 break;
+            case PIXEL_FORMAT_RAW_GBRG_12:
+            case PIXEL_FORMAT_RAW_GBRG_14:
+            case PIXEL_FORMAT_RAW_GBRG_16:
+                rggb_order = 0;
+                break;
             default:
+                assert(0);
                 rggb_order = 0;
                 break;
         }
