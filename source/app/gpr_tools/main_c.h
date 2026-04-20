@@ -27,7 +27,7 @@ extern "C" {
                          const char*  output_file_path, const char*  exiftool_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits,
                          const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height, int quality,
                          bool denoise_enabled, double denoise_strength, bool variance_stabilize, bool denoise_output,
-                         bool noise_replace, const char* fpn_calibration_path, bool ans_enabled );
+                         bool noise_replace, const char* fpn_calibration_path, bool ans_enabled, bool embedded_mode );
     
 #ifdef __cplusplus
 }

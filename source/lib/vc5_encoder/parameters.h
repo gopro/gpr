@@ -130,6 +130,7 @@ typedef struct _encoder_parameters
     double              noise_offset;
     bool                variance_stabilize;
     bool                ans_enabled;
+    bool                embedded_mode;
     uint32_t            noise_seed;
     double              noise_sigma[MAX_CHANNEL_COUNT];
 

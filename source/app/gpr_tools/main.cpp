@@ -79,6 +79,7 @@ public:
     bool    noise_replace;
     string  fpn_calibration;
     bool    ans_coding;
+    bool    embedded;
 
 public:
 
@@ -129,7 +130,8 @@ public:
         ("DenoiseOutput",                                   denoise_output,                             false,                  "Output denoised image (skip noise reconstruction)")
         ("NoiseReplace,R",                                  noise_replace,                              false,                  "Pixel-domain noise replacement (best compression)")
         ("FpnCalibration,F",                                fpn_calibration,                            string(""),             "FPN calibration file (JSON from fpn_extract)")
-        ("ANS,A",                                           ans_coding,                                 false,                  "Use ANS entropy coding (replaces VLC codebook)");
+        ("ANS,A",                                           ans_coding,                                 false,                  "Use ANS entropy coding (replaces VLC codebook)")
+        ("Embedded,E",                                      embedded,                                   false,                  "Embedded mode: single-thread, minimal memory (simulates camera SoC)");
         ;
     }
 };
@@ -217,7 +219,7 @@ int main(int argc, char *argv [])
                                 args.output_file_path.c_str(), args.apply_gpr_parameters.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits,
                                 args.jpg_preview_file_path.c_str(), args.jpg_preview_file_width, args.jpg_preview_file_height, args.quality,
                                 args.denoise, args.denoise_strength_pct / 100.0, args.stabilize, args.denoise_output,
-                                args.noise_replace, args.fpn_calibration.c_str(), args.ans_coding );
+                                args.noise_replace, args.fpn_calibration.c_str(), args.ans_coding, args.embedded );
     }
     
     return 0;

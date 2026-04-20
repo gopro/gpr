@@ -159,6 +159,9 @@ typedef struct _encoder
 	//! ANS entropy coding (replaces fixed VLC codebook)
 	bool ans_enabled;
 
+	//! Embedded mode: single-thread, no parallel pre-encode, minimal malloc
+	bool embedded_mode;
+
 	//! Noise-aware compression parameters
 	bool denoise_enabled;
 	double denoise_strength;
