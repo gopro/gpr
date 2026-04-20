@@ -53,5 +53,21 @@ void gpr_profile_info_set_defaults(gpr_profile_info* x)
     
     memset( x->color_matrix_1, 0, sizeof(x->color_matrix_1) );
     memset( x->color_matrix_2, 0, sizeof(x->color_matrix_2) );
+
+    memset( x->forward_matrix_1, 0, sizeof(x->forward_matrix_1) );
+    memset( x->forward_matrix_2, 0, sizeof(x->forward_matrix_2) );
+    x->has_forward_matrix = false;
+
+    x->baseline_exposure = 0.0;
+    x->analog_balance[0] = 1.0;
+    x->analog_balance[1] = 1.0;
+    x->analog_balance[2] = 1.0;
+
+    x->hue_sat_map_dims[0] = 0;
+    x->hue_sat_map_dims[1] = 0;
+    x->hue_sat_map_dims[2] = 0;
+    x->hue_sat_map_data1 = NULL;
+    x->hue_sat_map_data2 = NULL;
+    x->hue_sat_map_encoding = 0;
 }
 

@@ -160,15 +160,33 @@ static void set_vc5_encoder_parameters( vc5_encoder_parameters& vc5_encoder_para
         case PIXEL_FORMAT_GBRG_12P:
             vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_GBRG_12P;
             break;
+
+        case PIXEL_FORMAT_RGGB_16:
+            vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_RGGB_16;
+            break;
+
+        case PIXEL_FORMAT_GBRG_16:
+            vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_GBRG_16;
+            break;
             
         default:
             break;
     }
     
-    if( convert_params->fast_encoding )
+    if( convert_params->quality >= 0 && convert_params->quality < VC5_ENCODER_QUALITY_SETTING_COUNT )
+        vc5_encoder_params.quality_setting = (VC5_ENCODER_QUALITY_SETTING)convert_params->quality;
+    else if( convert_params->fast_encoding )
         vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_MEDIUM;
     else
         vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_FS1;
+
+    vc5_encoder_params.denoise_enabled    = convert_params->tuning_info.denoise_enabled;
+    vc5_encoder_params.denoise_strength   = convert_params->tuning_info.denoise_strength;
+    vc5_encoder_params.noise_scale        = convert_params->tuning_info.noise_scale;
+    vc5_encoder_params.noise_offset       = convert_params->tuning_info.noise_offset;
+    vc5_encoder_params.variance_stabilize = convert_params->tuning_info.variance_stabilize;
+    vc5_encoder_params.ans_enabled       = convert_params->tuning_info.ans_enabled;
+
 }
 #endif
 
@@ -185,20 +203,29 @@ void gpr_parameters_set_defaults(gpr_parameters* x)
     x->compute_md5sum = false;
     
     x->fast_encoding = false;
+    x->quality = -1;
 }
 
 void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x, gpr_malloc mem_alloc)
 {
     gpr_parameters_set_defaults(x);
-    
+
     *x = *y;
-    
+
+    // Clear FPN heap pointers to prevent double-free (shallow copy shares pointers)
+    // The copy does NOT own the FPN allocations — only the original does.
+    x->fpn.row_offsets[0] = NULL; x->fpn.row_offsets[1] = NULL;
+    x->fpn.row_offsets[2] = NULL; x->fpn.row_offsets[3] = NULL;
+    x->fpn.col_offsets[0] = NULL; x->fpn.col_offsets[1] = NULL;
+    x->fpn.col_offsets[2] = NULL; x->fpn.col_offsets[3] = NULL;
+    x->fpn.precomputed_map = NULL;
+
     if( y->gpmf_payload.size > 0 && y->gpmf_payload.buffer != NULL )
     {
         x->gpmf_payload.buffer = mem_alloc( y->gpmf_payload.size );
         memcpy( x->gpmf_payload.buffer, y->gpmf_payload.buffer, y->gpmf_payload.size );
     }
-    
+
     if( y->tuning_info.gain_map.size > 0 )
     {
         for ( int i = 0; i < 4; i++)
@@ -210,6 +237,29 @@ void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x, g
             }
         }
     }
+
+    // Deep-copy HueSatMap data
+    if( y->profile_info.hue_sat_map_dims[0] > 0 )
+    {
+        uint64_t count64 = (uint64_t)y->profile_info.hue_sat_map_dims[0] *
+                           y->profile_info.hue_sat_map_dims[1] *
+                           y->profile_info.hue_sat_map_dims[2];
+        /* Sanity check: reject absurdly large maps (> ~8M entries = ~96MB) */
+        if( count64 > 8000000 ) count64 = 0;
+        uint32_t count = (uint32_t)count64;
+        size_t data_size = count * 3 * sizeof(float);
+
+        if( y->profile_info.hue_sat_map_data1 != NULL )
+        {
+            x->profile_info.hue_sat_map_data1 = (float *)mem_alloc( data_size );
+            memcpy( x->profile_info.hue_sat_map_data1, y->profile_info.hue_sat_map_data1, data_size );
+        }
+        if( y->profile_info.hue_sat_map_data2 != NULL )
+        {
+            x->profile_info.hue_sat_map_data2 = (float *)mem_alloc( data_size );
+            memcpy( x->profile_info.hue_sat_map_data2, y->profile_info.hue_sat_map_data2, data_size );
+        }
+    }
 }
 
 void gpr_parameters_destroy(gpr_parameters* x, gpr_free mem_free)
@@ -218,7 +268,7 @@ void gpr_parameters_destroy(gpr_parameters* x, gpr_free mem_free)
     {
         mem_free( x->gpmf_payload.buffer );
     }
-    
+
     if( x->tuning_info.gain_map.size > 0 )
     {
         for ( int i = 0; i < 4; i++)
@@ -227,6 +277,19 @@ void gpr_parameters_destroy(gpr_parameters* x, gpr_free mem_free)
                 mem_free( x->tuning_info.gain_map.buffers[i] );
         }
     }
+
+    if( x->profile_info.hue_sat_map_data1 )
+    {
+        mem_free( x->profile_info.hue_sat_map_data1 );
+        x->profile_info.hue_sat_map_data1 = NULL;
+    }
+    if( x->profile_info.hue_sat_map_data2 )
+    {
+        mem_free( x->profile_info.hue_sat_map_data2 );
+        x->profile_info.hue_sat_map_data2 = NULL;
+    }
+
+    fpn_model_free(&x->fpn);
 }
 
 
@@ -443,11 +506,21 @@ static void convert_dng_exif_to_dng_exif_info( gpr_exif_info* dst_exif, const dn
     dst_exif->date_time_original        = convert_to_dng_date_and_time( src_exif->fDateTimeOriginal.DateTime() );
     dst_exif->date_time_digitized       = convert_to_dng_date_and_time( src_exif->fDateTimeOriginal.DateTime() );
     
-    assert(src_exif->fSoftware.Length() < sizeof(dst_exif->software_version));
-    memcpy( dst_exif->software_version, src_exif->fSoftware.Get(), src_exif->fSoftware.Length() );
+    {
+        size_t len = src_exif->fSoftware.Length();
+        if (len >= sizeof(dst_exif->software_version))
+            len = sizeof(dst_exif->software_version) - 1;
+        memcpy( dst_exif->software_version, src_exif->fSoftware.Get(), len );
+        dst_exif->software_version[len] = '\0';
+    }
 
-    assert(src_exif->fUserComment.Length() < sizeof(dst_exif->user_comment));
-    memcpy( dst_exif->user_comment, src_exif->fUserComment.Get(), src_exif->fUserComment.Length() );
+    {
+        size_t len = src_exif->fUserComment.Length();
+        if (len >= sizeof(dst_exif->user_comment))
+            len = sizeof(dst_exif->user_comment) - 1;
+        memcpy( dst_exif->user_comment, src_exif->fUserComment.Get(), len );
+        dst_exif->user_comment[len] = '\0';
+    }
     
     // GPS Info
     gpr_gps_info& dst_gps_info = dst_exif->gps_info;
@@ -652,11 +725,12 @@ static bool read_dng(const gpr_allocator*       allocator,
             convert_params->input_pitch  = convert_params->input_width * 2;
             
             // Copy ColorMatrix1, ColorMatrix2
+            if (negative->ProfileCount() > 0)
             {
                 const dng_camera_profile &profile_info = negative->ProfileByIndex( 0 );
                 const dng_matrix &m1 = profile_info.ColorMatrix1();
                 const dng_matrix &m2 = profile_info.ColorMatrix2();
-                
+
                 for (i = 0; i < 3; i++)
                 {
                     for (j = 0; j < 3; j++)
@@ -665,17 +739,91 @@ static bool read_dng(const gpr_allocator*       allocator,
                         convert_params->profile_info.color_matrix_2[i][j] = m2[i][j];
                     }
                 }
-                
+
                 convert_params->profile_info.compute_color_matrix = false;
                 convert_params->profile_info.matrix_weighting = 1.0;
-                
+
                 memset( convert_params->profile_info.wb1, 0, sizeof(convert_params->profile_info.wb1) );
                 memset( convert_params->profile_info.wb2, 0, sizeof(convert_params->profile_info.wb2) );
-                
+
                 memset( convert_params->profile_info.cam_to_srgb_1, 0, sizeof(convert_params->profile_info.cam_to_srgb_1) );
                 memset( convert_params->profile_info.cam_to_srgb_2, 0, sizeof(convert_params->profile_info.cam_to_srgb_2) );
+
+                // Copy CalibrationIlluminant values
+                convert_params->profile_info.illuminant1 = profile_info.CalibrationIlluminant1();
+                convert_params->profile_info.illuminant2 = profile_info.CalibrationIlluminant2();
+
+                // Copy ForwardMatrix if present
+                const dng_matrix &fm1 = profile_info.ForwardMatrix1();
+                const dng_matrix &fm2 = profile_info.ForwardMatrix2();
+                if (!fm1.IsEmpty() && !fm2.IsEmpty())
+                {
+                    convert_params->profile_info.has_forward_matrix = true;
+                    for (i = 0; i < 3; i++)
+                        for (j = 0; j < 3; j++)
+                        {
+                            convert_params->profile_info.forward_matrix_1[i][j] = fm1[i][j];
+                            convert_params->profile_info.forward_matrix_2[i][j] = fm2[i][j];
+                        }
+                }
+                else
+                {
+                    convert_params->profile_info.has_forward_matrix = false;
+                }
             }
-            
+
+            // Copy BaselineExposure and AnalogBalance
+            {
+                convert_params->profile_info.baseline_exposure = negative->BaselineExposure();
+
+                convert_params->profile_info.analog_balance[0] = negative->AnalogBalance(0);
+                convert_params->profile_info.analog_balance[1] = negative->AnalogBalance(1);
+                convert_params->profile_info.analog_balance[2] = negative->AnalogBalance(2);
+            }
+
+            // Copy ProfileHueSatMapData if present
+            if (negative->ProfileCount() > 0)
+            {
+                const dng_camera_profile &cam_profile = negative->ProfileByIndex( 0 );
+                if (cam_profile.HasHueSatDeltas())
+                {
+                    const dng_hue_sat_map &hsm1 = cam_profile.HueSatDeltas1();
+                    uint32 hDiv, sDiv, vDiv;
+                    hsm1.GetDivisions(hDiv, sDiv, vDiv);
+                    uint64 count64 = (uint64)hDiv * sDiv * vDiv;
+
+                    convert_params->profile_info.hue_sat_map_dims[0] = hDiv;
+                    convert_params->profile_info.hue_sat_map_dims[1] = sDiv;
+                    convert_params->profile_info.hue_sat_map_dims[2] = vDiv;
+                    convert_params->profile_info.hue_sat_map_encoding = cam_profile.HueSatMapEncoding();
+
+                    /* Sanity check: reject absurdly large maps */
+                    if (count64 > 8000000)
+                    {
+                        count64 = 0;
+                        convert_params->profile_info.hue_sat_map_dims[0] = 0;
+                        convert_params->profile_info.hue_sat_map_dims[1] = 0;
+                        convert_params->profile_info.hue_sat_map_dims[2] = 0;
+                    }
+                    uint32 count = (uint32)count64;
+
+                    // Copy data1 (3 floats per entry: hueShift, satScale, valScale)
+                    size_t data_size = count * 3 * sizeof(float);
+                    convert_params->profile_info.hue_sat_map_data1 = (float *)allocator->Alloc(data_size);
+                    const dng_hue_sat_map::HSBModify *src1 = hsm1.GetConstDeltas();
+                    memcpy(convert_params->profile_info.hue_sat_map_data1, src1, data_size);
+
+                    // Copy data2 if present
+                    const dng_hue_sat_map &hsm2 = cam_profile.HueSatDeltas2();
+                    if (hsm2.IsValid())
+                    {
+                        convert_params->profile_info.hue_sat_map_data2 = (float *)allocator->Alloc(data_size);
+                        const dng_hue_sat_map::HSBModify *src2 = hsm2.GetConstDeltas();
+                        memcpy(convert_params->profile_info.hue_sat_map_data2, src2, data_size);
+                    }
+                }
+            }
+
             // Set Exif Info
             convert_dng_exif_to_dng_exif_info( &convert_params->exif_info, negative->GetExif() );
             
@@ -694,20 +842,27 @@ static bool read_dng(const gpr_allocator*       allocator,
                     tuning_info.wb_gains.b_gain = 1 / camNeutral[2];
                 }
                 
-                const dng_linearization_info& linearization_info = *negative->GetLinearizationInfo();
-                
+                const dng_linearization_info *linearization_ptr = negative->GetLinearizationInfo();
+                if (linearization_ptr != NULL)
                 {
+                    const dng_linearization_info& linearization_info = *linearization_ptr;
+
                     gpr_static_black_level& static_black_level    = tuning_info.static_black_level;
-                    
-                    static_black_level.r_black   = linearization_info.fBlackLevel[0][0][0];
-                    static_black_level.g_r_black = linearization_info.fBlackLevel[0][1][0];
-                    static_black_level.g_b_black = linearization_info.fBlackLevel[1][0][0];
-                    static_black_level.b_black   = linearization_info.fBlackLevel[1][1][0];
-                }
-                
-                {
+
+                    // Index with modulo repeat dims so that a 1x1 pattern
+                    // (uniform black level) replicates to all four channels
+                    uint32 rr = linearization_info.fBlackLevelRepeatRows;
+                    uint32 rc = linearization_info.fBlackLevelRepeatCols;
+                    if (rr < 1) rr = 1;
+                    if (rc < 1) rc = 1;
+
+                    static_black_level.r_black   = linearization_info.fBlackLevel[0 % rr][0 % rc][0];
+                    static_black_level.g_r_black = linearization_info.fBlackLevel[0 % rr][1 % rc][0];
+                    static_black_level.g_b_black = linearization_info.fBlackLevel[1 % rr][0 % rc][0];
+                    static_black_level.b_black   = linearization_info.fBlackLevel[1 % rr][1 % rc][0];
+
                     gpr_saturation_level& dgain_saturation_level = tuning_info.dgain_saturation_level;
-                    
+
                     dgain_saturation_level.level_red        = linearization_info.fWhiteLevel[0];
                     dgain_saturation_level.level_green_even = dgain_saturation_level.level_red;
                     dgain_saturation_level.level_green_odd  = dgain_saturation_level.level_red;
@@ -721,44 +876,38 @@ static bool read_dng(const gpr_allocator*       allocator,
                     
                     bool rggb_raw = (rawIFD.fCFAPattern[0][0] == 0) && (rawIFD.fCFAPattern[0][1] == 1) && (rawIFD.fCFAPattern[1][0] == 1) && (rawIFD.fCFAPattern[1][1] == 2);
                     
+                    // Determine bit depth from the maximum saturation level
+                    uint32_t max_sat = dgain_saturation_level.level_red;
+                    if (dgain_saturation_level.level_green_even > max_sat) max_sat = dgain_saturation_level.level_green_even;
+                    if (dgain_saturation_level.level_green_odd  > max_sat) max_sat = dgain_saturation_level.level_green_odd;
+                    if (dgain_saturation_level.level_blue       > max_sat) max_sat = dgain_saturation_level.level_blue;
+
                     if( rggb_raw )
                     {
-                        if( dgain_saturation_level.level_red        == 4095 &&
-                            dgain_saturation_level.level_green_even == 4095 &&
-                            dgain_saturation_level.level_green_odd  == 4095 &&
-                            dgain_saturation_level.level_blue       == 4095 )
+                        if( max_sat <= 4095 )
                         {
                             tuning_info.pixel_format = PIXEL_FORMAT_RGGB_12;
                         }
-                        else if(dgain_saturation_level.level_red        == 16383 &&
-                                dgain_saturation_level.level_green_even == 16383 &&
-                                dgain_saturation_level.level_green_odd  == 16383 &&
-                                dgain_saturation_level.level_blue       == 16383 )
+                        else if( max_sat <= 16383 )
                         {
                             tuning_info.pixel_format = PIXEL_FORMAT_RGGB_14;
                         }
                         else
                         {
-                            assert(0);
-                            return false;
+                            tuning_info.pixel_format = PIXEL_FORMAT_RGGB_16;
                         }
                     }
                     else
                     {
-                        if( dgain_saturation_level.level_red        == 4095 &&
-                            dgain_saturation_level.level_green_even == 4095 &&
-                            dgain_saturation_level.level_green_odd  == 4095 &&
-                            dgain_saturation_level.level_blue       == 4095 )
+                        if( max_sat <= 4095 )
                         {
                             tuning_info.pixel_format = PIXEL_FORMAT_GBRG_12;
                         }
                         else
                         {
-                            assert(0);
-                            return false;
+                            // No GBRG_14 enum; use GBRG_16 for 14-bit and 16-bit
+                            tuning_info.pixel_format = PIXEL_FORMAT_GBRG_16;
                         }
-                        
-                        
                     }
                 }
                 
@@ -766,14 +915,72 @@ static bool read_dng(const gpr_allocator*       allocator,
                 if ( negative->HasNoiseProfile() )
                 {
                     dng_noise_profile  noise_profile = negative->NoiseProfile();
-                    
+
 		            dng_noise_function  noise_function = noise_profile.NoiseFunction (0);
 
                     tuning_info.noise_scale = noise_function.Scale();
                     tuning_info.noise_offset = noise_function.Offset();
-                    //LogPrint( "Noise profile s = %f, o = %f ", tuning_info.noise_scale, tuning_info.noise_offset );
                }
-                
+
+                // Read noise model metadata from XMP (if encoded with --Denoise)
+                {
+                    dng_xmp *xmp = negative->GetXMP();
+                    if (xmp)
+                    {
+                        const char *ns = "http://ns.adobe.com/exif/1.0/aux/";
+                        uint32 seed = 0;
+                        if (xmp->Get_uint32(ns, "GPRNoiseSeed", seed))
+                        {
+                            tuning_info.noise_seed = seed;
+                            real64 sig = 0;
+                            if (xmp->Get_real64(ns, "GPRNoiseSigma0", sig)) tuning_info.noise_sigma_est[0] = sig;
+                            if (xmp->Get_real64(ns, "GPRNoiseSigma1", sig)) tuning_info.noise_sigma_est[1] = sig;
+                            if (xmp->Get_real64(ns, "GPRNoiseSigma2", sig)) tuning_info.noise_sigma_est[2] = sig;
+                            if (xmp->Get_real64(ns, "GPRNoiseSigma3", sig)) tuning_info.noise_sigma_est[3] = sig;
+                        }
+                    }
+                }
+
+                // Read FPN polynomial from XMP (if stored during encoding)
+                {
+                    dng_xmp *xmp2 = negative->GetXMP();
+                    if (xmp2)
+                    {
+                        const char *ns2 = "http://ns.adobe.com/exif/1.0/aux/";
+                        uint32 poly_order = 0;
+                        if (xmp2->Get_uint32(ns2, "GPRFpnPolyOrder", poly_order) && poly_order > 0)
+                        {
+                            convert_params->fpn.poly_order = poly_order;
+                            uint32 fw = 0, fh = 0;
+                            xmp2->Get_uint32(ns2, "GPRFpnWidth", fw);
+                            xmp2->Get_uint32(ns2, "GPRFpnHeight", fh);
+                            convert_params->fpn.width = fw;
+                            convert_params->fpn.height = fh;
+
+                            const char *ch_prefix[] = {"GPRFpnR", "GPRFpnGr", "GPRFpnGb", "GPRFpnB"};
+                            for (int ch = 0; ch < 4; ch++)
+                            {
+                                for (int i = 0; i < FPN_MAX_POLY_TERMS && i < 15; i++)
+                                {
+                                    char key[64];
+                                    snprintf(key, sizeof(key), "%s%d", ch_prefix[ch], i);
+                                    real64 val = 0;
+                                    xmp2->Get_real64(ns2, key, val);
+                                    convert_params->fpn.poly_coeffs[ch][i] = val;
+                                }
+                            }
+                            if (fw > 0 && fh > 0)
+                                convert_params->fpn.valid = 1;
+                        }
+                    }
+                }
+
+                // DefaultCropOrigin and DefaultCropSize
+                tuning_info.default_crop_origin_h = Round_uint32(negative->DefaultCropOriginH().As_real64());
+                tuning_info.default_crop_origin_v = Round_uint32(negative->DefaultCropOriginV().As_real64());
+                tuning_info.default_crop_size_h = Round_uint32(negative->DefaultCropSizeH().As_real64());
+                tuning_info.default_crop_size_v = Round_uint32(negative->DefaultCropSizeV().As_real64());
+
                 // GainMap
                 dng_opcode_list &opcodelist2 =  negative->OpcodeList2 ();
                 uint32_t count = opcodelist2.Count ();
@@ -1049,15 +1256,32 @@ static void write_dng(const gpr_allocator*          allocator,
             case PIXEL_FORMAT_GBRG_12:
                 vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_12;
                 break;
+
+            case PIXEL_FORMAT_RGGB_16:
+                vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_16;
+                break;
+
+            case PIXEL_FORMAT_GBRG_16:
+                vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_16;
+                break;
                         
             default:
                 assert(0);
                 return;
         };
 
+        vc5_decoder_params.variance_stabilize = convert_params->tuning_info.variance_stabilize;
+        vc5_decoder_params.noise_scale        = convert_params->tuning_info.noise_scale;
+        vc5_decoder_params.noise_offset       = convert_params->tuning_info.noise_offset;
+        vc5_decoder_params.noise_seed         = convert_params->tuning_info.noise_seed;
+        vc5_decoder_params.add_noise_back     = (convert_params->tuning_info.noise_seed != 0)
+                                                && !convert_params->tuning_info.denoise_output;
+        memcpy(vc5_decoder_params.noise_sigma, convert_params->tuning_info.noise_sigma_est,
+               sizeof(vc5_decoder_params.noise_sigma));
+
         gpr_buffer vc5_image = { vc5_image_buffer->get_buffer(), vc5_image_buffer->get_size() };
         gpr_buffer raw_image = { raw_allocated_buffer.get_buffer(), raw_allocated_buffer.get_size()  };
-        
+
         if( vc5_decoder_process( &vc5_decoder_params, &vc5_image, &raw_image, NULL ) != CODEC_ERROR_OKAY )
         {
             assert(0);
@@ -1105,6 +1329,7 @@ static void write_dng(const gpr_allocator*          allocator,
             case PIXEL_FORMAT_RGGB_12:
             case PIXEL_FORMAT_RGGB_12P:
             case PIXEL_FORMAT_RGGB_14:
+            case PIXEL_FORMAT_RGGB_16:
                 negative->SetQuadBlacks(static_black_level.r_black,
                                         static_black_level.g_r_black,
                                         static_black_level.g_b_black,
@@ -1113,6 +1338,7 @@ static void write_dng(const gpr_allocator*          allocator,
                 break;
             case PIXEL_FORMAT_GBRG_12:
             case PIXEL_FORMAT_GBRG_12P:
+            case PIXEL_FORMAT_GBRG_16:
                 negative->SetQuadBlacks(static_black_level.g_b_black,
                                         static_black_level.b_black,
                                         static_black_level.r_black,
@@ -1205,13 +1431,20 @@ static void write_dng(const gpr_allocator*          allocator,
     //GP!! NEED outputWidth, activeWidth, outputHeight, activeHeight here
     negative->SetDefaultScale(dng_urational(outputWidth, activeWidth), dng_urational(outputHeight, activeHeight));
     
-    uint32 crop_size_val = 0;
-    dng_point crop_origin( 0, 0 );
-    dng_point crop_size( activeHeight - 2 * crop_size_val, activeWidth - 2 * crop_size_val );
-    
+    uint32 crop_origin_h = convert_params->tuning_info.default_crop_origin_h;
+    uint32 crop_origin_v = convert_params->tuning_info.default_crop_origin_v;
+    dng_point crop_origin( crop_origin_v, crop_origin_h );
+
+    /* Use stored crop size when available; fall back to symmetric formula */
+    uint32 crop_size_h = convert_params->tuning_info.default_crop_size_h;
+    uint32 crop_size_v = convert_params->tuning_info.default_crop_size_v;
+    if (crop_size_h == 0) crop_size_h = activeWidth  - 2 * crop_origin_h;
+    if (crop_size_v == 0) crop_size_v = activeHeight - 2 * crop_origin_v;
+    dng_point crop_size( crop_size_v, crop_size_h );
+
     negative->SetDefaultCropOrigin( crop_origin.h, crop_origin.v );
     negative->SetDefaultCropSize( crop_size.h, crop_size.v );
-    
+
     negative->SetOriginalDefaultCropSize( dng_urational(crop_size.h, 1), dng_urational(crop_size.v, 1) );
 
     {
@@ -1240,11 +1473,11 @@ static void write_dng(const gpr_allocator*          allocator,
     negative->SetColorKeys(colorCodes[0], colorCodes[1], colorCodes[2], colorCodes[3]);
 
     // Set Bayer Pattern
-    if( convert_params->tuning_info.pixel_format == PIXEL_FORMAT_RGGB_12 || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_RGGB_12P || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_RGGB_14 )
+    if( convert_params->tuning_info.pixel_format == PIXEL_FORMAT_RGGB_12 || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_RGGB_12P || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_RGGB_14 || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_RGGB_16 )
     {
         negative->SetBayerMosaic(1);
     }
-    else if( convert_params->tuning_info.pixel_format == PIXEL_FORMAT_GBRG_12 || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_GBRG_12P )
+    else if( convert_params->tuning_info.pixel_format == PIXEL_FORMAT_GBRG_12 || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_GBRG_12P || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_GBRG_16 )
     {
         negative->SetBayerMosaic(3);
     }
@@ -1254,14 +1487,16 @@ static void write_dng(const gpr_allocator*          allocator,
         return;
     }
     
-    negative->SetBaselineExposure(0);
+    negative->SetBaselineExposure(profile_info->baseline_exposure);
     negative->SetBaselineNoise(1.0);
     negative->SetBaselineSharpness(1.0);
-    
+
     negative->SetAntiAliasStrength(dng_urational(100, 100));
     negative->SetLinearResponseLimit(1.0);
     negative->SetShadowScale( dng_urational(1, 1) );
-    negative->SetAnalogBalance(dng_vector_3(1.0, 1.0, 1.0));
+    negative->SetAnalogBalance(dng_vector_3(profile_info->analog_balance[0],
+                                            profile_info->analog_balance[1],
+                                            profile_info->analog_balance[2]));
     
     AutoPtr<dng_camera_profile> prof(new dng_camera_profile);
     prof->SetName( camera_make_and_model );
@@ -1314,7 +1549,46 @@ static void write_dng(const gpr_allocator*          allocator,
     
     prof->SetCalibrationIlluminant1(profile_info->illuminant1);
     prof->SetCalibrationIlluminant2(profile_info->illuminant2);
-    
+
+    if (profile_info->has_forward_matrix)
+    {
+        dng_matrix_3by3 fm1;
+        dng_matrix_3by3 fm2;
+        for (i = 0; i < 3; i++)
+            for (j = 0; j < 3; j++)
+            {
+                fm1[i][j] = profile_info->forward_matrix_1[i][j];
+                fm2[i][j] = profile_info->forward_matrix_2[i][j];
+            }
+        prof->SetForwardMatrix1(fm1);
+        prof->SetForwardMatrix2(fm2);
+    }
+
+    if (profile_info->hue_sat_map_dims[0] > 0 && profile_info->hue_sat_map_data1 != NULL)
+    {
+        uint32 hDiv = profile_info->hue_sat_map_dims[0];
+        uint32 sDiv = profile_info->hue_sat_map_dims[1];
+        uint32 vDiv = profile_info->hue_sat_map_dims[2];
+        uint32 count = hDiv * sDiv * vDiv;
+
+        dng_hue_sat_map hsm1;
+        hsm1.SetDivisions(hDiv, sDiv, vDiv);
+        dng_hue_sat_map::HSBModify *dst1 = hsm1.GetDeltas();
+        memcpy(dst1, profile_info->hue_sat_map_data1, count * 3 * sizeof(float));
+        prof->SetHueSatDeltas1(hsm1);
+
+        if (profile_info->hue_sat_map_data2 != NULL)
+        {
+            dng_hue_sat_map hsm2;
+            hsm2.SetDivisions(hDiv, sDiv, vDiv);
+            dng_hue_sat_map::HSBModify *dst2 = hsm2.GetDeltas();
+            memcpy(dst2, profile_info->hue_sat_map_data2, count * 3 * sizeof(float));
+            prof->SetHueSatDeltas2(hsm2);
+        }
+
+        prof->SetHueSatMapEncoding(profile_info->hue_sat_map_encoding);
+    }
+
     negative->AddProfile(prof);
     
     dng_exif* const exif = negative->GetExif();
@@ -1360,7 +1634,50 @@ static void write_dng(const gpr_allocator*          allocator,
         set_vc5_encoder_parameters( gpr_writer->GetVc5EncoderParams(), convert_params );
       
         gpr_writer->EncodeVc5Image();
-                
+
+        // Write noise model metadata to XMP (after encoding populates sigma/seed)
+        {
+            vc5_encoder_parameters& enc_params = gpr_writer->GetVc5EncoderParams();
+            uint32_t noise_seed = enc_params.noise_seed;
+            if (noise_seed == 0) noise_seed = convert_params->tuning_info.noise_seed;
+            if (noise_seed != 0)
+            {
+                dng_xmp *xmp = negative->GetXMP();
+                if (xmp)
+                {
+                    const char *ns = "http://ns.adobe.com/exif/1.0/aux/";
+                    xmp->Set_uint32(ns, "GPRNoiseSeed", noise_seed);
+                    xmp->Set_real64(ns, "GPRNoiseSigma0", enc_params.noise_sigma_out[0], 6);
+                    xmp->Set_real64(ns, "GPRNoiseSigma1", enc_params.noise_sigma_out[1], 6);
+                    xmp->Set_real64(ns, "GPRNoiseSigma2", enc_params.noise_sigma_out[2], 6);
+                    xmp->Set_real64(ns, "GPRNoiseSigma3", enc_params.noise_sigma_out[3], 6);
+                }
+            }
+
+            // Write FPN polynomial coefficients if calibration was used
+            if (convert_params->fpn.valid)
+            {
+                dng_xmp *xmp = negative->GetXMP();
+                if (xmp)
+                {
+                    const char *ns = "http://ns.adobe.com/exif/1.0/aux/";
+                    xmp->Set_uint32(ns, "GPRFpnPolyOrder", (uint32)convert_params->fpn.poly_order);
+                    xmp->Set_uint32(ns, "GPRFpnWidth", (uint32)convert_params->fpn.width);
+                    xmp->Set_uint32(ns, "GPRFpnHeight", (uint32)convert_params->fpn.height);
+                    const char *ch_prefix[] = {"GPRFpnR", "GPRFpnGr", "GPRFpnGb", "GPRFpnB"};
+                    for (int ch = 0; ch < 4; ch++)
+                    {
+                        for (int i = 0; i < FPN_MAX_POLY_TERMS && i < 15; i++)
+                        {
+                            char key[64];
+                            snprintf(key, sizeof(key), "%s%d", ch_prefix[ch], i);
+                            xmp->Set_real64(ns, key, convert_params->fpn.poly_coeffs[ch][i], 8);
+                        }
+                    }
+                }
+            }
+        }
+
         if( convert_params->enable_preview )
         {
             const gpr_preview_image& preview_image = convert_params->preview_image;
@@ -1613,9 +1930,51 @@ bool gpr_convert_raw_to_gpr(const gpr_allocator*    allocator,
     gpr_buffer_auto raw_buffer(allocator->Alloc, allocator->Free);
     
     raw_buffer.set(inp_raw_buffer->buffer, inp_raw_buffer->size);
-    
+
+    // Phase C: Subtract fixed-pattern noise before encoding (if calibration loaded)
+    if (parameters->fpn.valid)
+    {
+        fpn_subtract(&parameters->fpn, (uint16_t*)raw_buffer.get_buffer(),
+                     parameters->input_width, parameters->input_height);
+    }
+
+    // Pixel-domain noise removal: quantize each pixel to the noise floor.
+    // The compressor then sees a clean signal with minimal entropy.
+    // Noise is restored on decode via noise_restore() with the same seed.
+    // REQUIRES calibrated noise model (DNG NoiseProfile) — auto-estimation
+    // from pixel differences conflates texture with noise and destroys signal.
+    if (parameters->tuning_info.noise_replace &&
+        parameters->tuning_info.noise_scale > 0)
+    {
+        // DNG NoiseProfile is in normalized [0,1] units.
+        // Convert to raw pixel units: variance_raw = scale * raw * max + offset * max^2
+        double max_val = (double)parameters->tuning_info.dgain_saturation_level.level_red;
+        if (max_val <= 0) max_val = 16383.0;
+        double nr_scale = parameters->tuning_info.noise_scale * max_val;
+        double nr_offset = parameters->tuning_info.noise_offset * max_val * max_val;
+
+        if (nr_scale > 0)
+        {
+            // ENCODER: remove noise only (no PRNG addition).
+            // The clean quantized signal compresses much better.
+            noise_remove((uint16_t*)raw_buffer.get_buffer(),
+                         parameters->input_width, parameters->input_height,
+                         nr_scale, nr_offset);
+
+            // Generate a deterministic seed from the raw data for noise restoration
+            uint32_t seed = 0x55AA1234;
+            const uint16_t *raw16 = (const uint16_t*)raw_buffer.get_buffer();
+            for (int i = 0; i < 64 && i < parameters->input_width; i++)
+                seed ^= (uint32_t)raw16[i] * 2654435761u;
+
+            // Store seed so the decoder can restore noise.
+            // Keep noise_scale/offset in DNG-normalized form (already stored from metadata).
+            const_cast<gpr_parameters*>(parameters)->tuning_info.noise_seed = seed;
+        }
+    }
+
     dng_memory_stream out_gpr_stream( gDefaultDNGMemoryAllocator );
-    
+
     write_dng( allocator, &out_gpr_stream, &raw_buffer, true, NULL, parameters );
 
     write_dngstream_to_buffer( &out_gpr_stream, out_gpr_buffer, allocator->Alloc, allocator->Free );
@@ -1633,22 +1992,29 @@ bool gpr_convert_dng_to_gpr(const gpr_allocator*    allocator,
     TIMESTAMP("[BEG]", 1)
 
     gpr_buffer_auto raw_buffer(allocator->Alloc, allocator->Free);
-    
+
     dng_memory_stream inp_dng_stream( gDefaultDNGMemoryAllocator );
     inp_dng_stream.Put( inp_dng_buffer->buffer, inp_dng_buffer->size );
     inp_dng_stream.SetReadPosition(0);
-    
-    if( read_dng( allocator, &inp_dng_stream, &raw_buffer, NULL, NULL ) == false )
+
+    // Extract metadata from input DNG into a mutable copy of parameters
+    gpr_parameters params_with_meta;
+    gpr_parameters_construct_copy( parameters, &params_with_meta, allocator->Alloc );
+
+    if( read_dng( allocator, &inp_dng_stream, &raw_buffer, NULL, &params_with_meta ) == false )
     {
+        gpr_parameters_destroy( &params_with_meta, allocator->Free );
         assert(0); return false;
     }
-    
+
     dng_memory_stream out_gpr_stream( gDefaultDNGMemoryAllocator );
-    
-    write_dng( allocator, &out_gpr_stream, &raw_buffer, true, NULL, parameters );
-    
+
+    write_dng( allocator, &out_gpr_stream, &raw_buffer, true, NULL, &params_with_meta );
+
     write_dngstream_to_buffer( &out_gpr_stream, out_gpr_buffer, allocator->Alloc, allocator->Free );
-    
+
+    gpr_parameters_destroy( &params_with_meta, allocator->Free );
+
     TIMESTAMP("[END]", 1)
 
     return true;
@@ -1749,22 +2115,29 @@ bool gpr_convert_gpr_to_dng(const gpr_allocator*    allocator,
 
     gpr_buffer_auto raw_buffer(allocator->Alloc, allocator->Free);
     gpr_buffer_auto vc5_buffer(allocator->Alloc, allocator->Free);
-    
+
     dng_memory_stream inp_gpr_stream( gDefaultDNGMemoryAllocator );
     inp_gpr_stream.Put( inp_gpr_buffer->buffer, inp_gpr_buffer->size );
     inp_gpr_stream.SetReadPosition(0);
-    
-    if( read_dng( allocator, &inp_gpr_stream, &raw_buffer, &vc5_buffer, NULL ) == false )
+
+    // Extract metadata from GPR (which is a DNG) into a mutable copy of parameters
+    gpr_parameters params_with_meta;
+    gpr_parameters_construct_copy( parameters, &params_with_meta, allocator->Alloc );
+
+    if( read_dng( allocator, &inp_gpr_stream, &raw_buffer, &vc5_buffer, &params_with_meta ) == false )
     {
+        gpr_parameters_destroy( &params_with_meta, allocator->Free );
         assert(0); return false;
     }
-    
+
     dng_memory_stream out_dng_stream( gDefaultDNGMemoryAllocator );
-    
-    write_dng( allocator, &out_dng_stream, &raw_buffer, false, NULL, parameters );
-    
+
+    write_dng( allocator, &out_dng_stream, &raw_buffer, false, NULL, &params_with_meta );
+
     write_dngstream_to_buffer( &out_dng_stream, out_dng_buffer, allocator->Alloc, allocator->Free );
-    
+
+    gpr_parameters_destroy( &params_with_meta, allocator->Free );
+
     TIMESTAMP("[END]", 1)
 
     return true;
@@ -1819,6 +2192,44 @@ bool gpr_convert_gpr_to_raw(const gpr_allocator*            allocator,
     return true;
 }
 
+bool gpr_convert_gpr_to_raw_ex(const gpr_allocator*    allocator,
+                               const gpr_parameters*   parameters,
+                                     gpr_buffer*       inp_gpr_buffer,
+                                     gpr_buffer*       out_raw_buffer)
+{
+    bool result = gpr_convert_gpr_to_raw(allocator, inp_gpr_buffer, out_raw_buffer);
+
+    if (result && parameters && !parameters->tuning_info.denoise_output)
+    {
+        // Restore noise: add back statistically equivalent noise from PRNG.
+        // Triggers automatically when the GPR contains a noise seed (from encoding
+        // with -R), unless denoise_output is set (user wants the clean signal).
+        if (parameters->tuning_info.noise_scale > 0 &&
+            parameters->tuning_info.noise_seed != 0)
+        {
+            // Convert DNG-normalized noise model to raw pixel units
+            double max_val = (double)parameters->tuning_info.dgain_saturation_level.level_red;
+            if (max_val <= 0) max_val = 16383.0;
+            double nr_scale = parameters->tuning_info.noise_scale * max_val;
+            double nr_offset = parameters->tuning_info.noise_offset * max_val * max_val;
+
+            noise_restore((uint16_t*)out_raw_buffer->buffer,
+                          parameters->input_width, parameters->input_height,
+                          nr_scale, nr_offset,
+                          parameters->tuning_info.noise_seed);
+        }
+
+        // Restore FPN (fixed-pattern noise)
+        if (parameters->fpn.valid)
+        {
+            fpn_add_back(&parameters->fpn, (uint16_t*)out_raw_buffer->buffer,
+                         parameters->input_width, parameters->input_height);
+        }
+    }
+
+    return result;
+}
+
 #endif // GPR_READING
 
 bool gpr_check_vc5( const gpr_allocator*        allocator,
@@ -1845,5 +2256,3 @@ bool gpr_check_vc5( const gpr_allocator*        allocator,
     
     return is_vc5_format;
 }
-
-

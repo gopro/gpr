@@ -51,6 +51,10 @@
         PIXEL_FORMAT_GBRG_12 = 3,                           // GBRG 12bit pixels packed into 16bits
         
         PIXEL_FORMAT_GBRG_12P = 4,                          // GBRG 12bit pixels packed into 12bits
+
+        PIXEL_FORMAT_RGGB_16 = 5,                           // RGGB 16bit pixels packed into 16bits
+
+        PIXEL_FORMAT_GBRG_16 = 6,                           // GBRG 16bit pixels packed into 16bits
         
     } GPR_PIXEL_FORMAT;
 
@@ -133,8 +137,23 @@
         double                  warp_blue_coefficient;
         
         gpr_gain_map            gain_map;
-        
+
         GPR_PIXEL_FORMAT        pixel_format;
+
+        uint32_t                default_crop_origin_h;
+        uint32_t                default_crop_origin_v;
+
+        uint32_t                default_crop_size_h;
+        uint32_t                default_crop_size_v;
+
+        bool                    denoise_enabled;    // Enable noise separation for entropy reduction
+        double                  denoise_strength;   // Threshold multiplier 0.0-1.0 (default 1.0)
+        bool                    variance_stabilize; // Enable Anscombe variance stabilization
+        bool                    denoise_output;     // Skip noise reconstruction on decode (actual denoising)
+        bool                    noise_replace;      // Pixel-domain noise replacement (Jetraw-style)
+        bool                    ans_enabled;        // Use ANS entropy coding (replaces VLC codebook)
+        uint32_t                noise_seed;         // PRNG seed for noise reconstruction (set by encoder)
+        double                  noise_sigma_est[4]; // Per-channel estimated noise sigma (set by encoder)
 
     } gpr_tuning_info;
 

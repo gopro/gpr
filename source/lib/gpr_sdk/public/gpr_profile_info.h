@@ -45,10 +45,23 @@
         
         Matrix      color_matrix_1;
         Matrix      color_matrix_2;
-     
+
+        Matrix      forward_matrix_1;
+        Matrix      forward_matrix_2;
+        bool        has_forward_matrix;
+
         uint16_t    illuminant1;
         uint16_t    illuminant2;
-        
+
+        double      baseline_exposure;
+        double      analog_balance[3];
+
+        /* ProfileHueSatMapData — per-hue color correction LUT */
+        uint32_t    hue_sat_map_dims[3];    /* [hue, sat, val] divisions */
+        float       *hue_sat_map_data1;     /* illuminant 1: dims[0]*dims[1]*dims[2]*3 floats */
+        float       *hue_sat_map_data2;     /* illuminant 2 (may be NULL) */
+        uint32_t    hue_sat_map_encoding;
+
     } gpr_profile_info;
 
     void gpr_profile_info_set_defaults(gpr_profile_info* x);

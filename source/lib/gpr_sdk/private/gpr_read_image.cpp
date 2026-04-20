@@ -53,9 +53,9 @@ static bool DecodeVC5(dng_image &image, gpr_buffer_auto& vc5_buffer, VC5_DECODER
     }
     
     raw_buffer.set( raw_image.buffer, raw_image.size, true );
-    
+
     dng_point size = image.Bounds().Size();
-    
+
     CopyBufferToRawImage( raw_buffer, size.h, image );
 
     return true;
@@ -92,15 +92,35 @@ void gpr_read_image::ReadTile (dng_host &host,
             {
                 bool rggb_raw = (ifd.fCFAPattern[0][0] == 0) && (ifd.fCFAPattern[0][1] == 1) && (ifd.fCFAPattern[1][0] == 1) && (ifd.fCFAPattern[1][1] == 2);
                 
+                // Use WhiteLevel to infer actual bit depth, NOT BitsPerSample
+                // (BitsPerSample is always 16 for uint16 DNG storage)
+                uint32 white_level = (uint32)ifd.fWhiteLevel[0];
+                uint32 bit_depth;
+                if (white_level <= 4095)
+                    bit_depth = 12;
+                else if (white_level <= 16383)
+                    bit_depth = 14;
+                else
+                    bit_depth = 16;
                 VC5_DECODER_PIXEL_FORMAT pixel_format;
-                
-                if( rggb_raw )
+
+                if (rggb_raw)
                 {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_14;
+                    if (bit_depth >= 16)
+                        pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_16;
+                    else if (bit_depth > 12)
+                        pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_14;
+                    else
+                        pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_12;
                 }
                 else
                 {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_12;
+                    if (bit_depth >= 16)
+                        pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_16;
+                    else if (bit_depth > 12)
+                        pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_14;
+                    else
+                        pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_12;
                 }
                 
                 if( DecodeVC5( image, *_vc5_buffer, pixel_format ) )

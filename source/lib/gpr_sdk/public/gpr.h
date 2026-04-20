@@ -29,6 +29,10 @@
 #include "gpr_allocator.h"
 #include "gpr_buffer.h"
 #include "gpr_rgb_buffer.h"
+/* noise_model.h is included here because fpn_model is embedded in gpr_parameters.
+   This exposes internal types to API consumers — a future version should use an
+   opaque pointer instead. See docs/future-ideas.md. */
+#include "noise_model.h"
 
 #ifdef __cplusplus
     extern "C" {
@@ -53,7 +57,9 @@
             unsigned int        input_pitch;                   /* Pitch of input source in pixels (only applies to raw input) */
 
             bool                fast_encoding;
-            
+
+            int                 quality;        /* Quality setting (0-5), or -1 for auto */
+
             bool                compute_md5sum;
             
             gpr_buffer          gpmf_payload;   /* GPMF payload of image file */
@@ -67,7 +73,9 @@
             gpr_profile_info    profile_info;   /* Camera color profile info object */
             
             gpr_tuning_info     tuning_info;    /* Camera tuning info object */
-            
+
+            fpn_model           fpn;            /* Fixed-pattern noise calibration (Phase C) */
+
         } gpr_parameters;
         
         void gpr_parameters_set_defaults(gpr_parameters* x);
@@ -160,6 +168,12 @@
         bool gpr_convert_gpr_to_raw(const gpr_allocator*    allocator,
                                           gpr_buffer*       inp_gpr_buffer,
                                           gpr_buffer*       out_raw_buffer);
+
+        //!< gpr to raw conversion with FPN noise reconstruction
+        bool gpr_convert_gpr_to_raw_ex(const gpr_allocator*    allocator,
+                                       const gpr_parameters*   parameters,
+                                             gpr_buffer*       inp_gpr_buffer,
+                                             gpr_buffer*       out_raw_buffer);
 #endif
         
 #ifdef __cplusplus
