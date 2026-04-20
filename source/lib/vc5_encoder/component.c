@@ -66,8 +66,12 @@ CODEC_ERROR AllocateComponentTransform(gpr_allocator *allocator, COMPONENT_TRANS
     if (transform->transform_matrix == NULL ||
         transform->transform_offset == NULL ||
         transform->transform_scale == NULL) {
-        
-        //TODO: Should clean up the partially allocated transform arrays
+        if (transform->transform_matrix) allocator->Free(transform->transform_matrix);
+        if (transform->transform_offset) allocator->Free(transform->transform_offset);
+        if (transform->transform_scale) allocator->Free(transform->transform_scale);
+        transform->transform_matrix = NULL;
+        transform->transform_offset = NULL;
+        transform->transform_scale = NULL;
         return CODEC_ERROR_OUTOFMEMORY;
     }
 

@@ -41,6 +41,8 @@
 #include "inverse.h"
 #include "codebooks.h"
 #include "wavelet.h"
+#include "ans_joint.h"
+#include "ans.h"
 #include "syntax.h"
 #include "decoder.h"
 #include "component.h"

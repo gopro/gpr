@@ -156,6 +156,18 @@ typedef struct _encoder
 	//! Parameter that controls the amount of rounding before quantization
 	int midpoint_prequant;
 
+	//! ANS entropy coding (replaces fixed VLC codebook)
+	bool ans_enabled;
+
+	//! Noise-aware compression parameters
+	bool denoise_enabled;
+	double denoise_strength;
+	double noise_scale;
+	double noise_offset;
+	bool variance_stabilize;
+	uint32_t noise_seed;
+	double noise_sigma[MAX_CHANNEL_COUNT];
+
 	//! Table for the order in which channels are encoded into the bitstream
 	CHANNEL channel_order_table[MAX_CHANNEL_COUNT];
 
@@ -174,9 +186,17 @@ typedef struct _encoder
 
     //! Six rows of horizontal lowpass results for each channel
     PIXEL *lowpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT];
-    
+
     //! Six rows of horizontal highpass results for each channel
     PIXEL *highpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT];
+
+    //! Pre-encoded ANS band data (filled in parallel, written serially)
+    //! Index: [channel][wavelet_level][band_in_wavelet(1-3)]
+    struct {
+        uint8_t *data;
+        size_t   size;
+        int      coding_method;  // 0=none, 1=ANS companded, 2=Joint RLV
+    } preencoded_band[MAX_CHANNEL_COUNT][MAX_WAVELET_COUNT][MAX_BAND_COUNT];
     
 #if VC5_ENABLED_PART(VC5_PART_SECTIONS)
     ENABLED_SECTIONS enabled_sections;
@@ -316,7 +336,7 @@ extern "C" {
     
     CODEC_ERROR EncodeLowpassBand(ENCODER *encoder, WAVELET *wavelet, int channel_number, BITSTREAM *stream);
     
-    CODEC_ERROR EncodeHighpassBand(ENCODER *encoder, WAVELET *wavelet, int band, int subband, BITSTREAM *stream);
+    CODEC_ERROR EncodeHighpassBand(ENCODER *encoder, WAVELET *wavelet, int band, int subband, BITSTREAM *stream, int channel_number, int wavelet_index);
     
     CODEC_ERROR EncodeHighpassBandLongRuns(BITSTREAM *stream, ENCODER_CODESET *codeset, PIXEL *data,
                                            DIMENSION width, DIMENSION height, DIMENSION pitch);

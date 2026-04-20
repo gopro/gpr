@@ -106,11 +106,11 @@ CODEC_ERROR PutTagPair(BITSTREAM *stream, int tag, int value)
     // The bitstream should be aligned on a tag word boundary
     assert(IsAlignedTag(stream));
     
-    // The value must fit within a tag word
-    assert(((uint32_t)value & ~(uint32_t)CODEC_TAG_MASK) == 0);
-    
-    PutLong(stream, ((uint32_t )tag << 16) | (value & CODEC_TAG_MASK));
-    
+    // The value must fit within a tag word (mask to 16 bits to handle sign-extended TAGWORD values)
+    assert(((uint32_t)(uint16_t)value & ~(uint32_t)CODEC_TAG_MASK) == 0);
+
+    PutLong(stream, ((uint32_t )tag << 16) | ((uint32_t)(uint16_t)value & CODEC_TAG_MASK));
+
     return CODEC_ERROR_OKAY;
 }
 
@@ -123,16 +123,16 @@ CODEC_ERROR PutTagPairOptional(BITSTREAM *stream, int tag, int value)
 {
     // The bitstream should be aligned on a tag word boundary
     assert(IsAlignedTag(stream));
-    
-    // The value must fit within a tag word
-    assert(((uint32_t)value & ~(uint32_t)CODEC_TAG_MASK) == 0);
-    
+
+    // The value must fit within a tag word (mask to 16 bits to handle sign-extended TAGWORD values)
+    assert(((uint32_t)(uint16_t)value & ~(uint32_t)CODEC_TAG_MASK) == 0);
+
     // Set the optional tag bit
     //tag |= CODEC_TAG_OPTIONAL;
     //tag = NEG(tag);
     tag = neg(tag);
-    
-    PutLong(stream, ((uint32_t )tag << 16) | (value & CODEC_TAG_MASK));
+
+    PutLong(stream, ((uint32_t )tag << 16) | ((uint32_t)(uint16_t)value & CODEC_TAG_MASK));
     
     return CODEC_ERROR_OKAY;
 }
