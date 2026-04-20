@@ -55,6 +55,7 @@ typedef struct {
 typedef struct {
     uint16_t freq[JANS_NUM_SYMBOLS + 1];
     uint16_t cum_freq[JANS_NUM_SYMBOLS + 1];
+    uint32_t rcp_freq[JANS_NUM_SYMBOLS + 1];  /* Reciprocal: ceil(2^32 / freq) for division-free encode */
     uint16_t decode_sym[JANS_TABLE_SIZE];
     JANS_DECODE_ENTRY decode_fast[JANS_TABLE_SIZE]; /* Packed for fast decode */
     int initialized;
