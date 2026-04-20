@@ -53,19 +53,15 @@ CODEC_ERROR TransformInverseSpatialQuantLowpass(gpr_allocator *allocator, WAVELE
 	assert(output->data[0] != NULL);
 
 	// Check for valid quantization values
-	if (input->quant[0] == 0) {
-		input->quant[0] = 1;
-	}
+    for (int i = 0; i < 4; ++i)
+    {
+        if (input->quant[i] == 0)
+            input->quant[i] = 1;
+    }
 
-	assert(input->quant[0] > 0);
-	assert(input->quant[1] > 0);
-	assert(input->quant[2] > 0);
-	assert(input->quant[3] > 0);
-
-	if (prescale > 1)
+    if (prescale > 1)
 	{
 		// This is a spatial transform for the lowpass temporal band
-		assert(prescale == 2);
 
 		// Apply the inverse spatial transform for a lowpass band that is not prescaled
 		InvertSpatialQuantDescale16s(allocator,
@@ -78,10 +74,10 @@ CODEC_ERROR TransformInverseSpatialQuantLowpass(gpr_allocator *allocator, WAVELE
 									 output_width, output_height,
 									 prescale, input->quant);
 	}
-	else
-	{
-		// This case does not handle any prescaling applied during encoding
-		assert(prescale == 0);
+    else
+    {
+        if (prescale != 0)
+            prescale = 0;
 
 		// Apply the inverse spatial transform for a lowpass band that is not prescaled
 		InvertSpatialQuant16s(allocator,
@@ -125,21 +121,17 @@ CODEC_ERROR TransformInverseSpatialQuantArray(gpr_allocator *allocator,
 	assert(input->data[3] != NULL);
 
 	// Check for valid quantization values
-	if (input->quant[0] == 0) {
-		input->quant[0] = 1;
-	}
-
-	assert(input->quant[0] > 0);
-	assert(input->quant[1] > 0);
-	assert(input->quant[2] > 0);
-	assert(input->quant[3] > 0);
+    for (int i = 0; i < 4; ++i)
+    {
+        if (input->quant[i] == 0)
+            input->quant[i] = 1;
+    }
 
 	assert(output_width > 0 && output_height > 0 && output_pitch > 0 && output_buffer != NULL);
 
-	if (prescale > 1)
+    if (prescale > 1)
 	{
 		// This is a spatial transform for the lowpass temporal band
-		assert(prescale == 2);
 
 		// Apply the inverse spatial transform for a lowpass band that is not prescaled
 		InvertSpatialQuantDescale16s(allocator,
@@ -152,10 +144,10 @@ CODEC_ERROR TransformInverseSpatialQuantArray(gpr_allocator *allocator,
 									 output_width, output_height,
 									 prescale, input->quant);
 	}
-	else
-	{
-		// This case does not handle any prescaling applied during encoding
-		assert(prescale == 0);
+    else
+    {
+        if (prescale != 0)
+            prescale = 0;
 
 		// Apply the inverse spatial transform for a lowpass band that is not prescaled
 		InvertSpatialQuant16s(allocator,
