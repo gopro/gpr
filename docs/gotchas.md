@@ -89,3 +89,37 @@ The encoder uses pthreads for parallel wavelet transform (Phase 1) and parallel 
 The decoder uses pthreads for the inverse wavelet transform. The ANS decode is single-threaded (bands are decoded sequentially from the bitstream).
 
 The `UncompandedValueFast` LUT and `g_cubic_inv` encoder table are initialized once (with benign races on the flag check). They are read-only after initialization.
+
+## 11. Memory Usage on Embedded / GoPro Hardware
+
+### Decoder (on-camera preview): Low Risk
+
+The ANS decoder adds minimal memory over VLC:
+- `JANS_TABLE` decode table: **20 KB** (fits in L1 cache)
+- Per-band transient buffer: **~3 MB** (jans blob read from bitstream, freed after each band)
+- No persistent allocations, no malloc in the decode inner loop
+- No division in the decode path (table lookup + multiply only)
+
+The existing codec already requires **~800 MB** for wavelet buffers on a 27 MP sensor. The ANS decoder adds < 1% to this.
+
+### Encoder (on-camera capture): Needs Optimization
+
+The parallel ANS pre-encode (Phase 1.8) is memory-intensive:
+
+| Configuration | Additional Memory | Notes |
+|--------------|------------------|-------|
+| 4 threads (default) | **+451 MB** | 113 MB per thread × 4 |
+| 1 thread | **+113 MB** | Serial mode, 4x slower |
+| Streaming (not implemented) | **~10 MB** | Process row-by-row |
+
+For a GoPro with 1-2 GB total RAM (shared with ISP, video pipeline, OS), the 4-thread mode is too expensive. Recommendations for embedded:
+1. Use single-thread ANS pre-encode (still faster than VLC due to better compression reducing I/O)
+2. Replace 5 malloc/free calls per band with a pool allocator
+3. Replace rANS division (`x / freq`, `x % freq`) with reciprocal multiplication for cores without fast hardware divide (Cortex-A53)
+4. Consider streaming encode: process wavelet bands row-by-row to cap memory at ~10 MB
+
+### Division Cost
+
+The rANS encoder uses integer division (`state / freq` and `state % freq`) once per token. On Cortex-A78 (GP2-class) this is ~10 cycles. On Cortex-A53 (older GoPro) it's 20-40 cycles. The standard optimization is Giesen's reciprocal multiplication trick which eliminates the divide entirely.
+
+The decoder has **no division** — only table lookup, multiply, and shift.
