@@ -65,11 +65,21 @@ public:
     string  rgb_file_resolution;
     
     int     rgb_file_bits;
-    
+
     string  output_file_path;
 
     string  apply_gpr_parameters;
-    
+
+    int     quality;
+
+    bool    denoise;
+    int     denoise_strength_pct;
+    bool    stabilize;
+    bool    denoise_output;
+    bool    noise_replace;
+    string  fpn_calibration;
+    bool    ans_coding;
+
 public:
 
     bool get_verbose() { return verbose; }
@@ -98,9 +108,9 @@ public:
         
         ("InputHeight,h",                                   input_height,                               3000,                   "Input image height in pixel samples [3000]")
 
-        ("InputPitch,p",                                    input_pitch,                                8000,                   "Input image pitch in bytes [8000]")
+        ("InputPitch,p",                                    input_pitch,                                0,                      "Input image pitch in bytes (0 = auto from width)")
         
-        ("InputPixelFormat,x",                              input_pixel_format,                         string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p)")
+        ("InputPixelFormat,x",                              input_pixel_format,                         string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], rggb16, gbrg12, gbrg12p, gbrg16)")
         
         ("ApplyGprParameters,a",                            apply_gpr_parameters,                       string(""),             "Parameters to use for GPR or DNG file.")
         
@@ -109,7 +119,17 @@ public:
         ("RgbFileResolution,r",                             rgb_file_resolution,                        string(""),             "Output RGB resolution \n[1:1, 2:1, 4:1, 8:1. 16:1]")
         ("RgbFileBits,b",                                   rgb_file_bits,                              8,                      "Output RGB bits [8]")
         
-        ("OutputFilePath,o",                                output_file_path,                           string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)");
+        ("OutputFilePath,o",                                output_file_path,                           string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)")
+
+        ("Quality,q",                                       quality,                                    -1,                     "Encoder quality\n(0=Low, 1=Medium, 2=High, 3=FS1, 4=FSX, 5=FS2, 6=FS3, 7=FS4, 8=FS5, -1=auto)")
+
+        ("Denoise,D",                                       denoise,                                    false,                  "Enable wavelet-domain denoising before compression")
+        ("DenoiseStrength,N",                               denoise_strength_pct,                       100,                    "Denoise strength [0-100, default: 100]")
+        ("Stabilize,V",                                     stabilize,                                  false,                  "Enable Anscombe variance stabilization")
+        ("DenoiseOutput",                                   denoise_output,                             false,                  "Output denoised image (skip noise reconstruction)")
+        ("NoiseReplace,R",                                  noise_replace,                              false,                  "Pixel-domain noise replacement (best compression)")
+        ("FpnCalibration,F",                                fpn_calibration,                            string(""),             "FPN calibration file (JSON from fpn_extract)")
+        ("ANS,A",                                           ans_coding,                                 false,                  "Use ANS entropy coding (replaces VLC codebook)");
         ;
     }
 };
@@ -195,7 +215,9 @@ int main(int argc, char *argv [])
     {
         return dng_convert_main(args.input_file_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_pixel_format.c_str(),
                                 args.output_file_path.c_str(), args.apply_gpr_parameters.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits,
-                                args.jpg_preview_file_path.c_str(), args.jpg_preview_file_width, args.jpg_preview_file_height );
+                                args.jpg_preview_file_path.c_str(), args.jpg_preview_file_width, args.jpg_preview_file_height, args.quality,
+                                args.denoise, args.denoise_strength_pct / 100.0, args.stabilize, args.denoise_output,
+                                args.noise_replace, args.fpn_calibration.c_str(), args.ans_coding );
     }
     
     return 0;
