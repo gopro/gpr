@@ -351,7 +351,13 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     }
     else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_RAW )
     {
-        success = gpr_convert_gpr_to_raw_ex( &allocator, &params, &input_buffer, &output_buffer );
+        /* Use _ex only when noise/FPN features were explicitly enabled via CLI.
+           This preserves backward compat for existing GPR files that have DNG
+           NoiseProfile but weren't encoded with the noise replacement flag. */
+        if (params.fpn.valid || noise_replace)
+            success = gpr_convert_gpr_to_raw_ex( &allocator, &params, &input_buffer, &output_buffer );
+        else
+            success = gpr_convert_gpr_to_raw( &allocator, &input_buffer, &output_buffer );
     }
 #endif
     else

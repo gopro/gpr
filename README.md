@@ -311,6 +311,67 @@ To summarize, here are speed gain factors over full resolution DNG decoding:
 
 Demosaicing has a higher complexity than GPR decoding, so numbers for RGB output after demosaic will be higher. Similar speed improvements can also be seen when writing JPG file. 
 
+# Noise-Aware Compression (v2.0)
+
+GPR v2.0 adds two independent compression features that can be used alone or together. See `docs/format-spec-v2.md` for full technical details.
+
+### Noise-Aware Adaptive Quantization (`-D`)
+
+The `-D 1` flag enables noise-aware adaptive quantization. The encoder estimates per-channel sensor noise from the DNG `NoiseProfile` metadata and raises quantization levels to the noise floor. Wavelet coefficients below the noise floor carry no useful signal, so quantizing them away is mathematically lossless with respect to the true image. This is most effective at higher ISOs where noise dominates.
+
+### ANS Entropy Coding (`-A`)
+
+The `-A 1` flag replaces the legacy VLC (Huffman) entropy coder with an ANS (Asymmetric Numeral Systems) coder that builds adaptive per-band frequency tables. ANS achieves significantly better compression on high-bit-depth data where VLC tables are a poor fit. For 14-bit GoPro data, ANS alone produces files roughly 35% smaller than VLC.
+
+### Combined Mode (`-A -D`)
+
+Using both flags together yields the best results: noise-aware quantization reduces entropy, and ANS codes the result optimally. This combination beats VLC across the full ISO range for supported cameras.
+
+## Quick Start
+
+Basic encode with both features:
+```
+$ gpr_tools -i photo.DNG -o photo.GPR -D 1 -A 1
+```
+
+Batch encode a directory:
+```
+$ gpr_batch.sh /path/to/photos /path/to/compressed -D -A --report
+```
+
+Nikon NEF workflow (requires Adobe DNG Converter first):
+```
+$ /Applications/Adobe\ DNG\ Converter.app/Contents/MacOS/Adobe\ DNG\ Converter -d /tmp/converted photo.NEF
+$ gpr_tools -i /tmp/converted/photo.dng -o photo.GPR -D 1 -A 1
+```
+
+## Compression Results
+
+| Camera | Bit Depth | Improvement vs VLC |
+| :--- | :---: | :---: |
+| GoPro Hero6 | 14-bit | ~35% smaller |
+| Hasselblad X2D 100C | 16-bit | 0-29% smaller (ISO dependent) |
+| Nikon Z8 | 14-bit | Comparable to VLC |
+
+## Supported Cameras
+
+| Camera | Bit Depth | Bayer Pattern | Notes |
+| :--- | :---: | :---: | :--- |
+| GoPro Hero5-12 | 12/14-bit | RGGB/GBRG | Native GPR support |
+| Hasselblad X2D 100C | 16-bit | RGGB | 11664x8750, largest gains at high ISO |
+| Nikon Z8 | 14-bit | RGGB | Requires DNG conversion from NEF |
+
+## New CLI Flags
+
+| Flag | Description | Default |
+| :--- | :--- | :---: |
+| `-D <0\|1>` | Noise-aware adaptive quantization | 0 (off) |
+| `-A <0\|1>` | ANS entropy coding | 0 (off) |
+
+Both flags default to off, preserving full backward compatibility with v1.0 GPR files. When neither flag is set, the encoder produces identical output to previous versions.
+
+---
+
 ```
 GoPro and CineForm are trademarks of GoPro, Inc.
 DNG, Photoshop and Lightroom is trademarks of Adobe Inc.
