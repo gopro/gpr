@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, 'feature/*' ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+
+    - name: Build
+      run: |
+        mkdir -p build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        make -j$(nproc)
+
+    - name: Smoke test (GoPro samples)
+      run: |
+        GPR=build/source/app/gpr_tools/gpr_tools
+
+        # Test GPR → DNG → GPR round-trip
+        for sample in data/samples/Hero6/GOPR0024.GPR; do
+          echo "Testing $sample..."
+          $GPR -i "$sample" -o /tmp/test.DNG
+          $GPR -i /tmp/test.DNG -o /tmp/test_vlc.GPR
+          $GPR -i /tmp/test.DNG -o /tmp/test_ans.GPR -A 1
+          $GPR -i /tmp/test.DNG -o /tmp/test_dn.GPR -D 1
+          $GPR -i /tmp/test.DNG -o /tmp/test_ans_dn.GPR -A 1 -D 1
+
+          # Verify decode
+          $GPR -i /tmp/test_vlc.GPR -o /tmp/dec_vlc.RAW
+          $GPR -i /tmp/test_ans.GPR -o /tmp/dec_ans.RAW
+
+          # Check files exist and are non-empty
+          for f in /tmp/test.DNG /tmp/test_vlc.GPR /tmp/test_ans.GPR /tmp/test_dn.GPR /tmp/dec_vlc.RAW /tmp/dec_ans.RAW; do
+            [ -s "$f" ] || { echo "FAIL: $f is empty or missing"; exit 1; }
+          done
+
+          echo "PASS: $sample"
+        done
+
+    - name: ANS standalone test
+      run: build/source/app/ans_test/ans_test
+
+    - name: Compare quality tool
+      run: |
+        CQ=build/source/app/compare_quality/compare_quality
+        [ -x "$CQ" ] && echo "compare_quality built OK" || { echo "FAIL: compare_quality not built"; exit 1; }
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build with NEON
+      run: |
+        mkdir -p build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        make -j$(sysctl -n hw.ncpu)
+
+    - name: Smoke test
+      run: |
+        GPR=build/source/app/gpr_tools/gpr_tools
+        $GPR -i data/samples/Hero6/GOPR0024.GPR -o /tmp/test.DNG
+        $GPR -i /tmp/test.DNG -o /tmp/test.GPR -A 1 -D 1
+        $GPR -i /tmp/test.GPR -o /tmp/test.RAW
+        [ -s /tmp/test.GPR ] && [ -s /tmp/test.RAW ] && echo "PASS" || exit 1
+
+    - name: ANS standalone test
+      run: build/source/app/ans_test/ans_test

@@ -1,0 +1,8 @@
+# Test data files are hardlinked from source locations, not stored in git.
+# Only the README and directory structure are tracked.
+*.GPR
+*.DNG
+*.dng
+*.fff
+*.NEF
+*.RAW
