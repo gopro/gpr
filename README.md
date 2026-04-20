@@ -339,7 +339,7 @@ Batch encode a directory:
 $ gpr_batch.sh /path/to/photos /path/to/compressed -D -A --report
 ```
 
-Nikon NEF workflow (requires Adobe DNG Converter first):
+Third-party RAW workflow (requires Adobe DNG Converter first):
 ```
 $ /Applications/Adobe\ DNG\ Converter.app/Contents/MacOS/Adobe\ DNG\ Converter -d /tmp/converted photo.NEF
 $ gpr_tools -i /tmp/converted/photo.dng -o photo.GPR -D 1 -A 1
@@ -350,16 +350,15 @@ $ gpr_tools -i /tmp/converted/photo.dng -o photo.GPR -D 1 -A 1
 | Camera | Bit Depth | Improvement vs VLC |
 | :--- | :---: | :---: |
 | GoPro Hero6 | 14-bit | ~35% smaller |
-| Hasselblad X2D 100C | 16-bit | 0-29% smaller (ISO dependent) |
-| Nikon Z8 | 14-bit | Comparable to VLC |
+| 100MP 16-bit sensor | 16-bit | 0-29% smaller (ISO dependent) |
+| 45MP 14-bit sensor | 14-bit | Comparable to VLC |
 
 ## Supported Cameras
 
 | Camera | Bit Depth | Bayer Pattern | Notes |
 | :--- | :---: | :---: | :--- |
 | GoPro Hero5-12 | 12/14-bit | RGGB/GBRG | Native GPR support |
-| Hasselblad X2D 100C | 16-bit | RGGB | 11664x8750, largest gains at high ISO |
-| Nikon Z8 | 14-bit | RGGB | Requires DNG conversion from NEF |
+| Any camera producing DNG-compatible raw data | 12/14/16-bit | RGGB/GBRG | Third-party RAW formats (NEF, CR2, ARW, etc.) require DNG conversion |
 
 ## New CLI Flags
 

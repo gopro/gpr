@@ -561,6 +561,7 @@ CODEC_ERROR PrepareEncoder(ENCODER *encoder,
 	encoder->noise_offset       = parameters->noise_offset;
 	encoder->variance_stabilize = parameters->variance_stabilize;
 	encoder->ans_enabled        = parameters->ans_enabled;
+	encoder->embedded_mode      = parameters->embedded_mode;
 
 	// Allocate the wavelet transforms
 	AllocEncoderTransforms(encoder);
@@ -1649,21 +1650,21 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 		}
 	}
 
-	/* Phase 1: Run forward wavelet transforms in parallel (one thread per channel) */
+	/* Phase 1: Forward wavelet transforms.
+	   Parallel (4 threads) in normal mode, serial in embedded mode. */
 	{
 		gpr_allocator *allocator = encoder->allocator;
 		FORWARD_THREAD_ARG thread_args[MAX_CHANNEL_COUNT];
 		pthread_t threads[MAX_CHANNEL_COUNT];
 		int thread_created[MAX_CHANNEL_COUNT];
 
-		/* Allocate per-thread scratch buffers and set up thread args */
+		/* Allocate per-channel scratch buffers and set up thread args */
 		for (channel_index = 0; channel_index < channel_count; channel_index++)
 		{
 			thread_args[channel_index].transform = &encoder->transform[channel_index];
 			thread_args[channel_index].input_component = &image->component_array_list[channel_index];
 			thread_args[channel_index].midpoint_prequant = encoder->midpoint_prequant;
 
-			/* Allocate per-channel scratch buffers (same sizes as encoder's shared buffers) */
 			int wavelet_index;
 			for (wavelet_index = 0; wavelet_index < MAX_WAVELET_COUNT; wavelet_index++)
 			{
@@ -1677,13 +1678,19 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 				}
 			}
 
-			thread_created[channel_index] = (pthread_create(&threads[channel_index], NULL,
-			                                                 ForwardTransformThread,
-			                                                 &thread_args[channel_index]) == 0);
-			if (!thread_created[channel_index])
+			if (encoder->embedded_mode)
 			{
-				/* Fallback: run inline if thread creation fails */
+				/* Embedded: run inline, one channel at a time */
 				ForwardTransformThread(&thread_args[channel_index]);
+				thread_created[channel_index] = 0;
+			}
+			else
+			{
+				thread_created[channel_index] = (pthread_create(&threads[channel_index], NULL,
+				                                                 ForwardTransformThread,
+				                                                 &thread_args[channel_index]) == 0);
+				if (!thread_created[channel_index])
+					ForwardTransformThread(&thread_args[channel_index]);
 			}
 		}
 
@@ -1732,8 +1739,9 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 
 	/* Phase 1.8: Pre-encode ANS bands in parallel (one thread per channel).
 	   This moves the expensive ANS table building and encoding off the serial
-	   bitstream path. Phase 2 then just copies the pre-encoded blobs. */
-	if (encoder->ans_enabled)
+	   bitstream path. Phase 2 then just copies the pre-encoded blobs.
+	   In embedded mode, skip this entirely — Phase 2 encodes inline. */
+	if (encoder->ans_enabled && !encoder->embedded_mode)
 	{
 		ensure_cubic_inv_table();
 
@@ -1760,6 +1768,11 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 			if (ans_thread_ok[channel_index])
 				pthread_join(ans_threads[channel_index], NULL);
 		}
+	}
+	else if (encoder->ans_enabled)
+	{
+		/* Embedded mode: clear pre-encoded storage so Phase 2 encodes inline */
+		memset(encoder->preencoded_band, 0, sizeof(encoder->preencoded_band));
 	}
 
 	/* Phase 2: Encode channels sequentially (bitstream is serial) */
