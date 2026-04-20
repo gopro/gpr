@@ -95,6 +95,7 @@ extern "C" {
 
     CODEC_ERROR GetRlv(BITSTREAM *stream, CODEBOOK *codebook, RUN *run);
     CODEC_ERROR GetRun(BITSTREAM *stream, CODEBOOK *codebook, RUN *run);
+    CODEC_ERROR GetRunFast(BITSTREAM *stream, CODEBOOK *codebook, RUN *run);
 
 #ifdef __cplusplus
 }

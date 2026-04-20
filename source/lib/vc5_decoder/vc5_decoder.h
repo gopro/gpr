@@ -41,7 +41,11 @@
         VC5_DECODER_PIXEL_FORMAT_GBRG_12 = 2,               // GBRG 12bit pixels packed into 16bits
         
         VC5_DECODER_PIXEL_FORMAT_GBRG_14 = 3,               // GBRG 12bit pixels packed into 16bits
-        
+
+        VC5_DECODER_PIXEL_FORMAT_RGGB_16 = 4,               // RGGB 16bit pixels packed into 16bits
+
+        VC5_DECODER_PIXEL_FORMAT_GBRG_16 = 5,               // GBRG 16bit pixels packed into 16bits
+
         VC5_DECODER_PIXEL_FORMAT_DEFAULT = VC5_DECODER_PIXEL_FORMAT_RGGB_14,
         
     } VC5_DECODER_PIXEL_FORMAT;
@@ -64,9 +68,16 @@
         gpr_rgb_gain                    rgb_gain;
         
         gpr_malloc                      mem_alloc;              // Callback function to allocate memory
-        
+
         gpr_free                        mem_free;               // Callback function to free memory
-        
+
+        bool                            variance_stabilize;     // Apply inverse Anscombe after decode
+        double                          noise_scale;            // DNG NoiseProfile scale
+        double                          noise_offset;           // DNG NoiseProfile offset
+        bool                            add_noise_back;         // Reconstruct and add noise after decode
+        uint32_t                        noise_seed;             // PRNG seed from encoder
+        double                          noise_sigma[4];         // Per-channel noise sigma from encoder
+
     } vc5_decoder_parameters;
         
     void vc5_decoder_parameters_set_default(vc5_decoder_parameters* decoding_parameters);

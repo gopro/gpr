@@ -15,7 +15,8 @@ include_directories( "../common/public" )
 # library
 add_library( ${LIB_NAME} STATIC ${SRC_FILES} ${INC_FILES} )
 
-target_link_libraries( ${LIB_NAME} )
+find_package( Threads REQUIRED )
+target_link_libraries( ${LIB_NAME} Threads::Threads )
 
 # set the folder where to place the projects
 set_target_properties( ${LIB_NAME} PROPERTIES FOLDER lib )
