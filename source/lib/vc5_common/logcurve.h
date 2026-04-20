@@ -21,19 +21,60 @@
 #ifndef LOGCURVE_H
 #define LOGCURVE_H
 
-#define LOG_CURVE_TABLE_LENGTH (1 << 12)
+#define LOG_CURVE_TABLE_LENGTH      (1 << 12)
+#define LOG_CURVE_TABLE_LENGTH_12   LOG_CURVE_TABLE_LENGTH
+#define LOG_CURVE_TABLE_LENGTH_14   (1 << 14)
+#define LOG_CURVE_TABLE_LENGTH_16   (1 << 16)
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+int vc5_logcurve_bypass(void);
     
-	extern uint16_t EncoderLogCurve[];
-	
-	extern uint16_t DecoderLogCurve[];
+#define EncoderLogCurve EncoderLogCurve12
+extern uint16_t EncoderLogCurve12[];
+extern uint16_t EncoderLogCurve14[];
+extern uint16_t EncoderLogCurve16[];
+
+extern uint16_t DecoderLogCurve12[];
+extern uint16_t DecoderLogCurve14[];
+extern uint16_t DecoderLogCurve16[];
+
+static INLINE uint16_t DecodeLogValue(uint32_t value, int bits)
+{
+    if (vc5_logcurve_bypass())
+    {
+        const uint32_t max_bits = (bits >= 16) ? 16 : (bits <= 0 ? 1 : bits);
+        const uint32_t max_val = (1u << max_bits) - 1;
+        if (value > max_val) value = max_val;
+        return (uint16_t)value;
+    }
+
+    const uint32_t max12 = (1u << 12) - 1;
+    const uint32_t max14 = (1u << 14) - 1;
+    const uint32_t max16 = (1u << 16) - 1;
+
+    if (bits <= 12)
+    {
+        if (value > max12) value = max12;
+        return DecoderLogCurve12[value];
+    }
+    else if (bits <= 14)
+    {
+        if (value > max14) value = max14;
+        return DecoderLogCurve14[value];
+    }
+    else
+    {
+        if (value > max16) value = max16;
+        return DecoderLogCurve16[value];
+    }
+}
 
 	void SetupDecoderLogCurve(void);
 
-    void SetupEncoderLogCurve(void);
+void SetupEncoderLogCurve(void);
 
 #ifdef __cplusplus
 }

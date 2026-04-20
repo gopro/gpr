@@ -21,8 +21,8 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 
-//! Data type for the values in a component array
-typedef uint16_t COMPONENT_VALUE;
+//! Data type for the values in a component array (widened for 16-bit pipeline)
+typedef int32_t COMPONENT_VALUE;
 
 /*!
 	@brief Data structure for an image input to the unpacking process

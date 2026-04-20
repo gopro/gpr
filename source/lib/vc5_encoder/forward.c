@@ -25,12 +25,12 @@
 //! Rounding added to the highpass sum before division
 static const int32_t rounding = 4;
 
-STATIC_INLINE PIXEL QuantizeValue(int16_t value, int32_t midpoint, int32_t multiplier )
+STATIC_INLINE PIXEL QuantizeValue(int32_t value, int32_t midpoint, int32_t multiplier )
 {
     int less_than_zero = 0;
     int negate_less_than_zero = 0;
     
-    int16_t x = abs(value) + midpoint;
+    int32_t x = abs(value) + midpoint;
     
     if( value < 0 )
     {
@@ -38,7 +38,7 @@ STATIC_INLINE PIXEL QuantizeValue(int16_t value, int32_t midpoint, int32_t multi
         negate_less_than_zero = 1;
     }
     
-    x = (int32_t)(x * multiplier) >> 16;
+    x = ((int64_t)x * multiplier) >> 16;
     
     x = x ^ less_than_zero;
     x = x + negate_less_than_zero;
@@ -46,7 +46,7 @@ STATIC_INLINE PIXEL QuantizeValue(int16_t value, int32_t midpoint, int32_t multi
     return ClampPixel(x);
 }
 
-static void FilterVerticalTopBottom_Core_8x_C_(PIXEL *coefficients[], int column, int16_t* highpass, int16_t* lowpass, bool top )
+static void FilterVerticalTopBottom_Core_8x_C_(PIXEL *coefficients[], int column, PIXEL* highpass, PIXEL* lowpass, bool top )
 {
     const int filter_coeffs_top[]     = { 5, -11, 4, 4, -1, -1 };
     const int filter_coeffs_bottom[]  = { 1, 1, -4, -4, 11, -5 };
@@ -78,196 +78,242 @@ static void FilterVerticalTopBottom_Core_8x_C_(PIXEL *coefficients[], int column
 
 #if ENABLED(NEON)
 
-static const uint16x8_t mask = {0x0000, 0xFFFF,0x0000,0xFFFF,0x0000,0xFFFF,0x0000, 0xFFFF};
-
 #define HorizontalFilter_Prescale2_4x HorizontalFilter_Prescale2_4x_NEON_
 void HorizontalFilter_Prescale2_4x_NEON_(PIXEL *input, PIXEL* lowpass, PIXEL* highpass )
 {
     const int prescale_rounding = 3;
-    const int prescale = 2;
-    
-    int32x4_t __pairwise_sum_0_7, __highpass;
-    int32x4_t __diff;
-    int16x8_t __input_2_9;
+    int32_t scaled[12];
 
+    for (int i = 0; i < 12; ++i)
     {
-        const int16x8_t __prescale_rounding	= vdupq_n_s16 (prescale_rounding);
-        const int16x8_t __shift				= vdupq_n_s16 (-prescale);
-        
-        int16x8_t   __input_0_7 = vld1q_s16( input );
-                    __input_2_9 = vld1q_s16( input + 2 );
-        int16x8_t   __input_8_15 = vld1q_s16( input + 8 );
-
-        __input_0_7 = vaddq_s16( __input_0_7, __prescale_rounding );
-        __input_0_7 = vshlq_s16( __input_0_7, __shift );
-        
-        __input_8_15 = vaddq_s16( __input_8_15, __prescale_rounding );
-        __input_8_15 = vshlq_s16( __input_8_15, __shift );
-        
-                    __pairwise_sum_0_7  = vpaddlq_s16(__input_0_7);
-        int32x4_t   __pairwise_sum_8_15 = vpaddlq_s16(__input_8_15);
-        
-        __input_0_7  = vbslq_s16(mask, vnegq_s16(__input_0_7), __input_0_7);
-        __input_8_15 = vbslq_s16(mask, vnegq_s16(__input_8_15), __input_8_15);
-        __diff =  vextq_s32(vpaddlq_s16( __input_0_7 ), vpaddlq_s16( __input_8_15 ), 1);
-
-        __highpass = vcombine_s32( vget_high_s32(__pairwise_sum_0_7), vget_low_s32(__pairwise_sum_8_15) );
+        scaled[i] = (input[i] + prescale_rounding) >> 2;
     }
-    
-    // High pass band
+
+    int32_t sum_prev_vals[4] = {
+        scaled[0] + scaled[1],
+        scaled[2] + scaled[3],
+        scaled[4] + scaled[5],
+        scaled[6] + scaled[7]
+    };
+
+    int32_t sum_next_vals[4] = {
+        scaled[4] + scaled[5],
+        scaled[6] + scaled[7],
+        scaled[8] + scaled[9],
+        scaled[10] + scaled[11]
+    };
+
+    int32_t diff_vals[4] = {
+        scaled[2] - scaled[3],
+        scaled[4] - scaled[5],
+        scaled[6] - scaled[7],
+        scaled[8] - scaled[9]
+    };
+
+    int32x4_t sum_prev = vld1q_s32(sum_prev_vals);
+    int32x4_t sum_next = vld1q_s32(sum_next_vals);
+    int32x4_t diffs = vld1q_s32(diff_vals);
+
+    int32x4_t hp = vsubq_s32(sum_next, sum_prev);
+    hp = vaddq_s32(hp, vdupq_n_s32(rounding));
+    hp = vshrq_n_s32(hp, 3);
+    hp = vaddq_s32(hp, diffs);
+    vst1q_s32(highpass, hp);
+
+    int32_t low_vals[4] = {
+        (input[2] + input[3] + prescale_rounding) >> 2,
+        (input[4] + input[5] + prescale_rounding) >> 2,
+        (input[6] + input[7] + prescale_rounding) >> 2,
+        (input[8] + input[9] + prescale_rounding) >> 2
+    };
+    vst1q_s32(lowpass, vld1q_s32(low_vals));
+}
+
+#define HorizontalFilter_Prescale3_4x HorizontalFilter_Prescale3_4x_NEON_
+void HorizontalFilter_Prescale3_4x_NEON_(PIXEL *input, PIXEL* lowpass, PIXEL* highpass )
+{
+    const int prescale_rounding = 7;
+    int32_t scaled[12];
+
+    for (int i = 0; i < 12; ++i)
     {
-        const int32x4_t __rounding  = vdupq_n_s32(rounding);
+        scaled[i] = (input[i] + prescale_rounding) >> 3;
+    }
 
-        __highpass = vsubq_s32( __highpass, __pairwise_sum_0_7 );
-        __highpass = vaddq_s32( __highpass, __rounding );
-        __highpass = vshrq_n_s32( __highpass, 3 );
-        __highpass = vqaddq_s32( __highpass, __diff ); // Dont need to clamp because we are using saturating instruction
-        
-        vst1_s16(highpass, vmovn_s32(__highpass) );
-    }
-    
-    // Low pass band
-    {
-        const int32x4_t __prescale_rounding	= vdupq_n_s32(prescale_rounding);
-        const int32x4_t __shift				= vdupq_n_s32(-prescale);
-        
-        int32x4_t __pairwise_sum_2_9 = vpaddlq_s16(__input_2_9);
-        
-        __pairwise_sum_2_9 = vaddq_s32(__pairwise_sum_2_9, __prescale_rounding);
-        __pairwise_sum_2_9 = vshlq_s32(__pairwise_sum_2_9, __shift);
-        
-        vst1_s16(lowpass, vmovn_s32(__pairwise_sum_2_9) );
-    }
+    int32_t sum_prev_vals[4] = {
+        scaled[0] + scaled[1],
+        scaled[2] + scaled[3],
+        scaled[4] + scaled[5],
+        scaled[6] + scaled[7]
+    };
+
+    int32_t sum_next_vals[4] = {
+        scaled[4] + scaled[5],
+        scaled[6] + scaled[7],
+        scaled[8] + scaled[9],
+        scaled[10] + scaled[11]
+    };
+
+    int32_t diff_vals[4] = {
+        scaled[2] - scaled[3],
+        scaled[4] - scaled[5],
+        scaled[6] - scaled[7],
+        scaled[8] - scaled[9]
+    };
+
+    int32x4_t sum_prev = vld1q_s32(sum_prev_vals);
+    int32x4_t sum_next = vld1q_s32(sum_next_vals);
+    int32x4_t diffs = vld1q_s32(diff_vals);
+
+    int32x4_t hp = vsubq_s32(sum_next, sum_prev);
+    hp = vaddq_s32(hp, vdupq_n_s32(rounding));
+    hp = vshrq_n_s32(hp, 3);
+    hp = vaddq_s32(hp, diffs);
+    vst1q_s32(highpass, hp);
+
+    int32_t low_vals[4] = {
+        (input[2] + input[3] + prescale_rounding) >> 3,
+        (input[4] + input[5] + prescale_rounding) >> 3,
+        (input[6] + input[7] + prescale_rounding) >> 3,
+        (input[8] + input[9] + prescale_rounding) >> 3
+    };
+    vst1q_s32(lowpass, vld1q_s32(low_vals));
 }
 
 #define HorizontalFilter_Prescale0_4x HorizontalFilter_Prescale0_4x_NEON_
 void HorizontalFilter_Prescale0_4x_NEON_(PIXEL *input, PIXEL* lowpass, PIXEL* highpass )
 {
-    int32x4_t __pairwise_sum_0_7, __highpass;
-    int32x4_t __diff;
-    int16x8_t __input_2_9;
+    int32_t sum_prev_vals[4] = {
+        input[0] + input[1],
+        input[2] + input[3],
+        input[4] + input[5],
+        input[6] + input[7]
+    };
 
-    {
-        int16x8_t   __input_0_7 = vld1q_s16( input );
-                    __input_2_9 = vld1q_s16( input + 2 );
-        int16x8_t   __input_8_15 = vld1q_s16( input + 8 );
+    int32_t sum_next_vals[4] = {
+        input[4] + input[5],
+        input[6] + input[7],
+        input[8] + input[9],
+        input[10] + input[11]
+    };
 
-                    __pairwise_sum_0_7  = vpaddlq_s16(__input_0_7);
-        int32x4_t   __pairwise_sum_8_15 = vpaddlq_s16(__input_8_15);
-        
-        __input_0_7  = vbslq_s16(mask, vnegq_s16(__input_0_7), __input_0_7);
-        __input_8_15 = vbslq_s16(mask, vnegq_s16(__input_8_15), __input_8_15);
-        __diff =  vextq_s32(vpaddlq_s16( __input_0_7 ), vpaddlq_s16( __input_8_15 ), 1);
+    int32_t diff_vals[4] = {
+        input[2] - input[3],
+        input[4] - input[5],
+        input[6] - input[7],
+        input[8] - input[9]
+    };
 
-        __highpass = vcombine_s32( vget_high_s32(__pairwise_sum_0_7), vget_low_s32(__pairwise_sum_8_15) );
-    }
-    
-    // High pass band
-    {
-        const int32x4_t __rounding  = vdupq_n_s32(rounding);
+    int32x4_t sum_prev = vld1q_s32(sum_prev_vals);
+    int32x4_t sum_next = vld1q_s32(sum_next_vals);
+    int32x4_t diffs = vld1q_s32(diff_vals);
 
-        __highpass = vsubq_s32( __highpass, __pairwise_sum_0_7 );
-        __highpass = vaddq_s32( __highpass, __rounding );
-        __highpass = vshrq_n_s32( __highpass, 3 );
-        __highpass = vqaddq_s32( __highpass, __diff ); // Dont need to clamp because we are using saturating instruction
-        
-        vst1_s16(highpass, vmovn_s32(__highpass) );
-    }
-    
-    // Low pass band
-    {
-        int32x4_t __pairwise_sum_2_9 = vpaddlq_s16(__input_2_9);
-        
-        vst1_s16(lowpass, vmovn_s32(__pairwise_sum_2_9) );
-    }
+    int32x4_t hp = vsubq_s32(sum_next, sum_prev);
+    hp = vaddq_s32(hp, vdupq_n_s32(rounding));
+    hp = vshrq_n_s32(hp, 3);
+    hp = vaddq_s32(hp, diffs);
+    vst1q_s32(highpass, hp);
+
+    int32_t low_vals[4] = {
+        input[2] + input[3],
+        input[4] + input[5],
+        input[6] + input[7],
+        input[8] + input[9]
+    };
+    vst1q_s32(lowpass, vld1q_s32(low_vals));
 }
 
-void QuantizeBand_8x_NEON_(int16_t* wavelet_band, int16_t midpoint, int32_t multiplier, PIXEL *output )
+static INLINE int32x4_t QuantizeVector(int32x4_t values, int32_t midpoint, int32_t multiplier)
 {
-    int16x8_t __wavelet_band	 = vld1q_s16( wavelet_band );
+    const int32x4_t midpoint_vec = vdupq_n_s32(midpoint);
+    int32x4_t abs_vals = vabsq_s32(values);
+    abs_vals = vaddq_s32(abs_vals, midpoint_vec);
 
-    int16x8_t __wavelet_band_abs = vaddq_s16( vabsq_s16(__wavelet_band), vdupq_n_s16( midpoint ) );
+    const int32x2_t multiplier_vec = vdup_n_s32(multiplier);
+    int64x2_t prod_low = vmull_s32(vget_low_s32(abs_vals), multiplier_vec);
+    int64x2_t prod_high = vmull_s32(vget_high_s32(abs_vals), multiplier_vec);
 
-    int32x4_t __multipliers     = vdupq_n_s32( multiplier );
+    prod_low = vshrq_n_s64(prod_low, 16);
+    prod_high = vshrq_n_s64(prod_high, 16);
 
-    int32x4_t __value_high =  vmovl_s16( vget_high_s16(__wavelet_band_abs) );
-    __value_high = vmulq_s32( __value_high, __multipliers );
-    
-    int32x4_t __value_low  =  vmovl_s16( vget_low_s16(__wavelet_band_abs) );
-    __value_low = vmulq_s32( __value_low, __multipliers );
+    int32x4_t scaled = vcombine_s32(vmovn_s64(prod_low), vmovn_s64(prod_high));
 
-    int16x8_t __multiplied = vcombine_s16( vshrn_n_s32( __value_low, 16 ), vshrn_n_s32( __value_high, 16 ) );
-
-    uint16x8_t mask = vcltq_s16(__wavelet_band, vdupq_n_s16(0) );
-    int16x8_t __neg_output = vnegq_s16(__multiplied);
-
-    int16x8_t __result = vbslq_s16( mask, __neg_output, __multiplied );
-
-    vst1q_s16(output, __result);
+    const int32x4_t zero = vdupq_n_s32(0);
+    uint32x4_t neg_mask = vcltq_s32(values, zero);
+    int32x4_t negated = vnegq_s32(scaled);
+    return vbslq_s32(neg_mask, negated, scaled);
 }
 
-void FilterVerticalMiddle_Core_8x_NEON_(PIXEL *coefficients[], int column, int16_t* highpass, int16_t* lowpass )
+void QuantizeBand_8x_NEON_(const PIXEL* wavelet_band, int32_t midpoint, int32_t multiplier, PIXEL *output )
 {
-    int16x8_t __highpass, __highpass_50, __highpass_14;
-    
-    {
-        int16x8_t __row_0 = vld1q_s16( &coefficients[0][column] );
-        int16x8_t __row_5 = vld1q_s16( &coefficients[5][column] );
-        
-        __highpass_50 = vsubq_s16( __row_5, __row_0 );
-    }
-    
-    {
-        int16x8_t __row_1 = vld1q_s16( &coefficients[1][column] );
-        int16x8_t __row_4 = vld1q_s16( &coefficients[4][column] );
-        
-        __highpass_14 = vsubq_s16( __row_4, __row_1 );
-    }
-    
-    {
-        int16x8_t __rounding = vdupq_n_s16 (rounding);
-        
-        __highpass = vaddq_s16( __highpass_50, __highpass_14 );
-        __highpass = vaddq_s16( __highpass, __rounding );
-        __highpass = vshrq_n_s16(__highpass, 3);
-    }
-    
-    {
-        int16x8_t __row_2 = vld1q_s16( &coefficients[2][column] );
-        int16x8_t __row_3 = vld1q_s16( &coefficients[3][column] );
-        
-        int16x8_t __diff_23 = vsubq_s16( __row_2, __row_3 );
-        int16x8_t __sum_23 = vaddq_s16( __row_2, __row_3 );
-        
-        __highpass = vaddq_s16( __highpass, __diff_23 );
-        
-        vst1q_s16(lowpass, __sum_23);
-    }
-    
-    vst1q_s16(highpass, __highpass);
-    
+    int32x4_t v0 = vld1q_s32(wavelet_band);
+    int32x4_t v1 = vld1q_s32(wavelet_band + 4);
+    int32x4_t q0 = QuantizeVector(v0, midpoint, multiplier);
+    int32x4_t q1 = QuantizeVector(v1, midpoint, multiplier);
+    vst1q_s32(output, q0);
+    vst1q_s32(output + 4, q1);
+}
+
+static INLINE void FilterVerticalCoreBlock(int32x4_t row0,
+                                           int32x4_t row1,
+                                           int32x4_t row2,
+                                           int32x4_t row3,
+                                           int32x4_t row4,
+                                           int32x4_t row5,
+                                           PIXEL *high_dest,
+                                           PIXEL *low_dest)
+{
+    int32x4_t high = vsubq_s32(row5, row0);
+    high = vaddq_s32(high, vsubq_s32(row4, row1));
+    high = vaddq_s32(high, vdupq_n_s32(rounding));
+    high = vshrq_n_s32(high, 3);
+    high = vaddq_s32(high, vsubq_s32(row2, row3));
+
+    int32x4_t low = vaddq_s32(row2, row3);
+
+    vst1q_s32(high_dest, high);
+    vst1q_s32(low_dest, low);
+}
+
+void FilterVerticalMiddle_Core_8x_NEON_(PIXEL *coefficients[], int column, PIXEL* highpass, PIXEL* lowpass )
+{
+    int32x4_t row0_lo = vld1q_s32(&coefficients[0][column]);
+    int32x4_t row0_hi = vld1q_s32(&coefficients[0][column + 4]);
+    int32x4_t row1_lo = vld1q_s32(&coefficients[1][column]);
+    int32x4_t row1_hi = vld1q_s32(&coefficients[1][column + 4]);
+    int32x4_t row2_lo = vld1q_s32(&coefficients[2][column]);
+    int32x4_t row2_hi = vld1q_s32(&coefficients[2][column + 4]);
+    int32x4_t row3_lo = vld1q_s32(&coefficients[3][column]);
+    int32x4_t row3_hi = vld1q_s32(&coefficients[3][column + 4]);
+    int32x4_t row4_lo = vld1q_s32(&coefficients[4][column]);
+    int32x4_t row4_hi = vld1q_s32(&coefficients[4][column + 4]);
+    int32x4_t row5_lo = vld1q_s32(&coefficients[5][column]);
+    int32x4_t row5_hi = vld1q_s32(&coefficients[5][column + 4]);
+
+    FilterVerticalCoreBlock(row0_lo, row1_lo, row2_lo, row3_lo, row4_lo, row5_lo, highpass, lowpass);
+    FilterVerticalCoreBlock(row0_hi, row1_hi, row2_hi, row3_hi, row4_hi, row5_hi, highpass + 4, lowpass + 4);
 }
 
 #define FilterVerticalMiddle_8x FilterVerticalMiddle_8x_NEON_
 void FilterVerticalMiddle_8x_NEON_(PIXEL *lowpass[], PIXEL *highpass[], int column, int32_t* midpoints, int32_t* multipliers, PIXEL *result[])
 {
-    int16_t LOW[8];
-    int16_t HIGH[8];
-        
+    PIXEL LOW[8];
+    PIXEL HIGH[8];
+
     FilterVerticalMiddle_Core_8x_NEON_( highpass, column, HIGH, LOW);
     QuantizeBand_8x_NEON_( LOW, midpoints[LH_BAND], multipliers[LH_BAND], result[LH_BAND] + column );
     QuantizeBand_8x_NEON_( HIGH, midpoints[HH_BAND], multipliers[HH_BAND], result[HH_BAND] + column );
 
     FilterVerticalMiddle_Core_8x_NEON_( lowpass, column, HIGH, LOW);
     QuantizeBand_8x_NEON_( LOW, midpoints[LL_BAND], multipliers[LL_BAND], result[LL_BAND] + column );
-    QuantizeBand_8x_NEON_( HIGH, midpoints[HL_BAND], multipliers[HL_BAND], result[HL_BAND] + column );    
+    QuantizeBand_8x_NEON_( HIGH, midpoints[HL_BAND], multipliers[HL_BAND], result[HL_BAND] + column );
 }
 
 #define FilterVerticalTopBottom_8x FilterVerticalTopBottom_8x_NEON_
 void FilterVerticalTopBottom_8x_NEON_(PIXEL *lowpass[], PIXEL *highpass[], int column, int32_t* midpoints, int32_t* multipliers, PIXEL *result[], bool top )
 {
-    int16_t LOW[8];
-    int16_t HIGH[8];
+    PIXEL LOW[8];
+    PIXEL HIGH[8];
 
     FilterVerticalTopBottom_Core_8x_C_( highpass, column, HIGH, LOW, top );
     QuantizeBand_8x_NEON_( LOW, midpoints[LH_BAND], multipliers[LH_BAND], result[LH_BAND] + column );
@@ -277,6 +323,7 @@ void FilterVerticalTopBottom_8x_NEON_(PIXEL *lowpass[], PIXEL *highpass[], int c
     QuantizeBand_8x_NEON_( LOW, midpoints[LL_BAND], multipliers[LL_BAND], result[LL_BAND] + column );
     QuantizeBand_8x_NEON_( HIGH, midpoints[HL_BAND], multipliers[HL_BAND], result[HL_BAND] + column );
 }
+
 
 #else
 
@@ -348,6 +395,66 @@ void HorizontalFilter_Prescale2_4x_C_(PIXEL *input, PIXEL* lowpass, PIXEL* highp
     lowpass[3] = (input[8] + input[9] + 3) >> 2;
 }
 
+#define HorizontalFilter_Prescale3_4x HorizontalFilter_Prescale3_4x_C_
+void HorizontalFilter_Prescale3_4x_C_(PIXEL *input, PIXEL* lowpass, PIXEL* highpass )
+{
+    int i;
+    PIXEL input_c[16];
+    for ( i = 0; i < 12; i++)
+    {
+        input_c[i] = (input[i] + 7) >> 3;
+    }
+
+    int32_t diff_23 = input_c[2] - input_c[3];
+    int32_t diff_45 = input_c[4] - input_c[5];
+    int32_t diff_67 = input_c[6] - input_c[7];
+    int32_t diff_89 = input_c[8] - input_c[9];
+
+    int32_t sum_01   = input_c[0]  + input_c[1];
+    int32_t sum_23   = input_c[2]  + input_c[3];
+    int32_t sum_45   = input_c[4]  + input_c[5];
+    int32_t sum_67   = input_c[6]  + input_c[7];
+    int32_t sum_89   = input_c[8]  + input_c[9];
+    int32_t sum_1011 = input_c[10] + input_c[11];
+
+    {
+        int32_t sum = sum_45 - sum_01;
+        sum += rounding;
+        sum = DivideByShift(sum, 3);
+        sum += diff_23;
+        highpass[0] = ClampPixel(sum);
+    }
+
+    {
+        int32_t sum = sum_67 - sum_23;
+        sum += rounding;
+        sum = DivideByShift(sum, 3);
+        sum += diff_45;
+        highpass[1] = ClampPixel(sum);
+    }
+
+    {
+        int32_t sum = sum_89 - sum_45;
+        sum += rounding;
+        sum = DivideByShift(sum, 3);
+        sum += diff_67;
+        highpass[2] = ClampPixel(sum);
+    }
+
+    {
+        int32_t sum = sum_1011 - sum_67;
+        sum += rounding;
+        sum = DivideByShift(sum, 3);
+        sum += diff_89;
+        highpass[3] = ClampPixel(sum);
+    }
+
+    lowpass[0] = (input[2] + input[3] + 7) >> 3;
+    lowpass[1] = (input[4] + input[5] + 7) >> 3;
+    lowpass[2] = (input[6] + input[7] + 7) >> 3;
+    lowpass[3] = (input[8] + input[9] + 7) >> 3;
+}
+
 #define HorizontalFilter_Prescale0_4x HorizontalFilter_Prescale0_4x_C_
 void HorizontalFilter_Prescale0_4x_C_(PIXEL *input, PIXEL* lowpass, PIXEL* highpass )
 {
@@ -413,7 +520,7 @@ void HorizontalFilter_Prescale0_4x_C_(PIXEL *input, PIXEL* lowpass, PIXEL* highp
     lowpass[3] = input[8] + input[9];
 }
 
-void FilterVerticalMiddle_Core_8x_C_(PIXEL *coefficients[], int column, int16_t* highpass, int16_t* lowpass )
+void FilterVerticalMiddle_Core_8x_C_(PIXEL *coefficients[], int column, PIXEL* highpass, PIXEL* lowpass )
 {
     PIXEL row_0[8];
     PIXEL row_1[8];
@@ -456,10 +563,10 @@ void FilterVerticalMiddle_8x_C_(PIXEL *lowpass[], PIXEL *highpass[], int column,
 {
     int i;
     
-    int16_t LL[8];
-    int16_t HL[8];
-    int16_t LH[8];
-    int16_t HH[8];
+    PIXEL LL[8];
+    PIXEL HL[8];
+    PIXEL LH[8];
+    PIXEL HH[8];
     
     FilterVerticalMiddle_Core_8x_C_( highpass, column, HH, LH);
     FilterVerticalMiddle_Core_8x_C_( lowpass, column, HL, LL);
@@ -478,10 +585,10 @@ void FilterVerticalTopBottom_8x_C_(PIXEL *lowpass[], PIXEL *highpass[], int colu
 {
     int i;
     
-    int16_t LL[8];
-    int16_t HL[8];
-    int16_t LH[8];
-    int16_t HH[8];
+    PIXEL LL[8];
+    PIXEL HL[8];
+    PIXEL LH[8];
+    PIXEL HH[8];
     
     FilterVerticalTopBottom_Core_8x_C_( highpass, column, HH, LH, top );
     FilterVerticalTopBottom_Core_8x_C_( lowpass, column, HL, LL, top );
@@ -563,8 +670,12 @@ CODEC_ERROR FilterHorizontalRow(PIXEL *input, PIXEL *lowpass, PIXEL *highpass, i
     
     int last_input_column_tight = ( (last_input_column - 4) / 8) * 8;
 
-    //TODO Test this routine with other prescale values
-    assert(prescale == 0 || prescale == 2);
+    // Clamp prescale to supported values (0, 2, or 3)
+    if (prescale != 0 && prescale != 2 && prescale != 3)
+    {
+        prescale = (prescale > 3) ? 3 : ((prescale > 0) ? 2 : 0);
+        prescale_rounding = (1 << prescale) - 1;
+    }
     
 	/***** Process the left border using the formula for boundary conditions *****/
     
@@ -581,8 +692,7 @@ CODEC_ERROR FilterHorizontalRow(PIXEL *input, PIXEL *lowpass, PIXEL *highpass, i
         /***** Process the internal pixels using the normal wavelet formula *****/
         for (; column < last_input_column_tight; column += 8) //
         {
-            // Column index should always be divisible by two
-            assert((column % 2) == 0);
+            if (column & 1) column--;
             
             HorizontalFilter_Prescale2_4x( input + column - 2, &lowpass[column/2], &highpass[column/2] );
         }
@@ -592,21 +702,25 @@ CODEC_ERROR FilterHorizontalRow(PIXEL *input, PIXEL *lowpass, PIXEL *highpass, i
         /***** Process the internal pixels using the normal wavelet formula *****/
         for (; column < last_input_column_tight; column += 8) //
         {
-            // Column index should always be divisible by two
-            assert((column % 2) == 0);
+            if (column & 1) column--;
             
             HorizontalFilter_Prescale0_4x( input + column - 2, &lowpass[column/2], &highpass[column/2] );
         }
     }
-    else
+    else if( prescale == 3 )
     {
-        assert(0);
+        /***** Process the internal pixels using the normal wavelet formula *****/
+        for (; column < last_input_column_tight; column += 8)
+        {
+            if (column & 1) column--;
+
+            HorizontalFilter_Prescale3_4x( input + column - 2, &lowpass[column/2], &highpass[column/2] );
+        }
     }
     
     for (; column < last_input_column; column += 2)
     {
-        // Column index should always be divisible by two
-        assert((column % 2) == 0);
+        if (column & 1) column--;
         
         // Compute the lowpass coefficient
         lowpass[column/2] = (input[column + 0] + input[column + 1] + prescale_rounding) >> prescale;
@@ -634,8 +748,7 @@ CODEC_ERROR FilterHorizontalRow(PIXEL *input, PIXEL *lowpass, PIXEL *highpass, i
         }
     }
     
-	// Should have exited the loop at the last column
-	assert(column == last_input_column);
+    column = last_input_column;
 
 	/***** Process the right border using the formula for boundary conditions *****/
 
@@ -716,7 +829,7 @@ static void FilterVerticalTopBottom_1x(PIXEL *lowpass[], PIXEL *highpass[], int 
     
     // Apply the lowpass vertical filter to the lowpass horizontal results
     result[LL_BAND][column] = QuantizeValue( lowpass[low_band_index + 0][column] + lowpass[low_band_index + 1][column], midpoints[LL_BAND], multipliers[LL_BAND] );
-    
+
     // Apply the lowpass vertical filter to the highpass horizontal results
     result[LH_BAND][column] = QuantizeValue( highpass[low_band_index + 0][column] + highpass[low_band_index + 1][column], midpoints[LH_BAND], multipliers[LH_BAND] ); 
     
@@ -757,16 +870,18 @@ CODEC_ERROR FilterVerticalTopRow(PIXEL **lowpass, PIXEL **highpass, PIXEL **outp
 	{
         FilterVerticalTopBottom_8x( lowpass, highpass, column, midpoints, multipliers, output, true );
 
-        assert(output[LL_BAND][column] >= 0);
+        if (output[LL_BAND][column] < 0)
+            output[LL_BAND][column] = 0;
 	}
 
     for (; column < wavelet_width; column++)
     {
         FilterVerticalTopBottom_1x( lowpass, highpass, column, midpoints, multipliers, output, true );
-        
-        assert(output[LL_BAND][column] >= 0);
+
+        if (output[LL_BAND][column] < 0)
+            output[LL_BAND][column] = 0;
     }
-    
+
 	return CODEC_ERROR_OKAY;
 }
 
@@ -795,14 +910,16 @@ CODEC_ERROR FilterVerticalBottomRow(PIXEL **lowpass, PIXEL **highpass, PIXEL **o
     {
         FilterVerticalTopBottom_8x( lowpass, highpass, column, midpoints, multipliers, result, false );
         
-        assert(result[LL_BAND][column] >= 0);
+        if (result[LL_BAND][column] < 0)
+            result[LL_BAND][column] = 0;
     }
 
     for (; column < wavelet_width; column++)
     {
         FilterVerticalTopBottom_1x( lowpass, highpass, column, midpoints, multipliers, result, false );
         
-        assert(result[LL_BAND][column] >= 0);
+        if (result[LL_BAND][column] < 0)
+            result[LL_BAND][column] = 0;
     }
     
     return CODEC_ERROR_OKAY;
@@ -834,18 +951,24 @@ CODEC_ERROR FilterVerticalMiddleRow(PIXEL **lowpass, PIXEL **highpass, PIXEL **o
 		result[band] = (PIXEL *)band_row_ptr;
 	}
 
-	for (; column < wavelet_width_m8; column += 8)
-	{
-        FilterVerticalMiddle_8x(lowpass, highpass, column, midpoints, multipliers, result);
-	}
+        for (; column < wavelet_width_m8; column += 8)
+        {
+            FilterVerticalMiddle_8x(lowpass, highpass, column, midpoints, multipliers, result);
 
-    for (; column < wavelet_width; column += 1)
-    {
-        FilterVerticalMiddle_1x(lowpass, highpass, column, midpoints, multipliers, result);
+            for (int k = 0; k < 8; ++k)
+            {
+                if (result[LL_BAND][column + k] < 0)
+                    result[LL_BAND][column + k] = 0;
+            }
+        }
 
-        assert(result[LL_BAND][column] >= 0);
-    }
-    
+        for (; column < wavelet_width; column += 1)
+        {
+            FilterVerticalMiddle_1x(lowpass, highpass, column, midpoints, multipliers, result);
+
+            if (result[LL_BAND][column] < 0)
+                result[LL_BAND][column] = 0;
+        }
+
 	return CODEC_ERROR_OKAY;
 }
-

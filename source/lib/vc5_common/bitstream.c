@@ -238,7 +238,12 @@ CODEC_ERROR PutBits(BITSTREAM *stream, BITWORD bits, BITCOUNT count)
         }
         
         // Write the bit buffer to the byte stream
-        PutWord(stream->stream, stream->buffer );
+        CODEC_ERROR err = PutWord(stream->stream, stream->buffer );
+        if (err != CODEC_ERROR_OKAY)
+        {
+            stream->error = BITSTREAM_ERROR_OVERFLOW;
+            return err;
+        }
         
         // Insert the remaining input bits into the bit buffer
         stream->buffer = (bits << (bit_word_count - count));
@@ -284,14 +289,16 @@ CODEC_ERROR GetBuffer(BITSTREAM *bitstream)
  */
 CODEC_ERROR PutBuffer(BITSTREAM *bitstream)
 {
-    //TODO: Need to signal an overflow error
-    assert(bitstream != NULL && bitstream->stream != NULL);
-    
-    // The bit buffer should be full
-    assert(bitstream->count == bit_word_count);
+    if (bitstream == NULL || bitstream->stream == NULL)
+        return CODEC_ERROR_NULLPTR;
     
     // Write the bit buffer to the byte stream
-    PutWord(bitstream->stream, bitstream->buffer );
+    CODEC_ERROR err = PutWord(bitstream->stream, bitstream->buffer );
+    if (err != CODEC_ERROR_OKAY)
+    {
+        bitstream->error = BITSTREAM_ERROR_OVERFLOW;
+        return err;
+    }
     
     // Empty the bit buffer
     bitstream->buffer = 0;
@@ -375,7 +382,11 @@ CODEC_ERROR FlushBitstream(BITSTREAM *bitstream)
     if (bitstream->count > 0)
     {
         // Write the bit buffer to the output stream
-        PutBuffer(bitstream);
+        CODEC_ERROR err = PutBuffer(bitstream);
+        if (err != CODEC_ERROR_OKAY)
+        {
+            return err;
+        }
     }
     
     // Indicate that the bitstream buffer is empty
@@ -402,7 +413,11 @@ CODEC_ERROR FlushBitstream(BITSTREAM *bitstream)
 size_t GetBitstreamPosition(BITSTREAM *bitstream)
 {
     if (bitstream->count == bit_word_count) {
-        PutBuffer(bitstream);
+        CODEC_ERROR err = PutBuffer(bitstream);
+        if (err != CODEC_ERROR_OKAY)
+        {
+            return 0;
+        }
     }
     
     // The bit buffer must be empty
@@ -442,4 +457,3 @@ CODEC_ERROR RewindBitstream(BITSTREAM *bitstream)
     
     return CODEC_ERROR_OKAY;
 }
-

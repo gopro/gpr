@@ -187,11 +187,14 @@ CODEC_ERROR PutWord(STREAM *stream, BITWORD word)
 		break;
 
 	case STREAM_TYPE_MEMORY:
-        {
-            uint8_t* buffer = (uint8_t *)stream->location.memory.buffer + stream->byte_count;
-            
-            memcpy(buffer, &word, sizeof(word));            
-        }
+		if (stream->byte_count + sizeof(word) > stream->location.memory.size)
+		{
+			return CODEC_ERROR_OUTOFMEMORY;
+		}
+		{
+			uint8_t* buffer = (uint8_t *)stream->location.memory.buffer + stream->byte_count;
+			memcpy(buffer, &word, sizeof(word));
+		}
 		break;
 
 	default:
@@ -221,6 +224,10 @@ CODEC_ERROR PutByte(STREAM *stream, uint8_t byte)
 		break;
 
 	case STREAM_TYPE_MEMORY:
+		if (stream->byte_count + 1 > stream->location.memory.size)
+		{
+			return CODEC_ERROR_OUTOFMEMORY;
+		}
 		((uint8_t *)stream->location.memory.buffer)[stream->byte_count] = byte;
 		break;
 
@@ -520,5 +527,4 @@ CODEC_ERROR PutBlockMemory(STREAM *stream, void *buffer, size_t size, size_t off
 	memcpy(block, buffer, size);
 	return CODEC_ERROR_OKAY;
 }
-
 

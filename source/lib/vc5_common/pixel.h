@@ -23,23 +23,23 @@
 #ifndef PIXEL_H
 #define PIXEL_H
 
-//! Data type for pixels
-typedef int16_t PIXEL;
+//! Data type for pixels (widened for 16-bit pipeline headroom)
+typedef int32_t PIXEL;
 
 //! Minimum and maximum pixel values
 enum {
-	PIXEL_MIN = INT16_MIN,
-	PIXEL_MAX = INT16_MAX,
+	PIXEL_MIN = INT32_MIN,
+	PIXEL_MAX = INT32_MAX,
 };
 
 //! Alternative definition for wavelet coefficients
-typedef int16_t COEFFICIENT;
+typedef int32_t COEFFICIENT;
 
 //! Minimum and maximum coefficient values
 enum
 {
-	COEFFICIENT_MIN = INT16_MIN,
-	COEFFICIENT_MAX = INT16_MAX,
+	COEFFICIENT_MIN = INT32_MIN,
+	COEFFICIENT_MAX = INT32_MAX,
 };
 
 /*!
@@ -50,11 +50,13 @@ enum
 
 	@todo Need to add support for more pixel formats to the reference decoder
 */
-typedef enum
+	typedef enum
 {
 	PIXEL_FORMAT_UNKNOWN = 0,
 
     PIXEL_FORMAT_RAW_RGGB_16  = 104,
+
+    PIXEL_FORMAT_RAW_GBRG_16  = 105,
 
     PIXEL_FORMAT_RAW_RGGB_12  = 106,
     PIXEL_FORMAT_RAW_RGGB_12P = 107,
