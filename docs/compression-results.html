@@ -41,7 +41,7 @@
 <body>
 
 <h1>GPR v2.0: Noise-Aware Compression + ANS Entropy Coding</h1>
-<p>Results from encoding 1,231+ images across GoPro, Nikon Z8, and Hasselblad X2D cameras.</p>
+<p>Results from encoding 1,231+ images across GoPro, 45MP 14-bit DSLR, and 100MP 16-bit medium format cameras.</p>
 
 <div class="metric-grid">
   <div class="metric-card">
@@ -50,7 +50,7 @@
   </div>
   <div class="metric-card">
     <div class="metric-value">6.7x</div>
-    <div class="metric-label">Avg compression (Z8, 1,231 files)</div>
+    <div class="metric-label">Avg compression (45MP 14-bit, 1,231 files)</div>
   </div>
   <div class="metric-card">
     <div class="metric-value">0</div>
@@ -110,7 +110,7 @@
 </div>
 
 <div class="chart">
-<h3>Nikon Z8 (45MP, 14-bit) &mdash; 91 MB RAW</h3>
+<h3>45MP 14-bit DSLR &mdash; 91 MB RAW</h3>
 <div class="bar-chart">
   <div class="bar-row">
     <div class="bar-label">VLC</div>
@@ -125,7 +125,7 @@
 </div>
 
 <div class="chart">
-<h3>Hasselblad X2D 100C (100MP, 16-bit) &mdash; 204 MB RAW</h3>
+<h3>100MP 16-bit Medium Format &mdash; 204 MB RAW</h3>
 <div class="bar-chart">
   <div class="bar-row">
     <div class="bar-label">ANS+DN</div>
@@ -135,7 +135,7 @@
 <p style="font-size:13px; color:#666; margin-top:8px;"><span class="highlight">5.7x compression ratio</span> on 16-bit medium format. VLC baseline unavailable (16-bit not supported by original codec).</p>
 </div>
 
-<h2>Compression Distribution: 1,231 Nikon Z8 Images</h2>
+<h2>Compression Distribution: 1,231 Images (45MP 14-bit DSLR)</h2>
 
 <div class="chart">
 <div class="histogram">
@@ -159,8 +159,8 @@
 <table>
   <tr><th>Camera</th><th>Resolution</th><th>Encode</th><th>Decode</th><th>Throughput</th></tr>
   <tr><td>GoPro Hero6</td><td>12 MP</td><td>77 ms</td><td>98 ms</td><td>122 MP/s</td></tr>
-  <tr><td>Nikon Z8</td><td>45 MP</td><td>1.19 s</td><td>0.54 s</td><td>83 MP/s</td></tr>
-  <tr><td>Hasselblad X2D</td><td>100 MP</td><td>2.5 s</td><td>1.2 s</td><td>83 MP/s</td></tr>
+  <tr><td>45MP 14-bit DSLR</td><td>45 MP</td><td>1.19 s</td><td>0.54 s</td><td>83 MP/s</td></tr>
+  <tr><td>100MP 16-bit MF</td><td>100 MP</td><td>2.5 s</td><td>1.2 s</td><td>83 MP/s</td></tr>
 </table>
 <p style="font-size:13px; color:#666;">Apple M-series, single image, ANS+DN mode. Encoder uses 4 parallel threads. DNG I/O accounts for 30-40% of encode time.</p>
 </div>
@@ -183,8 +183,8 @@
 <p>The ANS entropy coder is designed for resource-constrained ARM processors:</p>
 <table>
   <tr><th>Property</th><th>Value</th><th>Why It Matters for Embedded</th></tr>
-  <tr><td>Decode table size</td><td>16 KB</td><td>Fits in L1 cache on Cortex-A series</td></tr>
-  <tr><td>Working memory</td><td>~64 KB per band</td><td>Fits in SRAM on most SoCs</td></tr>
+  <tr><td>Decode table size</td><td>~21 KB</td><td>Fits in L1 cache on Cortex-A series (16 KB decode_fast + 5 KB freq/rcp tables)</td></tr>
+  <tr><td>Working memory</td><td>~3 MB transient per band</td><td>Allocated and freed per band, no persistent state</td></tr>
   <tr><td>Branch-free decode</td><td>Table lookup + shift</td><td>No branch misprediction penalties</td></tr>
   <tr><td>Integer-only decode</td><td>No FP in hot path</td><td>Works on cores without FPU</td></tr>
   <tr><td>4-way interleave</td><td>Ready for NEON</td><td>4 symbols decoded per iteration</td></tr>

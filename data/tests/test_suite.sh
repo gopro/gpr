@@ -22,8 +22,8 @@ RESULTS="$TMPDIR/results.csv"
 # Paths to test data
 SAMPLES="../../data/samples"
 HERO10_DARK="${HERO10_DARK:-/path/to/hero10/dark}"
-PHOCUS="${PHOCUS:-/path/to/phocus/captures}"
-HASSEL="${HASSEL:-/path/to/hasselblad/images}"
+CALIBRATION_CAPTURES="${CALIBRATION_CAPTURES:-/path/to/calibration/captures}"
+MF_16BIT="${MF_16BIT:-/path/to/mf_16bit/images}"
 
 mkdir -p "$TMPDIR"
 
@@ -120,9 +120,9 @@ if [ "$TIER" = "smoke" ] || [ "$TIER" = "medium" ] || [ "$TIER" = "full" ]; then
     # 3. HERO10 dark frame (low noise, should compress well)
     test_image "$HERO10_DARK/G0016905.GPR" "HERO10_dark" "HERO10" "?" 5568 4176 14 "rggb14" 3
 
-    # 4. Hasselblad X2D DNG (16-bit, 100MP)
-    if [ -f "$HASSEL/2024_12_Dec_Austin_0137.dng" ]; then
-        test_image "$HASSEL/2024_12_Dec_Austin_0137.dng" "X2D_Austin137" "X2D" "200" 11664 8750 16 "rggb16" 3
+    # 4. 100MP medium format DNG (16-bit)
+    if [ -f "$MF_16BIT/2024_12_Dec_Austin_0137.dng" ]; then
+        test_image "$MF_16BIT/2024_12_Dec_Austin_0137.dng" "MF16_Austin137" "MF_16bit" "200" 11664 8750 16 "rggb16" 3
     fi
 
     # 5. Hero5 (noisier, previously problematic)
@@ -151,15 +151,15 @@ if [ "$TIER" = "medium" ] || [ "$TIER" = "full" ]; then
         test_image "$GPR" "$NAME" "HERO10" "?" 5568 4176 14 "rggb14" 3
     done
 
-    # X2D at different quality settings
-    if [ -f "$HASSEL/2024_12_Dec_Austin_0186.dng" ]; then
-        test_image "$HASSEL/2024_12_Dec_Austin_0186.dng" "X2D_Austin186_Q3" "X2D" "64" 11664 8750 16 "rggb16" 3
-        test_image "$HASSEL/2024_12_Dec_Austin_0186.dng" "X2D_Austin186_Q5" "X2D" "64" 11664 8750 16 "rggb16" 5
+    # 100MP 16-bit at different quality settings
+    if [ -f "$MF_16BIT/2024_12_Dec_Austin_0186.dng" ]; then
+        test_image "$MF_16BIT/2024_12_Dec_Austin_0186.dng" "MF16_Austin186_Q3" "MF_16bit" "64" 11664 8750 16 "rggb16" 3
+        test_image "$MF_16BIT/2024_12_Dec_Austin_0186.dng" "MF16_Austin186_Q5" "MF_16bit" "64" 11664 8750 16 "rggb16" 5
     fi
 
-    # X2D encoded GPR round-trip
-    if [ -f "$HASSEL/encoded_v3.gpr" ]; then
-        test_image "$HASSEL/encoded_v3.gpr" "X2D_encoded_v3" "X2D" "232" 11664 8750 16 "rggb16" 3
+    # 100MP 16-bit encoded GPR round-trip
+    if [ -f "$MF_16BIT/encoded_v3.gpr" ]; then
+        test_image "$MF_16BIT/encoded_v3.gpr" "MF16_encoded_v3" "MF_16bit" "232" 11664 8750 16 "rggb16" 3
     fi
 
     # Fusion (dual-lens stereo)
@@ -194,42 +194,42 @@ if [ "$TIER" = "full" ]; then
         fi
     done
 
-    # X2D Phocus calibration frames at each ISO (1 each)
+    # 16-bit calibration frames at each ISO (1 each)
     if command -v dcraw &>/dev/null; then
         for ISO in 64 200 800 3200 12800; do
             # Find first short-exposure file at this ISO
-            for f in "$PHOCUS/"Job_*.fff; do
+            for f in "$CALIBRATION_CAPTURES/"Job_*.fff; do
                 FILE_ISO=$(exiftool -ISO -s -s -s "$f" 2>/dev/null)
                 FILE_EXP=$(exiftool -ExposureTime -s -s -s "$f" 2>/dev/null)
                 if [ "$FILE_ISO" = "$ISO" ] && [ "$FILE_EXP" = "1/1000" ]; then
-                    NAME="X2D_flat_ISO${ISO}"
-                    test_image "$f" "$NAME" "X2D" "$ISO" 11904 8842 16 "rggb16" 3
+                    NAME="MF16_flat_ISO${ISO}"
+                    test_image "$f" "$NAME" "MF_16bit" "$ISO" 11904 8842 16 "rggb16" 3
                     break
                 fi
             done
         done
 
-        # X2D dark frames at each ISO (1 each, long exposure)
+        # 16-bit dark frames at each ISO (1 each, long exposure)
         for ISO in 64 200 800; do
-            for f in "$PHOCUS/"Job_*.fff; do
+            for f in "$CALIBRATION_CAPTURES/"Job_*.fff; do
                 FILE_ISO=$(exiftool -ISO -s -s -s "$f" 2>/dev/null)
                 FILE_EXP=$(exiftool -ExposureTime -s -s -s "$f" 2>/dev/null)
                 if [ "$FILE_ISO" = "$ISO" ] && [ "$FILE_EXP" = "1" ]; then
-                    NAME="X2D_dark_ISO${ISO}"
-                    test_image "$f" "$NAME" "X2D" "$ISO" 11904 8842 16 "rggb16" 3
+                    NAME="MF16_dark_ISO${ISO}"
+                    test_image "$f" "$NAME" "MF_16bit" "$ISO" 11904 8842 16 "rggb16" 3
                     break
                 fi
             done
         done
     else
-        echo "  SKIP X2D Phocus tests (dcraw not installed)"
+        echo "  SKIP 16-bit calibration tests (dcraw not installed)"
     fi
 
-    # Both Hasselblad DNGs at multiple qualities
-    for DNG in "$HASSEL"/*.dng; do
-        NAME="X2D_$(basename $DNG .dng)"
+    # Both 16-bit test DNGs at multiple qualities
+    for DNG in "$MF_16BIT"/*.dng; do
+        NAME="MF16_$(basename $DNG .dng)"
         for Q in 0 3 5 8; do
-            test_image "$DNG" "${NAME}_Q${Q}" "X2D" "?" 11664 8750 16 "rggb16" $Q
+            test_image "$DNG" "${NAME}_Q${Q}" "MF_16bit" "?" 11664 8750 16 "rggb16" $Q
         done
     done
 
