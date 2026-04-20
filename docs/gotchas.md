@@ -120,6 +120,36 @@ For a GoPro with 1-2 GB total RAM (shared with ISP, video pipeline, OS), the 4-t
 
 ### Division Cost
 
-The rANS encoder uses integer division (`state / freq` and `state % freq`) once per token. On Cortex-A78 (GP2-class) this is ~10 cycles. On Cortex-A53 (older GoPro) it's 20-40 cycles. The standard optimization is Giesen's reciprocal multiplication trick which eliminates the divide entirely.
+The rANS encoder uses integer division (`state / freq` and `state % freq`) once per token. On Cortex-A78 (GP2-class) this is ~10 cycles via hardware `udiv`. On Cortex-A53 (older GoPro) it's 20-40 cycles. For a 12MP image: ~0.1s on A78, ~0.4s on A53.
 
-The decoder has **no division** — only table lookup, multiply, and shift.
+A reciprocal multiplication table (`rcp_freq[]`) is precomputed but **not currently used** — the 32-bit approximation is not exact for the full rANS state range (2^23 to 2^31). Exact division-free encode requires 64-bit or 128-bit reciprocals, which adds complexity. The hardware `udiv` on Cortex-A78 is fast enough.
+
+The **decoder has no division** — only table lookup, multiply, and shift.
+
+### malloc in Encoder Hot Path
+
+The ANS encoder calls `malloc` 6 times per band (tokens, residual buffer, rANS buffer, output buffer, plus companded input for mode 3). For 36 bands per image, that's 216 malloc+free pairs.
+
+On a desktop OS this is negligible. On an embedded RTOS:
+- Use `--Embedded` mode (skips Phase 1.8, encodes inline in Phase 2)
+- Each band's allocations are sequential (no concurrent allocations in embedded mode)
+- A future pool allocator could pre-allocate one large buffer and carve from it
+
+### Stack Usage
+
+`JANS_TABLE` is ~21 KB on the stack (frequency table + decode table + reciprocals). This is safe for RTOS stacks (typically 64 KB+) but exceeds the default 8 KB ISR stack.
+
+### Floating-Point
+
+- **Decoder hot path**: No floating-point — integer only
+- **Encoder Phase 0.5** (noise estimation): Uses `double` for MAD statistics and sqrt. One-time per channel, not hot path.
+- **noise_restore** (decoder, optional): Uses `float` for LUT + PRNG. Can be disabled.
+
+### Embedded Mode (`-E` flag)
+
+The `--Embedded` / `-E` CLI flag activates embedded-friendly behavior:
+- Wavelet transform runs serially (no pthreads)
+- Phase 1.8 (parallel ANS pre-encode) is skipped entirely
+- Bands encode inline in Phase 2, one at a time
+- Peak additional memory: ~113 MB (1 band at a time) vs ~451 MB (4 threads)
+- Output is **byte-identical** to normal mode
