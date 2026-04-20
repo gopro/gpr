@@ -9,6 +9,19 @@
  *
  *  This eliminates the 2-symbol-per-coefficient overhead of the
  *  separate run+magnitude ANS approach.
+ *
+ *  (C) Copyright 2018 GoPro Inc (http://gopro.com/).
+ *
+ *  Licensed under either:
+ *  - Apache License, Version 2.0, http://www.apache.org/licenses/LICENSE-2.0
+ *  - MIT license, http://opensource.org/licenses/MIT
+ *  at your option.
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  */
 
 #ifndef ANS_JOINT_H
@@ -42,6 +55,7 @@ typedef struct {
 typedef struct {
     uint16_t freq[JANS_NUM_SYMBOLS + 1];
     uint16_t cum_freq[JANS_NUM_SYMBOLS + 1];
+    uint32_t rcp_freq[JANS_NUM_SYMBOLS + 1];  /* Reciprocal: ceil(2^32 / freq) for division-free encode */
     uint16_t decode_sym[JANS_TABLE_SIZE];
     JANS_DECODE_ENTRY decode_fast[JANS_TABLE_SIZE]; /* Packed for fast decode */
     int initialized;

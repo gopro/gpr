@@ -21,7 +21,7 @@ endif()
 
 # Enable NEON on arm64 (Apple Silicon defaults to ON)
 set(NEON_DEFAULT OFF)
-if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)")
   set(NEON_DEFAULT ON)
 endif()
 option(NEON "Enable ARM NEON intrinsics" ${NEON_DEFAULT})

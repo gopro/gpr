@@ -43,7 +43,7 @@ test_sets/
 
 ## Source Locations
 - GoPro samples: `data/samples/` (checked into repo)
-- HERO10 darks: `/Users/dcliftreaves/Downloads/100GOPRO/`
-- X2D: `/Users/dcliftreaves/Pictures/hassel/`
-- Phocus: `/Users/dcliftreaves/Pictures/Phocus Captures.localized/`
-- Z8: `/Volumes/Photos/DavidsPics/2025/` (external server)
+- HERO10 darks: `<your-path>/100GOPRO/` (set `HERO10_DARK` env var)
+- X2D: `<your-path>/hasselblad/` (set `HASSEL` env var)
+- Phocus: `<your-path>/phocus-captures/` (set `PHOCUS` env var)
+- Z8: `<your-path>/nikon-z8/` (external storage)

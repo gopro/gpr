@@ -7,7 +7,7 @@ INPUT_DIR="$1"
 OUTPUT_DIR="$2"
 shift 2
 FLAGS="$@"
-JOBS=${BATCH_JOBS:-$(sysctl -n hw.ncpu)}
+JOBS=${BATCH_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)}
 
 GPR_TOOLS="$(dirname "$0")/../../build/source/app/gpr_tools/gpr_tools"
 

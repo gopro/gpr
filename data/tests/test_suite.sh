@@ -21,9 +21,9 @@ RESULTS="$TMPDIR/results.csv"
 
 # Paths to test data
 SAMPLES="../../data/samples"
-HERO10_DARK="/Users/dcliftreaves/Downloads/100GOPRO"
-PHOCUS="/Users/dcliftreaves/Pictures/Phocus Captures.localized"
-HASSEL="/Users/dcliftreaves/Pictures/hassel"
+HERO10_DARK="${HERO10_DARK:-/path/to/hero10/dark}"
+PHOCUS="${PHOCUS:-/path/to/phocus/captures}"
+HASSEL="${HASSEL:-/path/to/hasselblad/images}"
 
 mkdir -p "$TMPDIR"
 
