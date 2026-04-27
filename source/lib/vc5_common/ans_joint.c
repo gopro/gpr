@@ -20,10 +20,9 @@
 #include <string.h>
 #include <limits.h>
 
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
-#include <arm_neon.h>
-#define JANS_NEON 1
-#endif
+/* NEON vectorization of the rANS decode was tested and reverted —
+   ARM lacks gather instructions, making scalar table lookups faster.
+   See docs/future-ideas.md for details. */
 
 #define RANS_BYTE_L (1u << 23)
 
@@ -142,7 +141,8 @@ static uint32_t bitbuf_read(const uint8_t *buf, size_t buf_size,
                       | ((uint32_t)buf[*byte_pos + 1] << 8)
                       | ((uint32_t)buf[*byte_pos + 2] << 16)
                       | ((uint32_t)buf[*byte_pos + 3] << 24);
-        uint32_t value = (word >> *bit_pos) & ((1u << bits) - 1);
+        uint32_t mask = (bits >= 32) ? 0xFFFFFFFFu : ((1u << bits) - 1);
+        uint32_t value = (word >> *bit_pos) & mask;
         int new_bit = *bit_pos + bits;
         *byte_pos += new_bit >> 3;
         *bit_pos = new_bit & 7;

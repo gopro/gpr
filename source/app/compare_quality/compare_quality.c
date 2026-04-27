@@ -186,7 +186,7 @@ int main(int argc, char **argv) {
     printf("\nError Distribution:\n");
     printf("  Mean error:     %.4f DN (bias)\n", (double)sum_err / n);
     printf("  RMSE:           %.2f DN\n", sqrt(sse / n));
-    printf("  Max error:      %lld DN\n", max_err);
+    printf("  Max error:      %ld DN\n", (long)max_err);
     printf("  Changed pixels: %.1f%%\n", 100.0 * diff_count / n);
     printf("  Within ±1 DN:   %.1f%%\n", 100.0 * (err_hist[0] + err_hist[1]) / n);
     printf("  Within ±5 DN:   %.1f%%\n",

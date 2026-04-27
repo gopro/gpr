@@ -8,18 +8,13 @@ set(CMAKE_C_FLAGS "-std=c99")
 # project name
 project( gpr )
 
-# Enable link-time optimization for cross-TU inlining (GetBits, GetBuffer, etc.)
-cmake_policy(SET CMP0069 NEW)
-include(CheckIPOSupported)
-check_ipo_supported(RESULT ipo_supported OUTPUT ipo_output)
-if(ipo_supported)
-  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-  message(STATUS "LTO/IPO enabled")
-else()
-  message(STATUS "LTO/IPO not supported: ${ipo_output}")
-endif()
+# LTO intentionally disabled:
+# 1. GCC LTO fails on mixed C/C++ projects (lto-wrapper error on Ubuntu)
+# 2. LTO changes floating-point rounding in the inverse wavelet, breaking
+#    byte-exact backward compatibility with existing GPR files
+# Users who want LTO can enable it with: cmake -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
 
-# Enable NEON on arm64 (Apple Silicon defaults to ON)
+# NEON auto-enabled on ARM64
 set(NEON_DEFAULT OFF)
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)")
   set(NEON_DEFAULT ON)
@@ -97,3 +92,11 @@ add_subdirectory( "source/app/common/argument_parser" )
 add_subdirectory( "source/app/gpr_tools" )
 add_subdirectory( "source/app/compare_quality" )
 add_subdirectory( "source/app/ans_test" )
+
+# Fix byte order detection for Linux ARM64 (from gopro/gpr#53 by mckfarm)
+include(TestBigEndian)
+test_big_endian(IS_BIG_ENDIAN)
+if(NOT IS_BIG_ENDIAN)
+  target_compile_definitions( dng_sdk PUBLIC qDNGLittleEndian=1 )
+  target_compile_definitions( gpr_sdk PUBLIC qDNGLittleEndian=1 )
+endif()

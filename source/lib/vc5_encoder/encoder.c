@@ -346,6 +346,7 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 
 	// Allocate data structures for the encoder state and the bitstream
 	ENCODER encoder;
+	memset(&encoder, 0, sizeof(encoder));
 	BITSTREAM bitstream;
     
     SetupEncoderLogCurve();

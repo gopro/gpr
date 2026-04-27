@@ -334,11 +334,6 @@ Basic encode with both features:
 $ gpr_tools -i photo.DNG -o photo.GPR -D 1 -A 1
 ```
 
-Batch encode a directory:
-```
-$ gpr_batch.sh /path/to/photos /path/to/compressed -D -A --report
-```
-
 Third-party RAW workflow (requires Adobe DNG Converter first):
 ```
 $ /Applications/Adobe\ DNG\ Converter.app/Contents/MacOS/Adobe\ DNG\ Converter -d /tmp/converted photo.NEF

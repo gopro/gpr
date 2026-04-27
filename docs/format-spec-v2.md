@@ -355,10 +355,9 @@ A v2.0 encoder with ANS disabled and denoise disabled produces a byte-identical 
 - Encoder: `source/lib/vc5_encoder/encoder.c` — `EncodeHighpassBand()`
 - Decoder: `source/lib/vc5_decoder/decoder.c` — `DecodeHighpassBand()`
 - ANS coder (mode 1): `source/lib/vc5_common/ans.c`
-- Joint RLV ANS coder (mode 2): `source/lib/vc5_common/ans_joint.c`
-- Batch CLI: `source/app/gpr_tools/gpr_batch.sh`
+- Joint RLV ANS coder (modes 3/4): `source/lib/vc5_common/ans_joint.c`
 - Noise estimation: `source/lib/vc5_encoder/denoise.c`
-- CLI: `source/app/gpr_tools/main.cpp` — flags `-D`, `-A`, `-R`
+- CLI: `source/app/gpr_tools/main.cpp` — flags `-D`, `-A`, `-E`, `-R`
 
 ---
 
