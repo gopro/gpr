@@ -36,7 +36,9 @@
 #if ENABLED(NEON)
 #include <arm_neon.h>
 #endif
+#ifndef _WIN32
 #include <pthread.h>
+#endif
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -1652,11 +1654,16 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 	}
 
 	/* Phase 1: Forward wavelet transforms.
-	   Parallel (4 threads) in normal mode, serial in embedded mode. */
+	   Parallel (4 threads) in normal mode, serial in embedded/Windows mode. */
+#ifdef _WIN32
+	encoder->embedded_mode = 1;  /* Windows: force serial (no pthreads) */
+#endif
 	{
 		gpr_allocator *allocator = encoder->allocator;
 		FORWARD_THREAD_ARG thread_args[MAX_CHANNEL_COUNT];
+#ifndef _WIN32
 		pthread_t threads[MAX_CHANNEL_COUNT];
+#endif
 		int thread_created[MAX_CHANNEL_COUNT];
 
 		/* Allocate per-channel scratch buffers and set up thread args */
@@ -1687,10 +1694,12 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 			}
 			else
 			{
+#ifndef _WIN32
 				thread_created[channel_index] = (pthread_create(&threads[channel_index], NULL,
 				                                                 ForwardTransformThread,
 				                                                 &thread_args[channel_index]) == 0);
 				if (!thread_created[channel_index])
+#endif
 					ForwardTransformThread(&thread_args[channel_index]);
 			}
 		}
@@ -1698,8 +1707,10 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 		/* Wait for all transform threads to complete */
 		for (channel_index = 0; channel_index < channel_count; channel_index++)
 		{
+#ifndef _WIN32
 			if (thread_created[channel_index])
 				pthread_join(threads[channel_index], NULL);
+#endif
 
 			/* Free per-channel scratch buffers */
 			int wavelet_index;
@@ -1742,6 +1753,7 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 	   This moves the expensive ANS table building and encoding off the serial
 	   bitstream path. Phase 2 then just copies the pre-encoded blobs.
 	   In embedded mode, skip this entirely — Phase 2 encodes inline. */
+#ifndef _WIN32
 	if (encoder->ans_enabled && !encoder->embedded_mode)
 	{
 		ensure_cubic_inv_table();
@@ -1770,7 +1782,9 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 				pthread_join(ans_threads[channel_index], NULL);
 		}
 	}
-	else if (encoder->ans_enabled)
+	else
+#endif
+	if (encoder->ans_enabled)
 	{
 		/* Embedded mode: clear pre-encoded storage so Phase 2 encodes inline */
 		memset(encoder->preencoded_band, 0, sizeof(encoder->preencoded_band));

@@ -17,7 +17,9 @@
  */
 
 #include "headers.h"
+#ifndef _WIN32
 #include <pthread.h>
+#endif
 
 /*
 	Prefix lookup table for fast VLC decoding.
@@ -36,7 +38,9 @@ typedef struct {
 } VLC_LOOKUP;
 
 static VLC_LOOKUP vlc_table[1 << VLC_PEEK_BITS];  /* 4096 entries, 16KB */
+#ifndef _WIN32
 static pthread_once_t vlc_init_once = PTHREAD_ONCE_INIT;
+#endif
 static CODEBOOK *vlc_init_codebook = NULL;
 static int vlc_fast_disabled = 0;
 
@@ -108,7 +112,13 @@ CODEC_ERROR GetRunFast(BITSTREAM *stream, CODEBOOK *codebook, RUN *run)
 	if (vlc_init_codebook == NULL)
 		vlc_init_codebook = codebook;
 	assert(vlc_init_codebook == codebook);
+#ifndef _WIN32
 	pthread_once(&vlc_init_once, InitVLCTableOnce);
+#else
+	/* Windows: no pthread_once, use simple flag */
+	if (vlc_table[0].bits == 0 && !vlc_fast_disabled)
+		InitVLCTableOnce();
+#endif
 
 	/* Bypass fast path if disabled via VLC_NO_FAST env var */
 	if (vlc_fast_disabled)

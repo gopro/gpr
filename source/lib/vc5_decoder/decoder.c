@@ -21,7 +21,9 @@
 #include "headers.h"
 #include <stdio.h>
 #include <math.h>
+#ifndef _WIN32
 #include <pthread.h>
+#endif
 
 /*! @brief Apply inverse Generalized Anscombe Transform to a component array */
 /* Noise reconstruction uses shared functions from noise_model.c */
@@ -2404,7 +2406,9 @@ CODEC_ERROR ReconstructUnpackedImage(DECODER *decoder, UNPACKED_IMAGE *image)
     {
         PRESCALE prescale = decoder->codec.prescale_table[0];
         INVERSE_THREAD_ARG thread_args[MAX_CHANNEL_COUNT];
+#ifndef _WIN32
         pthread_t threads[MAX_CHANNEL_COUNT];
+#endif
         int thread_created[MAX_CHANNEL_COUNT];
 
         for (channel_number = 0; channel_number < channel_count; channel_number++)
@@ -2418,12 +2422,14 @@ CODEC_ERROR ReconstructUnpackedImage(DECODER *decoder, UNPACKED_IMAGE *image)
             thread_args[channel_number].prescale      = prescale;
             thread_args[channel_number].error         = CODEC_ERROR_OKAY;
 
+#ifndef _WIN32
             thread_created[channel_number] = (pthread_create(&threads[channel_number], NULL,
                                                               InverseTransformThread,
                                                               &thread_args[channel_number]) == 0);
             if (!thread_created[channel_number])
+#endif
             {
-                // Thread creation failed: run inline as fallback
+                // Windows or thread creation failed: run inline
                 InverseTransformThread(&thread_args[channel_number]);
             }
         }
@@ -2431,8 +2437,10 @@ CODEC_ERROR ReconstructUnpackedImage(DECODER *decoder, UNPACKED_IMAGE *image)
         // Wait for all threads to complete
         for (channel_number = 0; channel_number < channel_count; channel_number++)
         {
+#ifndef _WIN32
             if (thread_created[channel_number])
                 pthread_join(threads[channel_number], NULL);
+#endif
 
             if (thread_args[channel_number].error != CODEC_ERROR_OKAY)
                 error = thread_args[channel_number].error;
