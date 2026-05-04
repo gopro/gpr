@@ -25,6 +25,12 @@ int vc5_logcurve_bypass(void)
     return 0;
 }
 
+/* 12-bit and 14-bit tables are precomputed for cross-platform consistency.
+   This eliminates runtime pow()/log10() which produce different results on
+   MSVC vs GCC/Clang, causing different wavelet coefficients and file sizes.
+   16-bit tables are still computed at runtime (too large for static: 128KB each). */
+#include "logcurve_tables.h"
+
 uint16_t EncoderLogCurve12[LOG_CURVE_TABLE_LENGTH_12];
 uint16_t EncoderLogCurve14[LOG_CURVE_TABLE_LENGTH_14];
 uint16_t EncoderLogCurve16[LOG_CURVE_TABLE_LENGTH_16];
@@ -56,9 +62,9 @@ static void SetupDecoderCurve(uint16_t *table, int bits)
 
 void SetupDecoderLogCurve(void)
 {
-    SetupDecoderCurve(DecoderLogCurve12, 12);
-    SetupDecoderCurve(DecoderLogCurve14, 14);
-    SetupDecoderCurve(DecoderLogCurve16, 16);
+    memcpy(DecoderLogCurve12, DecoderLogCurve12_static, sizeof(DecoderLogCurve12));
+    memcpy(DecoderLogCurve14, DecoderLogCurve14_static, sizeof(DecoderLogCurve14));
+    SetupDecoderCurve(DecoderLogCurve16, 16);  /* 16-bit: too large for static */
 }
 
 static void SetupEncoderLogCurveBits(uint16_t* table, int input_bits, int output_bits)
@@ -78,7 +84,7 @@ static void SetupEncoderLogCurveBits(uint16_t* table, int input_bits, int output
 
 void SetupEncoderLogCurve(void)
 {
-    SetupEncoderLogCurveBits(EncoderLogCurve12, 12, 12);
-    SetupEncoderLogCurveBits(EncoderLogCurve14, 14, 14);
-    SetupEncoderLogCurveBits(EncoderLogCurve16, 16, 16);
+    memcpy(EncoderLogCurve12, EncoderLogCurve12_static, sizeof(EncoderLogCurve12));
+    memcpy(EncoderLogCurve14, EncoderLogCurve14_static, sizeof(EncoderLogCurve14));
+    SetupEncoderLogCurveBits(EncoderLogCurve16, 16, 16);  /* 16-bit: too large for static */
 }
