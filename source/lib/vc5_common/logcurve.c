@@ -19,6 +19,7 @@
  */
 
 #include "common.h"
+#include "logcurve_tables.h"
 
 uint16_t EncoderLogCurve[LOG_CURVE_TABLE_LENGTH];
 
@@ -26,33 +27,15 @@ uint16_t DecoderLogCurve[LOG_CURVE_TABLE_LENGTH];
 
 void SetupDecoderLogCurve(void)
 {
-    int i;
-    const int log_table_size = sizeof(DecoderLogCurve) / sizeof(DecoderLogCurve[0]);
-    
-    const int max_16_bit = (1 << 16) - 1;
-    
-    for( i = 0; i < log_table_size; i++ )
-    {
-        //input 12-bit, output 16-bit
-        float input = i;
-        float output = max_16_bit * (pow(113.0, input/4095.0) - 1.0)/112.0;
-        
-        DecoderLogCurve[i]  = minimum( (int)output, max_16_bit );
-    }
+    /* Use precomputed table for cross-platform consistency.
+       Runtime pow()/log10() produce different results on MSVC vs GCC/Clang,
+       causing different wavelet coefficients and file sizes. */
+    memcpy(DecoderLogCurve, DecoderLogCurve_static, sizeof(DecoderLogCurve));
 }
 
 void SetupEncoderLogCurve(void)
 {
-    int i;
-    const int max_input_val = LOG_CURVE_TABLE_LENGTH - 1;
-    
-    for( i = 0; i < LOG_CURVE_TABLE_LENGTH; i++ )
-    {
-        //input 16-bit, output 12-bit
-        float input = maximum( 0, i );
-        float output = 4095.0 * (log10(input/max_input_val * 112.0 + 1.0)/log10(113));
-
-        EncoderLogCurve[i]  = ( (uint16_t)output );
-    }
+    /* Use precomputed table for cross-platform consistency. */
+    memcpy(EncoderLogCurve, EncoderLogCurve_static, sizeof(EncoderLogCurve));
 }
 
