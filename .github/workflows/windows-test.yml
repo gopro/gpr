@@ -26,8 +26,14 @@ jobs:
         GPR=$(find build -name "gpr_tools.exe" | head -1)
         if [ -n "$GPR" ]; then
           $GPR -i data/samples/Hero6/GOPR0024.GPR -o /tmp/test.DNG
-          $GPR -i /tmp/test.DNG -o /tmp/test.GPR -A 1 -D 1
-          echo "GPR size: $(stat -c%s /tmp/test.GPR 2>/dev/null || stat -f%z /tmp/test.GPR)"
+          $GPR -i /tmp/test.DNG -o /tmp/test_vlc.GPR
+          echo "VLC size: $(wc -c < /tmp/test_vlc.GPR)"
+          $GPR -i /tmp/test.DNG -o /tmp/test_ans.GPR -A 1
+          echo "ANS size: $(wc -c < /tmp/test_ans.GPR)"
+          $GPR -i /tmp/test.DNG -o /tmp/test_ansdn.GPR -A 1 -D 1
+          echo "ANS+DN size: $(wc -c < /tmp/test_ansdn.GPR)"
+          $GPR -i /tmp/test_ansdn.GPR -o /tmp/test.RAW
+          echo "RAW size: $(wc -c < /tmp/test.RAW)"
         else
-          echo "gpr_tools.exe not built (DNG SDK pthread issue - expected)"
+          echo "gpr_tools.exe not built"
         fi
