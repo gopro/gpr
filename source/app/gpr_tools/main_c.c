@@ -17,7 +17,9 @@
  */
 
 #include <stdio.h>
+#ifndef _WIN32
 #include <strings.h>
+#endif
 #include <string.h>
 #include <stdbool.h>
 
@@ -25,6 +27,8 @@
 
 #if defined __GNUC__
 #define stricmp strcasecmp
+#elif defined _WIN32
+#define stricmp _stricmp
 #else
 #endif // if defined __GNUC__
 
@@ -298,6 +302,8 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
             write_buffer_to_file = false;
 #if GPR_JPEG_AVAILABLE
             tje_encode_to_file( output_file_path, rgb_buffer.width, rgb_buffer.height, 3, rgb_buffer.buffer );
+#elif defined _WIN32
+#define stricmp _stricmp
 #else
             printf("JPG writing capability is disabled. You could still write to a PPM file");
 #endif
