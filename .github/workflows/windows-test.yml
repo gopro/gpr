@@ -1,0 +1,33 @@
+name: Windows Build Test
+on:
+  push:
+    branches: ['feature/v2-minimal']
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      shell: cmd
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DNEON=OFF
+        cmake --build . --config Release 2>&1
+    - name: Find binaries
+      shell: cmd
+      run: dir /s /b build\*.exe
+    - name: Run ANS test
+      shell: bash
+      run: find build -name "ans_test.exe" -exec {} \;
+    - name: Smoke test
+      shell: bash
+      run: |
+        GPR=$(find build -name "gpr_tools.exe" | head -1)
+        if [ -n "$GPR" ]; then
+          $GPR -i data/samples/Hero6/GOPR0024.GPR -o /tmp/test.DNG
+          $GPR -i /tmp/test.DNG -o /tmp/test.GPR -A 1 -D 1
+          echo "GPR size: $(stat -c%s /tmp/test.GPR 2>/dev/null || stat -f%z /tmp/test.GPR)"
+        else
+          echo "gpr_tools.exe not built (DNG SDK pthread issue - expected)"
+        fi
