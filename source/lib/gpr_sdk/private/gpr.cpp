@@ -528,7 +528,7 @@ static void convert_dng_exif_to_dng_exif_info( gpr_exif_info* dst_exif, const dn
 }
 
 
-#define MAX_BUF_SIZE 16000
+#define MAX_BUF_SIZE (65*65*4*sizeof(float))
 
 static char _warp_rect_buffer [256];
 
