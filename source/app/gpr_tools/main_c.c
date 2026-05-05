@@ -17,7 +17,9 @@
  */
 
 #include <stdio.h>
+#ifndef _WIN32
 #include <strings.h>
+#endif
 #include <string.h>
 #include <stdbool.h>
 
@@ -25,6 +27,8 @@
 
 #if defined __GNUC__
 #define stricmp strcasecmp
+#elif defined _WIN32
+#define stricmp _stricmp
 #else
 #endif // if defined __GNUC__
 
