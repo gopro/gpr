@@ -69,3 +69,11 @@ endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/tiny_jpeg")
 add_subdirectory( "source/app/common/cJSON" )
 add_subdirectory( "source/app/common/argument_parser" )
 add_subdirectory( "source/app/gpr_tools" )
+
+# Check processor endianness
+INCLUDE(TestBigEndian)
+TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
+IF(NOT IS_BIG_ENDIAN)
+    TARGET_COMPILE_DEFINITIONS( dng_sdk PUBLIC -DqDNGLittleEndian=1)
+    TARGET_COMPILE_DEFINITIONS( gpr_sdk PUBLIC -DqDNGLittleEndian=1)
+ENDIF(NOT IS_BIG_ENDIAN)
