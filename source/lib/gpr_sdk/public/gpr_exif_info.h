@@ -31,7 +31,7 @@
 #define SURVEY_DATA_SIZE        32
 #define PROCESSING_METHOD_SIZE  32
 #define AREA_INFORMATION_SIZE   32
-#define IMAGE_DESCRIPTION_SIZE  32
+#define IMAGE_DESCRIPTION_SIZE  64
 
 #include "gpr_platform.h"
 
