@@ -40,13 +40,13 @@ protected:
 
 public:
     
-    bool    dump_gpr_parameters;
+    bool    print_gpr_json;
     
-    string  jpg_preview_file_path;
+    string  preview_file_path;
 
-    int     jpg_preview_file_width;
+    int     preview_file_width;
     
-    int     jpg_preview_file_height;
+    int     preview_file_height;
 
     int     input_width;
     
@@ -68,7 +68,7 @@ public:
     
     string  output_file_path;
 
-    string  apply_gpr_parameters;
+    string  apply_gpr_json;
     
 public:
 
@@ -80,36 +80,30 @@ public:
     {
         command_options.addOptions()
         /* long and short name */                           /* variable to update */                    /* default value */     /* help text */
-        ("help",                                            help,                                       false,                  "Prints this help text")
+        ("help,h",                                          help,                                       false,                  "Prints this help text")
         
         ("verbose",                                         verbose,                                    false,                  "Verbosity of the output")
 
-        ("JpgPreviewFilePath,P",                            jpg_preview_file_path,                      string(""),             "Preview jpg file path")
-        ("JpgPreviewFileWidth,W",                           jpg_preview_file_width,                     0,                      "Preview jpg file width")
-        ("JpgPreviewFileHeight,H",                          jpg_preview_file_height,                    0,                      "Preview jpg file height")
+        ("preview_file_path,pp",                            preview_file_path,                          string(""),             "Preview (jpg) file path")
+        ("preview_file_width,pw",                           preview_file_width,                         0,                      "Preview (jpg) file width")
+        ("preview_file_height,ph",                          preview_file_height,                        0,                      "Preview (jpg) file height")
         
-        ("DumpGprParameters,d",                             dump_gpr_parameters,                        false,                  "Dump GPR parameters to standard output")
+        ("print_gpr_json,d",                                print_gpr_json,                             false,                  "Print gpr params (as json) to standard output")
+        ("ApplyGprParameters,a",                            apply_gpr_json,                             string(""),             "Use gpr params for dng metadata")
 
-        ("InputSkipRows,s",                                 input_skip_rows,                            0,                      "Input image rows to skip")
+        ("input_file_path,i",                               input_file_path,                            string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
+        ("input_width,w",                                   input_width,                                4000,                   "Input image width in pixel samples [4000]")
+        ("input_height,h",                                  input_height,                               3000,                   "Input image height in pixel samples [3000]")
+        ("input_pitch,p",                                   input_pitch,                                8000,                   "Input image pitch in bytes [8000]")
+        ("input_pixel_format,x",                            input_pixel_format,                         string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p)")
+        ("input_skip_rows,s",                               input_skip_rows,                            0,                      "Input image rows to skip")
 
-        ("InputFilePath,i",                                 input_file_path,                            string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
-        
-        ("InputWidth,w",                                    input_width,                                4000,                   "Input image width in pixel samples [4000]")
-        
-        ("InputHeight,h",                                   input_height,                               3000,                   "Input image height in pixel samples [3000]")
+        ("output_file_path,o",                              output_file_path,                           string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)")
 
-        ("InputPitch,p",                                    input_pitch,                                8000,                   "Input image pitch in bytes [8000]")
-        
-        ("InputPixelFormat,x",                              input_pixel_format,                         string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p)")
-        
-        ("ApplyGprParameters,a",                            apply_gpr_parameters,                       string(""),             "Parameters to use for GPR or DNG file.")
-        
-        ("GPMFFilePath,g",                                  gpmf_file_path,                             string(""),             "GPMF file path")
+        ("gpmf_file_path,g",                                gpmf_file_path,                             string(""),             "GPMF file path")
 
-        ("RgbFileResolution,r",                             rgb_file_resolution,                        string(""),             "Output RGB resolution \n[1:1, 2:1, 4:1, 8:1. 16:1]")
-        ("RgbFileBits,b",                                   rgb_file_bits,                              8,                      "Output RGB bits [8]")
-        
-        ("OutputFilePath,o",                                output_file_path,                           string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)");
+        ("rgb_file_resolution,r",                           rgb_file_resolution,                        string(""),             "Output RGB resolution \n[1:1, 2:1, 4:1, 8:1. 16:1]")
+        ("rgb_file_bits,b",                                 rgb_file_bits,                              8,                      "Output RGB bits [8]");
         ;
     }
 };
@@ -170,7 +164,7 @@ int main(int argc, char *argv [])
         return -1;
     }
     
-    if( args.dump_gpr_parameters )
+    if( args.print_gpr_json )
     {
         if( dng_dump(args.input_file_path.c_str()) != 0 )
             return -1;
@@ -194,8 +188,8 @@ int main(int argc, char *argv [])
     if( args.output_file_path != "" )
     {
         return dng_convert_main(args.input_file_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_pixel_format.c_str(),
-                                args.output_file_path.c_str(), args.apply_gpr_parameters.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits,
-                                args.jpg_preview_file_path.c_str(), args.jpg_preview_file_width, args.jpg_preview_file_height );
+                                args.output_file_path.c_str(), args.apply_gpr_json.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits,
+                                args.preview_file_path.c_str(), args.preview_file_width, args.preview_file_height );
     }
     
     return 0;
