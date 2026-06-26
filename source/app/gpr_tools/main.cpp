@@ -102,7 +102,7 @@ public:
 
         ("gpmf_file_path,g",                                gpmf_file_path,                             string(""),             "GPMF file path")
 
-        ("rgb_file_resolution,r",                           rgb_file_resolution,                        string(""),             "Output RGB resolution \n[1:1, 2:1, 4:1, 8:1. 16:1]")
+        ("rgb_file_resolution,r",                           rgb_file_resolution,                        string(""),             "Output RGB resolution \n[1:1, 2:1, [4:1], 8:1. 16:1]")
         ("rgb_file_bits,b",                                 rgb_file_bits,                              8,                      "Output RGB bits [8]");
         ;
     }
