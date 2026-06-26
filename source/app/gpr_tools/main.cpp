@@ -84,7 +84,7 @@ public:
         ("input_width,w",               input_width,                  4000,                   "Input image width in pixel samples [4000]. Only use it when input format is RAW")
         ("input_height,h",              input_height,                 3000,                   "Input image height in pixel samples [3000]. Only use it when input format is RAW")
         ("input_pitch,p",               input_pitch,                  8000,                   "Input image pitch in bytes [8000]. Only use it when input format is RAW")
-        ("input_pixel_format,x",        input_pixel_format,           string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p). Only use it when input format is RAW")
+        ("input_pixel_format,x",        input_pixel_format,           string(""),             "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p, bggr12, bggr14). Only use it when input format is RAW\n(bggr12/bggr14 are for DNG output only)")
         ("input_skip_rows,s",           input_skip_rows,              0,                      "Input image rows to skip. Only use it when input format is RAW")
 
         ("output_path,o",               output_path,                  string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)")

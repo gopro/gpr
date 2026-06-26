@@ -51,7 +51,11 @@
         PIXEL_FORMAT_GBRG_12 = 3,                           // GBRG 12bit pixels packed into 16bits
         
         PIXEL_FORMAT_GBRG_12P = 4,                          // GBRG 12bit pixels packed into 12bits
-        
+
+        PIXEL_FORMAT_BGGR_12 = 5,                           // BGGR 12bit pixels packed into 16bits
+
+        PIXEL_FORMAT_BGGR_14 = 6,                           // BGGR 14bit pixels packed into 16bits
+
     } GPR_PIXEL_FORMAT;
 
     typedef enum

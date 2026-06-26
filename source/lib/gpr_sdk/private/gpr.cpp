@@ -720,23 +720,37 @@ static bool read_dng(const gpr_allocator*       allocator,
                     gpr_saturation_level& dgain_saturation_level = tuning_info.dgain_saturation_level;
                     
                     bool rggb_raw = (rawIFD.fCFAPattern[0][0] == 0) && (rawIFD.fCFAPattern[0][1] == 1) && (rawIFD.fCFAPattern[1][0] == 1) && (rawIFD.fCFAPattern[1][1] == 2);
-                    
+
+                    bool bggr_raw = (rawIFD.fCFAPattern[0][0] == 2) && (rawIFD.fCFAPattern[0][1] == 1) && (rawIFD.fCFAPattern[1][0] == 1) && (rawIFD.fCFAPattern[1][1] == 0);
+
+                    const bool is_12bit = ( dgain_saturation_level.level_red        == 4095 &&
+                                            dgain_saturation_level.level_green_even == 4095 &&
+                                            dgain_saturation_level.level_green_odd  == 4095 &&
+                                            dgain_saturation_level.level_blue       == 4095 );
+
+                    const bool is_14bit = ( dgain_saturation_level.level_red        == 16383 &&
+                                            dgain_saturation_level.level_green_even == 16383 &&
+                                            dgain_saturation_level.level_green_odd  == 16383 &&
+                                            dgain_saturation_level.level_blue       == 16383 );
+
                     if( rggb_raw )
                     {
-                        if( dgain_saturation_level.level_red        == 4095 &&
-                            dgain_saturation_level.level_green_even == 4095 &&
-                            dgain_saturation_level.level_green_odd  == 4095 &&
-                            dgain_saturation_level.level_blue       == 4095 )
-                        {
+                        if( is_12bit )
                             tuning_info.pixel_format = PIXEL_FORMAT_RGGB_12;
-                        }
-                        else if(dgain_saturation_level.level_red        == 16383 &&
-                                dgain_saturation_level.level_green_even == 16383 &&
-                                dgain_saturation_level.level_green_odd  == 16383 &&
-                                dgain_saturation_level.level_blue       == 16383 )
-                        {
+                        else if( is_14bit )
                             tuning_info.pixel_format = PIXEL_FORMAT_RGGB_14;
+                        else
+                        {
+                            assert(0);
+                            return false;
                         }
+                    }
+                    else if( bggr_raw )
+                    {
+                        if( is_12bit )
+                            tuning_info.pixel_format = PIXEL_FORMAT_BGGR_12;
+                        else if( is_14bit )
+                            tuning_info.pixel_format = PIXEL_FORMAT_BGGR_14;
                         else
                         {
                             assert(0);
@@ -745,20 +759,13 @@ static bool read_dng(const gpr_allocator*       allocator,
                     }
                     else
                     {
-                        if( dgain_saturation_level.level_red        == 4095 &&
-                            dgain_saturation_level.level_green_even == 4095 &&
-                            dgain_saturation_level.level_green_odd  == 4095 &&
-                            dgain_saturation_level.level_blue       == 4095 )
-                        {
+                        if( is_12bit )
                             tuning_info.pixel_format = PIXEL_FORMAT_GBRG_12;
-                        }
                         else
                         {
                             assert(0);
                             return false;
                         }
-                        
-                        
                     }
                 }
                 
@@ -1119,7 +1126,16 @@ static void write_dng(const gpr_allocator*          allocator,
                                         static_black_level.g_r_black,
                                         -1 );
                 break;
-                
+
+            case PIXEL_FORMAT_BGGR_12:
+            case PIXEL_FORMAT_BGGR_14:
+                negative->SetQuadBlacks(static_black_level.b_black,
+                                        static_black_level.g_b_black,
+                                        static_black_level.g_r_black,
+                                        static_black_level.r_black,
+                                        -1 );
+                break;
+
             default:
                 assert(0);
         }
@@ -1247,6 +1263,10 @@ static void write_dng(const gpr_allocator*          allocator,
     else if( convert_params->tuning_info.pixel_format == PIXEL_FORMAT_GBRG_12 || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_GBRG_12P )
     {
         negative->SetBayerMosaic(3);
+    }
+    else if( convert_params->tuning_info.pixel_format == PIXEL_FORMAT_BGGR_12 || convert_params->tuning_info.pixel_format == PIXEL_FORMAT_BGGR_14 )
+    {
+        negative->SetBayerMosaic(2);
     }
     else
     {
