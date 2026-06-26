@@ -165,6 +165,15 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
             fprintf( stderr, "Error: BGGR input is only supported for DNG output, not GPR.\n" );
             return -1;
         }
+
+        // Explicit dimensions on the command line override those from the metadata file.
+        // Relevant for RAW input, where -w/-h/-p define how the raw bytes are interpreted.
+        if( input_file_type == FILE_TYPE_RAW )
+        {
+            if( input_width  != 0 ) params.input_width  = input_width;
+            if( input_height != 0 ) params.input_height = input_height;
+            if( input_pitch  != 0 ) params.input_pitch  = input_pitch;
+        }
     }
     else if( input_file_type == FILE_TYPE_GPR || input_file_type == FILE_TYPE_DNG )
     {
@@ -172,9 +181,10 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     }
     else
     {
-        params.input_width  = input_width;
-        params.input_height = input_height;
-        params.input_pitch  = input_pitch;
+        // 0 means "not specified on the command line"; fall back to legacy defaults.
+        params.input_width  = ( input_width  != 0 ) ? input_width  : 4000;
+        params.input_height = ( input_height != 0 ) ? input_height : 3000;
+        params.input_pitch  = ( input_pitch  != 0 ) ? input_pitch  : params.input_width * 2;
 
         // Default RAW pixel format when -x is not specified.
         if( strcmp(input_pixel_format, "") == 0 )

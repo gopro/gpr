@@ -81,9 +81,9 @@ public:
         ("apply_gpr_json,a",            apply_gpr_json,               string(""),             "Use gpr params for dng metadata")
 
         ("input_path,i",                input_path,                   string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
-        ("input_width,w",               input_width,                  4000,                   "Input image width in pixel samples [4000]. Only use it when input format is RAW")
-        ("input_height,h",              input_height,                 3000,                   "Input image height in pixel samples [3000]. Only use it when input format is RAW")
-        ("input_pitch,p",               input_pitch,                  8000,                   "Input image pitch in bytes [8000]. Only use it when input format is RAW")
+        ("input_width,w",               input_width,                  0,                      "Input image width in pixel samples [4000]. Overrides metadata when set")
+        ("input_height,h",              input_height,                 0,                      "Input image height in pixel samples [3000]. Overrides metadata when set")
+        ("input_pitch,p",               input_pitch,                  0,                      "Input image pitch in bytes [8000]. Overrides metadata when set")
         ("input_pixel_format,x",        input_pixel_format,           string(""),             "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p, bggr12, bggr14). Only use it when input format is RAW\n(bggr12/bggr14 are for DNG output only)")
         ("input_skip_rows,s",           input_skip_rows,              0,                      "Input image rows to skip. Only use it when input format is RAW")
 
