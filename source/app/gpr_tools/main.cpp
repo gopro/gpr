@@ -82,14 +82,14 @@ public:
         /* long and short name */                           /* variable to update */                    /* default value */     /* help text */
         ("help,h",                                          help,                                       false,                  "Prints this help text")
         
-        ("verbose",                                         verbose,                                    false,                  "Verbosity of the output")
+        ("verbose,v",                                       verbose,                                    false,                  "Verbosity of the output")
 
-        ("preview_file_path,pp",                            preview_file_path,                          string(""),             "Preview (jpg) file path")
-        ("preview_file_width,pw",                           preview_file_width,                         0,                      "Preview (jpg) file width")
-        ("preview_file_height,ph",                          preview_file_height,                        0,                      "Preview (jpg) file height")
+        ("preview_file_path",                               preview_file_path,                          string(""),             "Preview (jpg) file path")
+        ("preview_file_width",                              preview_file_width,                         0,                      "Preview (jpg) file width")
+        ("preview_file_height",                             preview_file_height,                        0,                      "Preview (jpg) file height")
         
         ("print_gpr_json,d",                                print_gpr_json,                             false,                  "Print gpr params (as json) to standard output")
-        ("ApplyGprParameters,a",                            apply_gpr_json,                             string(""),             "Use gpr params for dng metadata")
+        ("apply_gpr_json,a",                                apply_gpr_json,                             string(""),             "Use gpr params for dng metadata")
 
         ("input_file_path,i",                               input_file_path,                            string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
         ("input_width,w",                                   input_width,                                4000,                   "Input image width in pixel samples [4000]")
