@@ -137,8 +137,10 @@
         double                  warp_blue_coefficient;
         
         gpr_gain_map            gain_map;
-        
+
         GPR_PIXEL_FORMAT        pixel_format;
+
+        double                  baseline_exposure;      // DNG BaselineExposure (EV); brightening applied at render time
 
     } gpr_tuning_info;
 

@@ -665,7 +665,12 @@ static bool read_dng(const gpr_allocator*       allocator,
                         convert_params->profile_info.color_matrix_2[i][j] = m2[i][j];
                     }
                 }
-                
+
+                // Read the calibration illuminants from the same profile so they stay
+                // paired with the color matrices above (otherwise they keep stale defaults).
+                convert_params->profile_info.illuminant1 = profile_info.CalibrationIlluminant1();
+                convert_params->profile_info.illuminant2 = profile_info.CalibrationIlluminant2();
+
                 convert_params->profile_info.compute_color_matrix = false;
                 convert_params->profile_info.matrix_weighting = 1.0;
                 
@@ -688,11 +693,13 @@ static bool read_dng(const gpr_allocator*       allocator,
                 if( negative->HasCameraNeutral() )
                 {
                     const dng_vector& camNeutral = negative->CameraNeutral();
-                    
+
                     tuning_info.wb_gains.r_gain = 1 / camNeutral[0];
                     tuning_info.wb_gains.g_gain = 1 / camNeutral[1];
                     tuning_info.wb_gains.b_gain = 1 / camNeutral[2];
                 }
+
+                tuning_info.baseline_exposure = negative->BaselineExposure();
                 
                 const dng_linearization_info& linearization_info = *negative->GetLinearizationInfo();
                 
@@ -1280,7 +1287,7 @@ static void write_dng(const gpr_allocator*          allocator,
         return;
     }
     
-    negative->SetBaselineExposure(0);
+    negative->SetBaselineExposure(convert_params->tuning_info.baseline_exposure);
     negative->SetBaselineNoise(1.0);
     negative->SetBaselineSharpness(1.0);
     

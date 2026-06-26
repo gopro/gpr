@@ -492,6 +492,11 @@ void parse_tuning_info( cJSON* pTuningInfo, gpr_tuning_info& tuning_info )
     pJSON = pJSON->next;
 
     tuning_info.pixel_format = (GPR_PIXEL_FORMAT)pJSON->valueint;
+
+    // Optional trailing field: tolerate JSON files written before it existed.
+    pJSON = pJSON->next;
+    if( pJSON )
+        tuning_info.baseline_exposure = pJSON->valuedouble;
 }
 
 int gpr_parameters_parse( gpr_parameters* parameters, const char* input_file_path )
