@@ -63,9 +63,11 @@ public:
     string  gpmf_file_path;
 
     string  rgb_file_resolution;
-    
+
     int     rgb_file_bits;
-    
+
+    int     jpg_quality;
+
     string  output_file_path;
 
     string  apply_gpr_json;
@@ -103,7 +105,8 @@ public:
         ("gpmf_file_path,g",                                gpmf_file_path,                             string(""),             "GPMF file path")
 
         ("rgb_file_resolution,r",                           rgb_file_resolution,                        string(""),             "Output RGB resolution \n[1:1, 2:1, [4:1], 8:1. 16:1]")
-        ("rgb_file_bits,b",                                 rgb_file_bits,                              8,                      "Output RGB bits [8]");
+        ("rgb_file_bits,b",                                 rgb_file_bits,                              8,                      "Output RGB bits [8]")
+        ("jpg_quality,q",                                   jpg_quality,                                2,                      "Output JPG quality \n(1=lowest, [2], 3=highest)");
         ;
     }
 };
@@ -188,7 +191,7 @@ int main(int argc, char *argv [])
     if( args.output_file_path != "" )
     {
         return dng_convert_main(args.input_file_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_pixel_format.c_str(),
-                                args.output_file_path.c_str(), args.apply_gpr_json.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits,
+                                args.output_file_path.c_str(), args.apply_gpr_json.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits, args.jpg_quality,
                                 args.preview_file_path.c_str(), args.preview_file_width, args.preview_file_height );
     }
     

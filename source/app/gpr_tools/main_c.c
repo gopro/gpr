@@ -96,7 +96,7 @@ static FILE_TYPE GetFileType( const char* file_path )
 }
 
 int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, const char* input_pixel_format,
-                     const char*  output_file_path, const char*  metadata_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits,
+                     const char*  output_file_path, const char*  metadata_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits, int jpg_quality,
                      const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height )
 {
     bool success;
@@ -297,7 +297,13 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
         {
             write_buffer_to_file = false;
 #if GPR_JPEG_AVAILABLE
-            tje_encode_to_file( output_file_path, rgb_buffer.width, rgb_buffer.height, 3, rgb_buffer.buffer );
+            // tinyjpeg only supports quality levels 1 (lowest), 2, or 3 (highest)
+            if( jpg_quality < 1 || jpg_quality > 3 )
+            {
+                fprintf( stderr, "JPG quality %d out of range, clamping to [1,3]\n", jpg_quality );
+                jpg_quality = jpg_quality < 1 ? 1 : 3;
+            }
+            tje_encode_to_file_at_quality( output_file_path, jpg_quality, rgb_buffer.width, rgb_buffer.height, 3, rgb_buffer.buffer );
 #else
             printf("JPG writing capability is disabled. You could still write to a PPM file");
 #endif
