@@ -69,7 +69,7 @@ public:
     {
         command_options.addOptions()
         /* long and short name */      /* variable to update */       /* default value */     /* help text */
-        ("help,h",                      help,                         false,                  "Prints this help text")
+        ("help",                        help,                         false,                  "Prints this help text")
         
         ("verbose,v",                   verbose,                      false,                  "Verbosity of the output")
 
