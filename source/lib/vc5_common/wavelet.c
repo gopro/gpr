@@ -470,9 +470,9 @@ void WaveletToRGB( gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL*
     {
         for ( x = 0;  x < src_width; x++)
         {
-            int32_t G = GS_src[ (src_width - x - 1) + y * src_pitch];
-            int32_t R = 2 * ( RG_src[(src_width - x - 1) + y * src_pitch] - midpoint) + G;
-            int32_t B = 2 * ( BG_src[(src_width - x - 1) + y * src_pitch] - midpoint) + G;
+            int32_t G = GS_src[ x + y * src_pitch];
+            int32_t R = 2 * ( RG_src[x + y * src_pitch] - midpoint) + G;
+            int32_t B = 2 * ( BG_src[x + y * src_pitch] - midpoint) + G;
             
             // R,G,B are in 16-bit range since DecoderLogCurve outputs in 16 bits (although it's input is 12 bits)
             R = DecoderLogCurve[ clamp_uint( (R >> shift), 12) ];
