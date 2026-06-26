@@ -34,19 +34,19 @@ bool LogInit(void)
 int LogPrint(const char* format, ... )
 {
     StopTimer(&LogTimer);
-    
-	printf("[%5d-ms] ", (unsigned int)TimeMSecs(&LogTimer));
+
+	fprintf(stderr, "[%5d-ms] ", (unsigned int)TimeMSecs(&LogTimer));
 
 	{
 		va_list argptr;
 		va_start(argptr, format);
 
-		vfprintf(stdout, format, argptr);
+		vfprintf(stderr, format, argptr);
 
 		va_end(argptr);
 	}
 
-    printf( "%c", '\n' );
+    fprintf( stderr, "%c", '\n' );
     
     StartTimer(&LogTimer);
     
