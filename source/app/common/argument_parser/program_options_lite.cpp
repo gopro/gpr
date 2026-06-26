@@ -268,6 +268,47 @@ namespace program_options_lite
     {
         return storePair(opts, true, true, name, value);
     }
+
+    /* returns true if the named option is a boolean flag, which may be
+     * specified without an explicit value (e.g. "-d" instead of "-d 1") */
+    static bool isBooleanOption(Options& opts, bool allow_long, bool allow_short, const string& name)
+    {
+        Options::NamesMap::iterator opt_it;
+        bool found = false;
+
+        if (allow_long)
+        {
+            opt_it = opts.opt_long_map.find(name);
+            if (opt_it != opts.opt_long_map.end())
+            {
+                found = true;
+            }
+        }
+
+        if (allow_short && !found)
+        {
+            opt_it = opts.opt_short_map.find(name);
+            if (opt_it != opts.opt_short_map.end())
+            {
+                found = true;
+            }
+        }
+
+        if (!found)
+        {
+            return false;
+        }
+
+        for (Options::NamesPtrList::iterator it = opt_it->second.begin(); it != opt_it->second.end(); ++it)
+        {
+            if ((*it)->opt->isBoolean())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
     
     /**
      * returns number of extra arguments consumed
@@ -323,7 +364,14 @@ namespace program_options_lite
         size_t arg_opt_start = arg.find_first_not_of('-');
         string option = arg.substr(arg_opt_start);
         /* lookup option */
-        
+
+        /* boolean flags take no argument: "-d" is equivalent to "-d 1" */
+        if (isBooleanOption(opts, false, true, option))
+        {
+            storePair(opts, false, true, option, "1");
+            return 0;
+        }
+
         /* argument in argv[1] */
         /* xxx, need to handle case where option isn't required */
         if (argc == 1)
@@ -332,7 +380,7 @@ namespace program_options_lite
             return 0; /* run out of argv for argument */
         }
         storePair(opts, false, true, option, string(argv[1]));
-        
+
         return 1;
     }
     
