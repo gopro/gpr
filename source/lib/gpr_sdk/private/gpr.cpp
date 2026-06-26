@@ -699,7 +699,9 @@ static bool read_dng(const gpr_allocator*       allocator,
                     tuning_info.wb_gains.b_gain = 1 / camNeutral[2];
                 }
 
-                tuning_info.baseline_exposure = negative->BaselineExposure();
+                tuning_info.baseline_exposure  = negative->BaselineExposure();
+                tuning_info.baseline_sharpness = negative->BaselineSharpness();
+                tuning_info.baseline_noise     = negative->BaselineNoise();
                 
                 const dng_linearization_info& linearization_info = *negative->GetLinearizationInfo();
                 
@@ -1288,8 +1290,8 @@ static void write_dng(const gpr_allocator*          allocator,
     }
     
     negative->SetBaselineExposure(convert_params->tuning_info.baseline_exposure);
-    negative->SetBaselineNoise(1.0);
-    negative->SetBaselineSharpness(1.0);
+    negative->SetBaselineNoise(convert_params->tuning_info.baseline_noise);
+    negative->SetBaselineSharpness(convert_params->tuning_info.baseline_sharpness);
     
     negative->SetAntiAliasStrength(dng_urational(100, 100));
     negative->SetLinearResponseLimit(1.0);

@@ -142,6 +142,10 @@
 
         double                  baseline_exposure;      // DNG BaselineExposure (EV); brightening applied at render time
 
+        double                  baseline_sharpness;     // DNG BaselineSharpness (default 1.0)
+
+        double                  baseline_noise;         // DNG BaselineNoise (default 1.0)
+
     } gpr_tuning_info;
 
     int32_t gpr_tuning_info_get_dgain_saturation_level(const gpr_tuning_info* x, GPR_RAW_CHANNEL channel);

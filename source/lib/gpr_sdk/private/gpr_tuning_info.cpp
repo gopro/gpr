@@ -81,6 +81,10 @@ void gpr_tuning_info_set_defaults( gpr_tuning_info* x )
     x->pixel_format = PIXEL_FORMAT_RGGB_14;
 
     x->baseline_exposure = 0.0;
+
+    x->baseline_sharpness = 1.0;
+
+    x->baseline_noise = 1.0;
 }
 
 

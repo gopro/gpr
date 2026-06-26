@@ -494,7 +494,11 @@ ostream& operator<<(ostream& output, const gpr_tuning_info& x)
 
     print_val( output, "pixel_format", x.pixel_format );
 
-    print_val( output, "baseline_exposure", x.baseline_exposure, 0, true );
+    print_val( output, "baseline_exposure", x.baseline_exposure );
+
+    print_val( output, "baseline_sharpness", x.baseline_sharpness );
+
+    print_val( output, "baseline_noise", x.baseline_noise, 0, true );
 
     end_tag( "tuning_info", output );
 
