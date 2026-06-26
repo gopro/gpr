@@ -1,0 +1,75 @@
+{
+  "schema": "gopro.labs.raw_media_extension.v1",
+  "id": "org.gpr.gvid",
+  "name": "GPR Raw Video",
+  "abi": 1,
+  "delivery": "static_labs_feature",
+  "camera_models": [
+    "MISSION1",
+    "MISSION1_PRO"
+  ],
+  "requires": [
+    "raw_bayer_frame_source",
+    "sd_writer",
+    "preview_surface",
+    "media_indexer",
+    "receipt_writer"
+  ],
+  "media_types": [
+    ".gvid"
+  ],
+  "capture_modes": [
+    {
+      "id": "gvid_4k_bayer_20",
+      "description": "4096 x 3072 Bayer raw video with camera-display preview",
+      "width": 4096,
+      "height": 3072,
+      "fps_floor": 20,
+      "pixel_format": "rggb16",
+      "bit_depth": 16,
+      "payload_kind": "gpr_vc5_frame",
+      "preview": {
+        "width": 1024,
+        "height": 768,
+        "format": "rgb888",
+        "fps_floor": 20
+      }
+    }
+  ],
+  "resource_limits": {
+    "max_rss_mb": 256,
+    "max_frame_time_ms": 50,
+    "max_write_mbps": 135,
+    "max_dropped_frames": 0
+  },
+  "control": {
+    "labs_commands": [
+      "EXT?",
+      "EXT=org.gpr.gvid",
+      "EXTC=mode:gvid_4k_bayer_20",
+      "EXTR=1",
+      "EXTR=0",
+      "EXTS?"
+    ],
+    "open_gopro_http": [
+      "GET /gopro/labs/extensions",
+      "GET /gopro/labs/extensions/org.gpr.gvid",
+      "POST /gopro/labs/extensions/org.gpr.gvid/configure",
+      "POST /gopro/labs/extensions/org.gpr.gvid/capture/start",
+      "POST /gopro/labs/extensions/org.gpr.gvid/capture/stop",
+      "GET /gopro/labs/extensions/org.gpr.gvid/status",
+      "GET /gopro/labs/extensions/org.gpr.gvid/receipt/latest"
+    ]
+  },
+  "receipts": {
+    "capture": "gopro.labs.raw_media_capture_receipt.v1",
+    "preview": "gopro.labs.raw_media_preview_receipt.v1",
+    "install": "gopro.labs.extension_install_receipt.v1"
+  },
+  "security": {
+    "signature_required": true,
+    "native_code_allowed": false,
+    "rollback_protection": true,
+    "resource_limits_enforced": true
+  }
+}
