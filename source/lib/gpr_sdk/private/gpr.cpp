@@ -698,11 +698,17 @@ static bool read_dng(const gpr_allocator*       allocator,
                 
                 {
                     gpr_static_black_level& static_black_level    = tuning_info.static_black_level;
-                    
-                    static_black_level.r_black   = linearization_info.fBlackLevel[0][0][0];
-                    static_black_level.g_r_black = linearization_info.fBlackLevel[0][1][0];
-                    static_black_level.g_b_black = linearization_info.fBlackLevel[1][0][0];
-                    static_black_level.b_black   = linearization_info.fBlackLevel[1][1][0];
+
+                    // Index into the black level pattern modulo its repeat dimensions. This
+                    // expands a scalar (1x1) BlackLevel across all four CFA channels, while
+                    // still reading a full 2x2 per-channel pattern when one is present.
+                    const uint32 black_rows = linearization_info.fBlackLevelRepeatRows > 0 ? linearization_info.fBlackLevelRepeatRows : 1;
+                    const uint32 black_cols = linearization_info.fBlackLevelRepeatCols > 0 ? linearization_info.fBlackLevelRepeatCols : 1;
+
+                    static_black_level.r_black   = linearization_info.fBlackLevel[0 % black_rows][0 % black_cols][0];
+                    static_black_level.g_r_black = linearization_info.fBlackLevel[0 % black_rows][1 % black_cols][0];
+                    static_black_level.g_b_black = linearization_info.fBlackLevel[1 % black_rows][0 % black_cols][0];
+                    static_black_level.b_black   = linearization_info.fBlackLevel[1 % black_rows][1 % black_cols][0];
                 }
                 
                 {
