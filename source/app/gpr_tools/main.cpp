@@ -32,45 +32,31 @@ using namespace std;
 
 class my_argument_parser : public argument_parser
 {
-protected:
-    
+public:
     bool    help;
-    
     bool    verbose;
 
-public:
-    
-    bool    print_gpr_json;
-    
     string  preview_file_path;
-
     int     preview_file_width;
-    
     int     preview_file_height;
 
-    int     input_width;
-    
-    int     input_height;
+    bool    print_gpr_json;
+    string  apply_gpr_json;
 
+    string  input_path;
+    int     input_width;
+    int     input_height;
     int     input_pitch;
-    
+    string  input_pixel_format;
     int     input_skip_rows;
     
-    string  input_pixel_format;
+    string  output_path;
     
-    string  input_file_path;
-    
-    string  gpmf_file_path;
+    string  gpmf_path;
 
-    string  rgb_file_resolution;
-
-    int     rgb_file_bits;
-
+    string  rgb_resolution;
+    int     rgb_bits;
     int     jpg_quality;
-
-    string  output_file_path;
-
-    string  apply_gpr_json;
     
 public:
 
@@ -81,32 +67,31 @@ public:
     void set_options()
     {
         command_options.addOptions()
-        /* long and short name */                           /* variable to update */                    /* default value */     /* help text */
-        ("help,h",                                          help,                                       false,                  "Prints this help text")
+        /* long and short name */      /* variable to update */       /* default value */     /* help text */
+        ("help,h",                      help,                         false,                  "Prints this help text")
         
-        ("verbose,v",                                       verbose,                                    false,                  "Verbosity of the output")
+        ("verbose,v",                   verbose,                      false,                  "Verbosity of the output")
 
-        ("preview_file_path",                               preview_file_path,                          string(""),             "Preview (jpg) file path")
-        ("preview_file_width",                              preview_file_width,                         0,                      "Preview (jpg) file width")
-        ("preview_file_height",                             preview_file_height,                        0,                      "Preview (jpg) file height")
+        ("preview_file_path",           preview_file_path,            string(""),             "Preview (jpg) file path")
+        ("preview_file_width",          preview_file_width,           0,                      "Preview (jpg) file width")
+        ("preview_file_height",         preview_file_height,          0,                      "Preview (jpg) file height")
         
-        ("print_gpr_json,d",                                print_gpr_json,                             false,                  "Print gpr params (as json) to standard output")
-        ("apply_gpr_json,a",                                apply_gpr_json,                             string(""),             "Use gpr params for dng metadata")
+        ("print_gpr_json,d",            print_gpr_json,               false,                  "Print gpr params (as json) to standard output")
+        ("apply_gpr_json,a",            apply_gpr_json,               string(""),             "Use gpr params for dng metadata")
 
-        ("input_file_path,i",                               input_file_path,                            string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
-        ("input_width,w",                                   input_width,                                4000,                   "Input image width in pixel samples [4000]")
-        ("input_height,h",                                  input_height,                               3000,                   "Input image height in pixel samples [3000]")
-        ("input_pitch,p",                                   input_pitch,                                8000,                   "Input image pitch in bytes [8000]")
-        ("input_pixel_format,x",                            input_pixel_format,                         string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p)")
-        ("input_skip_rows,s",                               input_skip_rows,                            0,                      "Input image rows to skip")
+        ("input_path,i",                input_path,                   string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
+        ("input_width,w",               input_width,                  4000,                   "Input image width in pixel samples [4000]")
+        ("input_height,h",              input_height,                 3000,                   "Input image height in pixel samples [3000]")
+        ("input_pitch,p",               input_pitch,                  8000,                   "Input image pitch in bytes [8000]")
+        ("input_pixel_format,x",        input_pixel_format,           string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p)")
+        ("input_skip_rows,s",           input_skip_rows,              0,                      "Input image rows to skip")
 
-        ("output_file_path,o",                              output_file_path,                           string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)")
+        ("output_path,o",               output_path,                  string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)")
+        ("gpmf_path,g",                 gpmf_path,                    string(""),             "GPMF file path")
 
-        ("gpmf_file_path,g",                                gpmf_file_path,                             string(""),             "GPMF file path")
-
-        ("rgb_file_resolution,r",                           rgb_file_resolution,                        string(""),             "Output RGB resolution \n[1:1, 2:1, [4:1], 8:1. 16:1]")
-        ("rgb_file_bits,b",                                 rgb_file_bits,                              8,                      "Output RGB bits [8]")
-        ("jpg_quality,q",                                   jpg_quality,                                2,                      "Output JPG quality \n(1=lowest, [2], 3=highest)");
+        ("rgb_resolution,r",            rgb_resolution,               string(""),             "Output RGB resolution \n[1:1, 2:1, [4:1], 8:1. 16:1]")
+        ("rgb_bits,b",                  rgb_bits,                     8,                      "Output RGB bits [8]")
+        ("jpg_quality,q",               jpg_quality,                  2,                      "Output JPG quality \n(1=lowest, [2], 3=highest)");
         ;
     }
 };
@@ -169,29 +154,29 @@ int main(int argc, char *argv [])
     
     if( args.print_gpr_json )
     {
-        if( dng_dump(args.input_file_path.c_str()) != 0 )
+        if( dng_dump(args.input_path.c_str()) != 0 )
             return -1;
     }
     else
     {
-        string ext = strrchr( args.input_file_path.c_str(),'.');
+        string ext = strrchr( args.input_path.c_str(),'.');
         
-        if( args.output_file_path == string("") && ( ext == string(".GPR") || ext == string(".gpr") ) )
+        if( args.output_path == string("") && ( ext == string(".GPR") || ext == string(".gpr") ) )
         {
-            args.output_file_path = args.input_file_path;
-            args.output_file_path.erase(args.output_file_path.find_last_of("."), string::npos);
+            args.output_path = args.input_path;
+            args.output_path.erase(args.output_path.find_last_of("."), string::npos);
             
-            args.output_file_path = args.output_file_path + string(".DNG");
+            args.output_path = args.output_path + string(".DNG");
         }
     }
     
-    fprintf( stderr, "%s Input File: %s \n",    zerotag, args.input_file_path.c_str() );
-    fprintf( stderr, "%s Output File: %s \n",   zerotag, args.output_file_path.c_str() );
+    fprintf( stderr, "%s Input File: %s \n",    zerotag, args.input_path.c_str() );
+    fprintf( stderr, "%s Output File: %s \n",   zerotag, args.output_path.c_str() );
 
-    if( args.output_file_path != "" )
+    if( args.output_path != "" )
     {
-        return dng_convert_main(args.input_file_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_pixel_format.c_str(),
-                                args.output_file_path.c_str(), args.apply_gpr_json.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits, args.jpg_quality,
+        return dng_convert_main(args.input_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_pixel_format.c_str(),
+                                args.output_path.c_str(), args.apply_gpr_json.c_str(), args.gpmf_path.c_str(), args.rgb_resolution.c_str(), args.rgb_bits, args.jpg_quality,
                                 args.preview_file_path.c_str(), args.preview_file_width, args.preview_file_height );
     }
     

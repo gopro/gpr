@@ -48,9 +48,9 @@ public:
     
     string  output_pixel_format;
     
-    string  input_file_path;
+    string  input_path;
     
-    string  output_file_path;
+    string  output_path;
     
 public:
     
@@ -65,11 +65,11 @@ public:
         ("help",                                            help,                                       false,                  "Prints this help text")
         ("verbose",                                         verbose,                                    false,                  "Verbosity of the output")
         
-        ("InputFilePath,i",                                 input_file_path,                            string(""),             "Input file path")
+        ("InputFilePath,i",                                 input_path,                            string(""),             "Input file path")
         
         ("OutputPixelFormat,x",                             output_pixel_format,                        string("rggb14"),       "Output pixel format [rggb12, rggb12p, rggb14, gbrg12, gbrg12p]")
         
-        ("OutputFilePath,o",                                output_file_path,                           string(""),             "Output file path")
+        ("OutputFilePath,o",                                output_path,                           string(""),             "Output file path")
         
         ("PrintLogCurve,l",                                 log_curve_file_path,                        string(""),             "File for encoding log curve output");
         ;
@@ -137,12 +137,12 @@ int main(int argc, char *argv[])
     gpr_buffer vc5_image = { NULL, 0  };
 
     // Print the flags indicating which parts are enabled for this encoder
-    LogPrint("Vc5 Input image: %s", args.input_file_path.c_str() );
-    LogPrint("Raw Output file: %s", args.output_file_path.c_str() );
+    LogPrint("Vc5 Input image: %s", args.input_path.c_str() );
+    LogPrint("Raw Output file: %s", args.output_path.c_str() );
     
-    if( read_from_file( &vc5_image, args.input_file_path.c_str(), vc5_decoder_params.mem_alloc, vc5_decoder_params.mem_free ) )
+    if( read_from_file( &vc5_image, args.input_path.c_str(), vc5_decoder_params.mem_alloc, vc5_decoder_params.mem_free ) )
     {
-        LogPrint("Could not read input file: %s", args.input_file_path.c_str());
+        LogPrint("Could not read input file: %s", args.input_path.c_str());
         exit(-1);
     }
     
@@ -167,9 +167,9 @@ int main(int argc, char *argv[])
 
         assert( raw_image.buffer && raw_image.size > 0 );
 
-        if( write_to_file( &raw_image, args.output_file_path.c_str() ) )
+        if( write_to_file( &raw_image, args.output_path.c_str() ) )
         {
-            LogPrint("Error writing bitstream to location %s", args.output_file_path.c_str() );
+            LogPrint("Error writing bitstream to location %s", args.output_path.c_str() );
             return -1;
         }
         
