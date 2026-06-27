@@ -91,12 +91,18 @@ void gpr_read_image::ReadTile (dng_host &host,
             if( GetDecodeVC5() == true )
             {
                 bool rggb_raw = (ifd.fCFAPattern[0][0] == 0) && (ifd.fCFAPattern[0][1] == 1) && (ifd.fCFAPattern[1][0] == 1) && (ifd.fCFAPattern[1][1] == 2);
-                
+
+                bool bggr_raw = (ifd.fCFAPattern[0][0] == 2) && (ifd.fCFAPattern[0][1] == 1) && (ifd.fCFAPattern[1][0] == 1) && (ifd.fCFAPattern[1][1] == 0);
+
                 VC5_DECODER_PIXEL_FORMAT pixel_format;
-                
+
                 if( rggb_raw )
                 {
                     pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_14;
+                }
+                else if( bggr_raw )
+                {
+                    pixel_format = VC5_DECODER_PIXEL_FORMAT_BGGR_12;
                 }
                 else
                 {

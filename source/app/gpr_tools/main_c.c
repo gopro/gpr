@@ -159,13 +159,6 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
                 params.tuning_info.pixel_format = pf;
         }
 
-        if( ( params.tuning_info.pixel_format == PIXEL_FORMAT_BGGR_12 || params.tuning_info.pixel_format == PIXEL_FORMAT_BGGR_14 )
-            && output_file_type == FILE_TYPE_GPR )
-        {
-            fprintf( stderr, "Error: BGGR input is only supported for DNG output, not GPR.\n" );
-            return -1;
-        }
-
         // Explicit dimensions on the command line override those from the metadata file.
         // Relevant for RAW input, where -w/-h/-p define how the raw bytes are interpreted.
         if( input_file_type == FILE_TYPE_RAW )
@@ -249,15 +242,6 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
 
             if( input_pitch == -1 )
                 input_pitch = input_width * 2;
-        }
-
-        // BGGR raw input is only supported when writing an (uncompressed) DNG.
-        // The VC5/GPR encoder does not implement the BGGR Bayer phase.
-        if( ( params.tuning_info.pixel_format == PIXEL_FORMAT_BGGR_12 || params.tuning_info.pixel_format == PIXEL_FORMAT_BGGR_14 )
-            && output_file_type == FILE_TYPE_GPR )
-        {
-            fprintf( stderr, "Error: BGGR input is only supported for DNG output, not GPR.\n" );
-            return -1;
         }
 
         params.tuning_info.dgain_saturation_level.level_red         = saturation_level;

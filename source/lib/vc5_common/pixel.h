@@ -63,7 +63,10 @@ typedef enum
     PIXEL_FORMAT_RAW_GBRG_12  = 109,
     PIXEL_FORMAT_RAW_GBRG_12P = 110,
     PIXEL_FORMAT_RAW_GBRG_14  = 111,
-    
+
+    PIXEL_FORMAT_RAW_BGGR_12  = 112,
+    PIXEL_FORMAT_RAW_BGGR_14  = 113,
+
     PIXEL_FORMAT_RAW_DEFAULT = PIXEL_FORMAT_RAW_RGGB_14,
     
 	//! Input pixel formats above this value must be encoded into the sample

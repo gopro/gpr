@@ -745,6 +745,8 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
     case PIXEL_FORMAT_RAW_RGGB_14:
     case PIXEL_FORMAT_RAW_GBRG_12:
     case PIXEL_FORMAT_RAW_GBRG_12P:
+    case PIXEL_FORMAT_RAW_BGGR_12:
+    case PIXEL_FORMAT_RAW_BGGR_14:
     case PIXEL_FORMAT_RAW_RGGB_16:
         channel_count = 4;
         max_channel_width = input->width / 2;
@@ -767,25 +769,33 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
     switch (input->format)
     {
         case PIXEL_FORMAT_RAW_RGGB_14:
-            UnpackImage_14(input, output, enabled_parts, true );
+            UnpackImage_14(input, output, enabled_parts, BAYER_ORDERING_RGGB );
+            break;
+
+        case PIXEL_FORMAT_RAW_BGGR_14:
+            UnpackImage_14(input, output, enabled_parts, BAYER_ORDERING_BGGR );
             break;
 
         case PIXEL_FORMAT_RAW_RGGB_12:
-            UnpackImage_12(input, output, enabled_parts, true );
+            UnpackImage_12(input, output, enabled_parts, BAYER_ORDERING_RGGB );
             break;
 
         case PIXEL_FORMAT_RAW_GBRG_12:
-            UnpackImage_12(input, output, enabled_parts, false );
+            UnpackImage_12(input, output, enabled_parts, BAYER_ORDERING_GBRG );
+            break;
+
+        case PIXEL_FORMAT_RAW_BGGR_12:
+            UnpackImage_12(input, output, enabled_parts, BAYER_ORDERING_BGGR );
             break;
 
         case PIXEL_FORMAT_RAW_RGGB_12P:
-            UnpackImage_12P(input, output, enabled_parts, true );
+            UnpackImage_12P(input, output, enabled_parts, BAYER_ORDERING_RGGB );
             break;
 
         case PIXEL_FORMAT_RAW_GBRG_12P:
-            UnpackImage_12P(input, output, enabled_parts, false );
+            UnpackImage_12P(input, output, enabled_parts, BAYER_ORDERING_GBRG );
             break;
-            
+
         default:
             assert(0);
             return CODEC_ERROR_PIXEL_FORMAT;

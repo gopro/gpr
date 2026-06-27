@@ -129,6 +129,8 @@ DIMENSION ImagePitch(DIMENSION width, PIXEL_FORMAT format)
         case PIXEL_FORMAT_RAW_RGGB_14:
         case PIXEL_FORMAT_RAW_GBRG_12:
         case PIXEL_FORMAT_RAW_GBRG_12P:
+        case PIXEL_FORMAT_RAW_BGGR_12:
+        case PIXEL_FORMAT_RAW_BGGR_14:
         case PIXEL_FORMAT_RAW_RGGB_16:
             // Half the width of the image times 2 samples times 2 bytes per sample
             pitch = width * sizeof(uint16_t);

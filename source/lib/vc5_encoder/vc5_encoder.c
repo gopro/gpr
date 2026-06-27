@@ -114,7 +114,15 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
         case VC5_ENCODER_PIXEL_FORMAT_GBRG_12P:
             image.format = PIXEL_FORMAT_RAW_GBRG_12P;
             break;
-            
+
+        case VC5_ENCODER_PIXEL_FORMAT_BGGR_12:
+            image.format = PIXEL_FORMAT_RAW_BGGR_12;
+            break;
+
+        case VC5_ENCODER_PIXEL_FORMAT_BGGR_14:
+            image.format = PIXEL_FORMAT_RAW_BGGR_14;
+            break;
+
         default:
             assert(0);
     }
