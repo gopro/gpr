@@ -108,7 +108,7 @@ static int parse_input_pixel_format( const char* s, GPR_PIXEL_FORMAT* out )
     return 0;
 }
 
-int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, const char* input_pixel_format,
+int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, size_t input_skip_cols, const char* input_pixel_format,
                      const char*  output_file_path, const char*  metadata_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits, int jpg_quality,
                      const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height )
 {
@@ -261,7 +261,14 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     {
         input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_rows * input_pitch);
     }
-    
+
+    // Skipping columns shifts the horizontal Bayer phase (e.g. BGGR -> GBRG).
+    // Each pixel sample is 16 bits, so advance by 2 bytes per column.
+    if( input_skip_cols > 0 )
+    {
+        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_cols * sizeof(uint16_t));
+    }
+
     gpr_buffer preview = { NULL, 0 };
 
     if( strcmp(jpg_preview_file_path, "") != 0 )
@@ -392,6 +399,11 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     if( input_skip_rows > 0 )
     {
 		input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_rows * input_pitch);
+    }
+
+    if( input_skip_cols > 0 )
+    {
+        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_cols * sizeof(uint16_t));
     }
     
     if( preview.buffer )

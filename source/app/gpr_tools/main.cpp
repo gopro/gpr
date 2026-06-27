@@ -50,7 +50,8 @@ public:
     int     input_pitch;
     string  input_pixel_format;
     int     input_skip_rows;
-    
+    int     input_skip_cols;
+
     string  output_path;
     
     string  gpmf_path;
@@ -84,15 +85,18 @@ public:
         ("input_width,w",               input_width,                  0,                      "Input image width in pixel samples [4000]. Overrides metadata when set")
         ("input_height,h",              input_height,                 0,                      "Input image height in pixel samples [3000]. Overrides metadata when set")
         ("input_pitch,p",               input_pitch,                  0,                      "Input image pitch in bytes [8000]. Overrides metadata when set")
-        ("input_pixel_format,x",        input_pixel_format,           string(""),             "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p, bggr12, bggr14). Only use it when input format is RAW\n(bggr12/bggr14 are for DNG output only)")
-        ("input_skip_rows,s",           input_skip_rows,              0,                      "Input image rows to skip. Only use it when input format is RAW")
+        ("input_pixel_format,x",        input_pixel_format,           string(""),             "Input pixel format \n"
+                                                                                              "(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p, bggr12, bggr14). Only use it when input format is RAW\n"
+                                                                                              "(bggr12/bggr14 are for DNG output only)")
+        ("input_skip_rows",             input_skip_rows,              0,                      "Input image rows to skip (shifts Bayer phase, e.g. BGGR->GRBG). Only use it when input format is RAW")        
+        ("input_skip_cols",             input_skip_cols,              0,                      "Input image columns to skip (shifts Bayer phase, e.g. BGGR->GBRG). Only use it when input format is RAW")
 
         ("output_path,o",               output_path,                  string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)")
         ("gpmf_path,g",                 gpmf_path,                    string(""),             "GPMF file path")
 
-        ("rgb_resolution,r",            rgb_resolution,               string(""),             "Output RGB resolution \n[1:1, 2:1, [4:1], 8:1. 16:1]")
+        ("rgb_resolution",              rgb_resolution,               string(""),             "Output RGB resolution \n[1:1, 2:1, [4:1], 8:1. 16:1]")
         ("rgb_bits,b",                  rgb_bits,                     8,                      "Output RGB bits [8]")
-        ("jpg_quality,q",               jpg_quality,                  2,                      "Output JPG quality \n(1=lowest, [2], 3=highest)");
+        ("jpg_quality",                 jpg_quality,                  2,                      "Output JPG quality \n(1=lowest, [2], 3=highest)");
         ;
     }
 };
@@ -176,7 +180,7 @@ int main(int argc, char *argv [])
 
     if( args.output_path != "" )
     {
-        return dng_convert_main(args.input_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_pixel_format.c_str(),
+        return dng_convert_main(args.input_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_skip_cols, args.input_pixel_format.c_str(),
                                 args.output_path.c_str(), args.apply_gpr_json.c_str(), args.gpmf_path.c_str(), args.rgb_resolution.c_str(), args.rgb_bits, args.jpg_quality,
                                 args.preview_file_path.c_str(), args.preview_file_width, args.preview_file_height );
     }
