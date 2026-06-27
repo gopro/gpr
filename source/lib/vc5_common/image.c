@@ -126,6 +126,8 @@ DIMENSION ImagePitch(DIMENSION width, PIXEL_FORMAT format)
     
     switch (format)
     {
+        case PIXEL_FORMAT_RAW_RGGB_12:
+        case PIXEL_FORMAT_RAW_RGGB_12P:
         case PIXEL_FORMAT_RAW_RGGB_14:
         case PIXEL_FORMAT_RAW_GBRG_12:
         case PIXEL_FORMAT_RAW_GBRG_12P:

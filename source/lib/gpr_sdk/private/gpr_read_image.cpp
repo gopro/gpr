@@ -94,19 +94,24 @@ void gpr_read_image::ReadTile (dng_host &host,
 
                 bool bggr_raw = (ifd.fCFAPattern[0][0] == 2) && (ifd.fCFAPattern[0][1] == 1) && (ifd.fCFAPattern[1][0] == 1) && (ifd.fCFAPattern[1][1] == 0);
 
+                // Derive the bit depth from the white level (4095 -> 12-bit, 16383 -> 14-bit)
+                // rather than hardcoding it per pattern. This keeps the decode bit depth in
+                // sync with however the data was encoded.
+                bool is_14bit = ( ifd.fWhiteLevel[0] > 4095.0 );
+
                 VC5_DECODER_PIXEL_FORMAT pixel_format;
 
                 if( rggb_raw )
                 {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_14;
+                    pixel_format = is_14bit ? VC5_DECODER_PIXEL_FORMAT_RGGB_14 : VC5_DECODER_PIXEL_FORMAT_RGGB_12;
                 }
                 else if( bggr_raw )
                 {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_BGGR_12;
+                    pixel_format = is_14bit ? VC5_DECODER_PIXEL_FORMAT_BGGR_14 : VC5_DECODER_PIXEL_FORMAT_BGGR_12;
                 }
                 else
                 {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_12;
+                    pixel_format = is_14bit ? VC5_DECODER_PIXEL_FORMAT_GBRG_14 : VC5_DECODER_PIXEL_FORMAT_GBRG_12;
                 }
                 
                 if( DecodeVC5( image, *_vc5_buffer, pixel_format ) )
