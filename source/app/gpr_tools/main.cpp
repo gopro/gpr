@@ -119,13 +119,13 @@ int dng_dump(const char*  input_file_path)
     }
     
     int success = gpr_parse_metadata( &allocator, &input_buffer, &params );
-    
+
     if( success )
     {
         gpr_parameters_print( &params, NULL );
     }
-    
-    return 0;
+
+    return success ? 0 : -1;
 }
 
 int main(int argc, char *argv [])

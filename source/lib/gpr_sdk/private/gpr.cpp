@@ -734,9 +734,23 @@ static bool read_dng(const gpr_allocator*       allocator,
                 
                 {
                     dng_ifd &rawIFD = *info.fIFD [info.fMainIndex].Get ();
-                 
+
+                    // gpr/VC5 only supports single-channel Bayer CFA mosaics. Reject DNGs
+                    // that store already-demosaiced/linear data (e.g. Apple ProRAW from the
+                    // stock iOS Camera app, PhotometricInterpretation = LinearRaw) with a
+                    // clear error instead of asserting deep in pixel-format detection below.
+                    if( rawIFD.fPhotometricInterpretation != piCFA || rawIFD.fSamplesPerPixel != 1 )
+                    {
+                        fprintf( stderr, "Error: unsupported DNG -- expected a single-channel Bayer CFA raw image, "
+                                          "but found PhotometricInterpretation=%u, SamplesPerPixel=%u.\n"
+                                          "This usually means the DNG is already demosaiced/linear (e.g. Apple ProRAW "
+                                          "from the stock iOS Camera app), which gpr_tools cannot encode/decode.\n",
+                                          (unsigned)rawIFD.fPhotometricInterpretation, (unsigned)rawIFD.fSamplesPerPixel );
+                        return false;
+                    }
+
                     gpr_saturation_level& dgain_saturation_level = tuning_info.dgain_saturation_level;
-                    
+
                     bool rggb_raw = (rawIFD.fCFAPattern[0][0] == 0) && (rawIFD.fCFAPattern[0][1] == 1) && (rawIFD.fCFAPattern[1][0] == 1) && (rawIFD.fCFAPattern[1][1] == 2);
 
                     bool bggr_raw = (rawIFD.fCFAPattern[0][0] == 2) && (rawIFD.fCFAPattern[0][1] == 1) && (rawIFD.fCFAPattern[1][0] == 1) && (rawIFD.fCFAPattern[1][1] == 0);
@@ -1511,9 +1525,9 @@ bool gpr_parse_metadata(const gpr_allocator*        allocator,
     
     if( read_dng( allocator, &inp_dng_stream, NULL, NULL, parameters ) == false )
     {
-        assert(0); return false;
+        return false;
     }
-    
+
     return true;
 }
 
