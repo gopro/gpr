@@ -130,6 +130,19 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
         return -1;
     }
 
+    // DNG -> DNG is a legitimate conversion (e.g. reapplying metadata via -a),
+    // so it is exempt from this check. Every other same-format pair (GPR -> GPR,
+    // RAW -> RAW, PPM -> PPM, JPG -> JPG) is not a supported conversion -- this is
+    // usually an output file extension typo, so fail with a clear message instead
+    // of falling through to the generic "Unsupported conversion" error below.
+    if( input_file_type == output_file_type && input_file_type != FILE_TYPE_DNG )
+    {
+        fprintf( stderr, "Error: input file `%s' and output file `%s' have the same format; there is no conversion to perform.\n"
+                          "Check that the output file extension (-o) is correct.\n",
+                          input_file_path, output_file_path );
+        return -1;
+    }
+
     gpr_allocator allocator;
     allocator.Alloc = malloc;
     allocator.Free = free;
