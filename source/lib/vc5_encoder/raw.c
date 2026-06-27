@@ -26,25 +26,32 @@
 /** 14 BIT INPUT FORMAT **/
 /** ------------------- **/
 
-static void UnpackPixel_14(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_14(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     uint16_t R1, G1, G2, B1;
     uint16_t GS, GD, RG, BG;
-    
+
     uint16_t *GS_output_row_ptr = (uint16_t *)output_buffer[0];
     uint16_t *GD_output_row_ptr = (uint16_t *)output_buffer[3];
     uint16_t *RG_output_row_ptr = (uint16_t *)output_buffer[1];
     uint16_t *BG_output_row_ptr = (uint16_t *)output_buffer[2];
-    
+
     const int internal_precision = 12;
     const int32_t midpoint = (1 << (internal_precision - 1));
 
-    if( rggb )
+    if( bayer_ordering == BAYER_ORDERING_RGGB )
     {
         R1 = input_row1_ptr[2 * column + 0];
         G1 = input_row1_ptr[2 * column + 1];
         G2 = input_row2_ptr[2 * column + 0];
         B1 = input_row2_ptr[2 * column + 1];
+    }
+    else if( bayer_ordering == BAYER_ORDERING_BGGR )
+    {
+        B1 = input_row1_ptr[2 * column + 0];
+        G1 = input_row1_ptr[2 * column + 1];
+        G2 = input_row2_ptr[2 * column + 0];
+        R1 = input_row2_ptr[2 * column + 1];
     }
     else
     {
@@ -53,7 +60,7 @@ static void UnpackPixel_14(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, i
         R1 = input_row2_ptr[2 * column + 0];
         G2 = input_row2_ptr[2 * column + 1];
     }
-    
+
     // Apply protune log curve
     R1 = EncoderLogCurve[ R1 >> 2 ];
     G1 = EncoderLogCurve[ G1 >> 2 ];
@@ -75,7 +82,7 @@ static void UnpackPixel_14(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, i
 #if ENABLED(NEON)
 
 #define UnpackPixel_14_8x UnpackPixel_14_8x_NEON_
-static void UnpackPixel_14_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_14_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     int i;    
     uint16x8x2_t row_1, row_2;
@@ -100,7 +107,8 @@ static void UnpackPixel_14_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_ro
 
     int16x8_t R1, G1, G2, B1;
 
-    if( rggb )
+    // NEON path handles only RGGB / GBRG; BGGR is routed to the scalar path.
+    if( bayer_ordering == BAYER_ORDERING_RGGB )
     {
         R1 = vreinterpretq_s16_u16( row_1.val[0] );
         G1 = vreinterpretq_s16_u16( row_1.val[1] );
@@ -140,18 +148,18 @@ static void UnpackPixel_14_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_ro
 #else
 
 #define UnpackPixel_14_8x UnpackPixel_14_8x_C_
-static void UnpackPixel_14_8x_C_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_14_8x_C_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     int i;
     for ( i = 0; i < 8; i++)
     {
-        UnpackPixel_14(input_row1_ptr, input_row2_ptr, column + i, output_buffer, rggb );
+        UnpackPixel_14(input_row1_ptr, input_row2_ptr, column + i, output_buffer, bayer_ordering );
     }
 }
 
 #endif
 
-void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb )
+void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, BAYER_ORDERING bayer_ordering )
 {
     uint8_t *input_buffer = (uint8_t *)input->buffer + input->offset;
     
@@ -185,16 +193,26 @@ void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_P
         
         int column = 0;
         
-        // Unpack the row of Bayer components from the BYR4 pattern elements
-        for (; column < input_width_m8; column+= 8)
+        // Unpack the row of Bayer components from the BYR4 pattern elements.
+        // BGGR is not implemented in the (NEON) 8x path, so handle it per-pixel.
+        if( bayer_ordering == BAYER_ORDERING_BGGR )
         {
-            UnpackPixel_14_8x(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, rggb );
+            for (; column < input_width; column++)
+            {
+                UnpackPixel_14(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
         }
-        
-        // Unpack the row of Bayer components from the BYR4 pattern elements
-        for (; column < input_width; column++)
+        else
         {
-            UnpackPixel_14(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, rggb );
+            for (; column < input_width_m8; column+= 8)
+            {
+                UnpackPixel_14_8x(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
+
+            for (; column < input_width; column++)
+            {
+                UnpackPixel_14(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
         }
         
         input_row_ptr += input_pitch;
@@ -210,25 +228,32 @@ void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_P
 /** 12 BIT INPUT FORMAT **/
 /** ------------------- **/
 
-static void UnpackPixel_12(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_12(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     uint16_t R1, G1, G2, B1;
     uint16_t GS, GD, RG, BG;
-    
+
     uint16_t *GS_output_row_ptr = (uint16_t *)output_buffer[0];
     uint16_t *GD_output_row_ptr = (uint16_t *)output_buffer[3];
     uint16_t *RG_output_row_ptr = (uint16_t *)output_buffer[1];
     uint16_t *BG_output_row_ptr = (uint16_t *)output_buffer[2];
-    
+
     const int internal_precision = 12;
     const int32_t midpoint = (1 << (internal_precision - 1));
-    
-    if( rggb )
+
+    if( bayer_ordering == BAYER_ORDERING_RGGB )
     {
         R1 = input_row1_ptr[2 * column + 0];
         G1 = input_row1_ptr[2 * column + 1];
         G2 = input_row2_ptr[2 * column + 0];
         B1 = input_row2_ptr[2 * column + 1];
+    }
+    else if( bayer_ordering == BAYER_ORDERING_BGGR )
+    {
+        B1 = input_row1_ptr[2 * column + 0];
+        G1 = input_row1_ptr[2 * column + 1];
+        G2 = input_row2_ptr[2 * column + 0];
+        R1 = input_row2_ptr[2 * column + 1];
     }
     else
     {
@@ -237,7 +262,7 @@ static void UnpackPixel_12(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, i
         R1 = input_row2_ptr[2 * column + 0];
         G2 = input_row2_ptr[2 * column + 1];
     }
-    
+
     // Apply protune log curve
     R1 = EncoderLogCurve[ R1 ];
     G1 = EncoderLogCurve[ G1 ];
@@ -259,7 +284,7 @@ static void UnpackPixel_12(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, i
 #if ENABLED(NEON)
 
 #define UnpackPixel_12_8x UnpackPixel_12_8x_NEON_
-static void UnpackPixel_12_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_12_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     int i;
     uint16x8x2_t row_1, row_2;
@@ -283,8 +308,9 @@ static void UnpackPixel_12_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_ro
     }
     
     int16x8_t R1, G1, G2, B1;
-    
-    if( rggb )
+
+    // NEON path handles only RGGB / GBRG; BGGR is routed to the scalar path.
+    if( bayer_ordering == BAYER_ORDERING_RGGB )
     {
         R1 = vreinterpretq_s16_u16( row_1.val[0] );
         G1 = vreinterpretq_s16_u16( row_1.val[1] );
@@ -324,18 +350,18 @@ static void UnpackPixel_12_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_ro
 #else
 
 #define UnpackPixel_12_8x UnpackPixel_12_8x_C_
-static void UnpackPixel_12_8x_C_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_12_8x_C_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     int i;
     for ( i = 0; i < 8; i++)
     {
-        UnpackPixel_12(input_row1_ptr, input_row2_ptr, column + i, output_buffer, rggb );
+        UnpackPixel_12(input_row1_ptr, input_row2_ptr, column + i, output_buffer, bayer_ordering );
     }
 }
 
 #endif
 
-void UnpackImage_12(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb )
+void UnpackImage_12(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, BAYER_ORDERING bayer_ordering )
 {
     uint8_t *input_buffer = (uint8_t *)input->buffer + input->offset;
     
@@ -368,16 +394,25 @@ void UnpackImage_12(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_P
         
         int column = 0;
         
-        // Unpack the row of Bayer components from the BYR4 pattern elements
-        for (; column < input_width_m8; column+= 8)
+        // BGGR is not implemented in the (NEON) 8x path, so handle it per-pixel.
+        if( bayer_ordering == BAYER_ORDERING_BGGR )
         {
-            UnpackPixel_12_8x(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, rggb );
+            for (; column < input_width; column++)
+            {
+                UnpackPixel_12(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
         }
-        
-        // Unpack the row of Bayer components from the BYR4 pattern elements
-        for (; column < input_width; column++)
+        else
         {
-            UnpackPixel_12(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, rggb );
+            for (; column < input_width_m8; column+= 8)
+            {
+                UnpackPixel_12_8x(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
+
+            for (; column < input_width; column++)
+            {
+                UnpackPixel_12(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
         }
         
         input_row_ptr += input_pitch;
@@ -393,26 +428,31 @@ void UnpackImage_12(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_P
 /** 12 bit PACKED INPUT FORMAT **/
 /** -------------------------- **/
 
-static void UnpackPixel_12P(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_12P(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     uint16_t R1, G1, G2, B1;
     uint16_t GS, GD, RG, BG;
-    
+
     const int internal_precision = 12;
     const int32_t midpoint = (1 << (internal_precision - 1));
-    
+
     const unsigned int byte_offset = (column * 3);
-    
+
     { // read first row data
         uint8_t* row1_ptr = (uint8_t*)input_row1_ptr;
-        
+
         unsigned char byte_0 = row1_ptr[byte_offset + 0];
         unsigned char byte_1 = row1_ptr[byte_offset + 1];
         unsigned char byte_2 = row1_ptr[byte_offset + 2];
-        
-        if( rggb )
+
+        if( bayer_ordering == BAYER_ORDERING_RGGB )
         {
             R1 = (byte_0)      + ((byte_1 & 0x0f) << 8);
+            G1 = (byte_2 << 4) + ((byte_1 & 0xf0) >> 4);
+        }
+        else if( bayer_ordering == BAYER_ORDERING_BGGR )
+        {
+            B1 = (byte_0)      + ((byte_1 & 0x0f) << 8);
             G1 = (byte_2 << 4) + ((byte_1 & 0xf0) >> 4);
         }
         else
@@ -421,18 +461,23 @@ static void UnpackPixel_12P(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, 
             B1 = (byte_2 << 4) + ((byte_1 & 0xf0) >> 4);
         }
     }
-    
+
     { // read second row data
         uint8_t* row2_ptr = (uint8_t*)input_row2_ptr;
-        
+
         unsigned char byte_0 = row2_ptr[byte_offset + 0];
         unsigned char byte_1 = row2_ptr[byte_offset + 1];
         unsigned char byte_2 = row2_ptr[byte_offset + 2];
-        
-        if( rggb )
+
+        if( bayer_ordering == BAYER_ORDERING_RGGB )
         {
             G2 = (byte_0)      + ((byte_1 & 0x0f) << 8);
             B1 = (byte_2 << 4) + ((byte_1 & 0xf0) >> 4);
+        }
+        else if( bayer_ordering == BAYER_ORDERING_BGGR )
+        {
+            G2 = (byte_0)      + ((byte_1 & 0x0f) << 8);
+            R1 = (byte_2 << 4) + ((byte_1 & 0xf0) >> 4);
         }
         else
         {
@@ -469,7 +514,7 @@ static void UnpackPixel_12P(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, 
 #if ENABLED(NEON)
 
 #define UnpackPixel_12P_8x UnpackPixel_12P_8x_NEON_
-static void UnpackPixel_12P_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_12P_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     int i;
     uint16x8_t g1, b1, r1, g2;
@@ -486,7 +531,8 @@ static void UnpackPixel_12P_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_r
         uint8x8_t   __byte1           = __byte012.val[1];
         uint8x8_t   __byte2           = __byte012.val[2];
 
-        if( rggb )
+        // NEON path handles only RGGB / GBRG; BGGR is routed to the scalar path.
+        if( bayer_ordering == BAYER_ORDERING_RGGB )
         {
             r1 = vaddw_u8(vshll_n_u8(vshl_n_u8(__byte1, 4), 4), __byte0);
             g1 = vaddw_u8(vshll_n_u8(__byte2, 4), vshr_n_u8(__byte1, 4));
@@ -504,7 +550,7 @@ static void UnpackPixel_12P_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_r
         uint8x8_t   __byte1           = __byte012.val[1];
         uint8x8_t   __byte2           = __byte012.val[2];
 
-        if( rggb )
+        if( bayer_ordering == BAYER_ORDERING_RGGB )
         {
             g2 = vaddw_u8(vshll_n_u8(vshl_n_u8(__byte1, 4), 4), __byte0);
             b1 = vaddw_u8(vshll_n_u8(__byte2, 4), vshr_n_u8(__byte1, 4));
@@ -555,18 +601,18 @@ static void UnpackPixel_12P_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_r
 #else
 
 #define UnpackPixel_12P_8x UnpackPixel_12P_8x_C_
-static void UnpackPixel_12P_8x_C_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
+static void UnpackPixel_12P_8x_C_(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], BAYER_ORDERING bayer_ordering )
 {
     int i;
     for ( i = 0; i < 8; i++)
     {
-        UnpackPixel_12P(input_row1_ptr, input_row2_ptr, column + i, output_buffer, rggb );
+        UnpackPixel_12P(input_row1_ptr, input_row2_ptr, column + i, output_buffer, bayer_ordering );
     }
 }
 
 #endif
 
-void UnpackImage_12P(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb )
+void UnpackImage_12P(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, BAYER_ORDERING bayer_ordering )
 {
     uint8_t *input_buffer = (uint8_t *)input->buffer + input->offset;
     
@@ -598,16 +644,25 @@ void UnpackImage_12P(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_
         
         int column = 0;
         
-        // Unpack the row of Bayer components from the BYR4 pattern elements
-        for (; column < input_width_m8; column+= 8)
+        // BGGR is not implemented in the (NEON) 8x path, so handle it per-pixel.
+        if( bayer_ordering == BAYER_ORDERING_BGGR )
         {
-            UnpackPixel_12P_8x(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, rggb );
+            for (; column < input_width; column++)
+            {
+                UnpackPixel_12P(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
         }
-        
-        // Unpack the row of Bayer components from the BYR4 pattern elements
-        for (; column < input_width; column++)
+        else
         {
-            UnpackPixel_12P(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, rggb );
+            for (; column < input_width_m8; column+= 8)
+            {
+                UnpackPixel_12P_8x(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
+
+            for (; column < input_width; column++)
+            {
+                UnpackPixel_12P(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, bayer_ordering );
+            }
         }
         
         input_row_ptr += input_pitch;

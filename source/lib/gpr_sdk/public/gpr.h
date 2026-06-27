@@ -52,8 +52,6 @@
             
             unsigned int        input_pitch;                   /* Pitch of input source in pixels (only applies to raw input) */
 
-            bool                fast_encoding;
-            
             bool                compute_md5sum;
             
             gpr_buffer          gpmf_payload;   /* GPMF payload of image file */

@@ -123,7 +123,15 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
                     output_row2_ptr[2 * column + 0] = (uint16_t)R;
                     output_row2_ptr[2 * column + 1] = (uint16_t)G2;
                     break;
-                    
+
+                case PIXEL_FORMAT_RAW_BGGR_12:
+                case PIXEL_FORMAT_RAW_BGGR_14:
+                    output_row1_ptr[2 * column + 0] = (uint16_t)B;
+                    output_row1_ptr[2 * column + 1] = (uint16_t)G1;
+                    output_row2_ptr[2 * column + 0] = (uint16_t)G2;
+                    output_row2_ptr[2 * column + 1] = (uint16_t)R;
+                    break;
+
                 default:
                     assert(0);
                     break;

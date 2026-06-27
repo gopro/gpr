@@ -57,7 +57,8 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
             {1, 24, 24, 12, 32, 32, 24, 128, 128, 192}, // CineForm High
             {1, 24, 24, 12, 24, 24, 12, 96, 96, 144},   // CineForm Filmscan-1
             {1, 24, 24, 12, 24, 24, 12, 64, 64, 96},    // CineForm Filmscan-X
-            {1, 24, 24, 12, 24, 24, 12, 32, 32, 48}     // CineForm Filmscan-2
+            {1, 24, 24, 12, 24, 24, 12, 32, 32, 48},    // CineForm Filmscan-2
+            {1, 24, 24, 12, 24, 24, 12, 24, 24, 32}     // CineForm Ultra
         };
         
         if( encoding_parameters->quality_setting < VC5_ENCODER_QUALITY_SETTING_COUNT )
@@ -114,7 +115,15 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
         case VC5_ENCODER_PIXEL_FORMAT_GBRG_12P:
             image.format = PIXEL_FORMAT_RAW_GBRG_12P;
             break;
-            
+
+        case VC5_ENCODER_PIXEL_FORMAT_BGGR_12:
+            image.format = PIXEL_FORMAT_RAW_BGGR_12;
+            break;
+
+        case VC5_ENCODER_PIXEL_FORMAT_BGGR_14:
+            image.format = PIXEL_FORMAT_RAW_BGGR_14;
+            break;
+
         default:
             assert(0);
     }

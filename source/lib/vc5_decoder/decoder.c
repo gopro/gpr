@@ -864,11 +864,13 @@ CODEC_ERROR ImageRepackingProcess(const UNPACKED_IMAGE *unpacked_image,
     {
         case PIXEL_FORMAT_RAW_RGGB_12:
         case PIXEL_FORMAT_RAW_GBRG_12:
+        case PIXEL_FORMAT_RAW_BGGR_12:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 12, output_format );
-            
+
         case PIXEL_FORMAT_RAW_RGGB_14:
         case PIXEL_FORMAT_RAW_GBRG_14:
+        case PIXEL_FORMAT_RAW_BGGR_14:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 14, output_format );
             break;

@@ -108,7 +108,7 @@ static int parse_input_pixel_format( const char* s, GPR_PIXEL_FORMAT* out )
     return 0;
 }
 
-int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, const char* input_pixel_format,
+int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, size_t input_skip_cols, const char* input_pixel_format,
                      const char*  output_file_path, const char*  metadata_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits, int jpg_quality,
                      const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height )
 {
@@ -157,13 +157,6 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
             GPR_PIXEL_FORMAT pf;
             if( parse_input_pixel_format(input_pixel_format, &pf) )
                 params.tuning_info.pixel_format = pf;
-        }
-
-        if( ( params.tuning_info.pixel_format == PIXEL_FORMAT_BGGR_12 || params.tuning_info.pixel_format == PIXEL_FORMAT_BGGR_14 )
-            && output_file_type == FILE_TYPE_GPR )
-        {
-            fprintf( stderr, "Error: BGGR input is only supported for DNG output, not GPR.\n" );
-            return -1;
         }
 
         // Explicit dimensions on the command line override those from the metadata file.
@@ -251,15 +244,6 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
                 input_pitch = input_width * 2;
         }
 
-        // BGGR raw input is only supported when writing an (uncompressed) DNG.
-        // The VC5/GPR encoder does not implement the BGGR Bayer phase.
-        if( ( params.tuning_info.pixel_format == PIXEL_FORMAT_BGGR_12 || params.tuning_info.pixel_format == PIXEL_FORMAT_BGGR_14 )
-            && output_file_type == FILE_TYPE_GPR )
-        {
-            fprintf( stderr, "Error: BGGR input is only supported for DNG output, not GPR.\n" );
-            return -1;
-        }
-
         params.tuning_info.dgain_saturation_level.level_red         = saturation_level;
         params.tuning_info.dgain_saturation_level.level_green_even  = saturation_level;
         params.tuning_info.dgain_saturation_level.level_green_odd   = saturation_level;
@@ -277,7 +261,14 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     {
         input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_rows * input_pitch);
     }
-    
+
+    // Skipping columns shifts the horizontal Bayer phase (e.g. BGGR -> GBRG).
+    // Each pixel sample is 16 bits, so advance by 2 bytes per column.
+    if( input_skip_cols > 0 )
+    {
+        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_cols * sizeof(uint16_t));
+    }
+
     gpr_buffer preview = { NULL, 0 };
 
     if( strcmp(jpg_preview_file_path, "") != 0 )
@@ -408,6 +399,11 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     if( input_skip_rows > 0 )
     {
 		input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_rows * input_pitch);
+    }
+
+    if( input_skip_cols > 0 )
+    {
+        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_cols * sizeof(uint16_t));
     }
     
     if( preview.buffer )

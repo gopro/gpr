@@ -41,7 +41,11 @@
         VC5_DECODER_PIXEL_FORMAT_GBRG_12 = 2,               // GBRG 12bit pixels packed into 16bits
         
         VC5_DECODER_PIXEL_FORMAT_GBRG_14 = 3,               // GBRG 12bit pixels packed into 16bits
-        
+
+        VC5_DECODER_PIXEL_FORMAT_BGGR_12 = 4,               // BGGR 12bit pixels packed into 16bits
+
+        VC5_DECODER_PIXEL_FORMAT_BGGR_14 = 5,               // BGGR 14bit pixels packed into 16bits
+
         VC5_DECODER_PIXEL_FORMAT_DEFAULT = VC5_DECODER_PIXEL_FORMAT_RGGB_14,
         
     } VC5_DECODER_PIXEL_FORMAT;

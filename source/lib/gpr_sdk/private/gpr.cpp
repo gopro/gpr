@@ -160,15 +160,20 @@ static void set_vc5_encoder_parameters( vc5_encoder_parameters& vc5_encoder_para
         case PIXEL_FORMAT_GBRG_12P:
             vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_GBRG_12P;
             break;
-            
+
+        case PIXEL_FORMAT_BGGR_12:
+            vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_BGGR_12;
+            break;
+
+        case PIXEL_FORMAT_BGGR_14:
+            vc5_encoder_params.pixel_format = VC5_ENCODER_PIXEL_FORMAT_BGGR_14;
+            break;
+
         default:
             break;
     }
     
-    if( convert_params->fast_encoding )
-        vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_MEDIUM;
-    else
-        vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_FS1;
+    vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_DEFAULT;
 }
 #endif
 
@@ -183,8 +188,6 @@ void gpr_parameters_set_defaults(gpr_parameters* x)
     x->enable_preview = true;
     
     x->compute_md5sum = false;
-    
-    x->fast_encoding = false;
 }
 
 void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x, gpr_malloc mem_alloc)
@@ -1071,7 +1074,15 @@ static void write_dng(const gpr_allocator*          allocator,
             case PIXEL_FORMAT_GBRG_12:
                 vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_12;
                 break;
-                        
+
+            case PIXEL_FORMAT_BGGR_12:
+                vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_BGGR_12;
+                break;
+
+            case PIXEL_FORMAT_BGGR_14:
+                vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_BGGR_14;
+                break;
+
             default:
                 assert(0);
                 return;
