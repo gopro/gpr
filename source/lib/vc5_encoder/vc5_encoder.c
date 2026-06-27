@@ -57,7 +57,8 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
             {1, 24, 24, 12, 32, 32, 24, 128, 128, 192}, // CineForm High
             {1, 24, 24, 12, 24, 24, 12, 96, 96, 144},   // CineForm Filmscan-1
             {1, 24, 24, 12, 24, 24, 12, 64, 64, 96},    // CineForm Filmscan-X
-            {1, 24, 24, 12, 24, 24, 12, 32, 32, 48}     // CineForm Filmscan-2
+            {1, 24, 24, 12, 24, 24, 12, 32, 32, 48},    // CineForm Filmscan-2
+            {1, 24, 24, 12, 24, 24, 12, 24, 24, 32}     // CineForm Ultra
         };
         
         if( encoding_parameters->quality_setting < VC5_ENCODER_QUALITY_SETTING_COUNT )
