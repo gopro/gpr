@@ -173,10 +173,7 @@ static void set_vc5_encoder_parameters( vc5_encoder_parameters& vc5_encoder_para
             break;
     }
     
-    if( convert_params->fast_encoding )
-        vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_MEDIUM;
-    else
-        vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_FS1;
+    vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_DEFAULT;
 }
 #endif
 
@@ -191,8 +188,6 @@ void gpr_parameters_set_defaults(gpr_parameters* x)
     x->enable_preview = true;
     
     x->compute_md5sum = false;
-    
-    x->fast_encoding = false;
 }
 
 void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x, gpr_malloc mem_alloc)

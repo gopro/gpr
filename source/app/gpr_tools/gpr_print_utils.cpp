@@ -513,8 +513,6 @@ ostream& operator<<(ostream& output, const gpr_parameters& x)
 
     print_val( output, "input_pitch", x.input_pitch );
 
-    print_val( output, "fast_encoding", x.fast_encoding );
-
     // print_val( output, "gpmf_payload_buffer", x.gpmf_payload.buffer );
     
     print_val( output, "gpmf_payload_size", x.gpmf_payload.size );
