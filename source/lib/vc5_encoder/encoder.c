@@ -367,14 +367,44 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 		return error;
 	}
     
-    if( rgb_image != NULL && parameters->rgb_resolution == GPR_RGB_RESOLUTION_SIXTEENTH )
-    { // Thumbnail
+    if( rgb_image != NULL )
+    { // Preview / thumbnail. The wavelet level selected determines the preview resolution:
+      // each successive wavelet level halves the image in both dimensions.
         SetupDecoderLogCurve();
 
-        WaveletToRGB(parameters->allocator,
-                     encoder.transform[0].wavelet[2]->data[LL_BAND], encoder.transform[1].wavelet[2]->data[LL_BAND], encoder.transform[2].wavelet[2]->data[LL_BAND],
-                     encoder.transform[0].wavelet[2]->width, encoder.transform[0].wavelet[2]->height, encoder.transform[0].wavelet[2]->width,
-                     rgb_image, 14, 8, &parameters->rgb_gain );
+        switch( parameters->preview_resolution )
+        {
+            case GPR_RGB_RESOLUTION_HALF: // 2:1 -- the unpacked component arrays are already at half resolution
+                WaveletToRGB(parameters->allocator,
+                             (PIXEL*)unpacked_image.component_array_list[0].data, (PIXEL*)unpacked_image.component_array_list[1].data, (PIXEL*)unpacked_image.component_array_list[2].data,
+                             unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / 2,
+                             rgb_image, 12, 8, &parameters->rgb_gain );
+                break;
+
+            case GPR_RGB_RESOLUTION_QUARTER: // 4:1 -- first wavelet level
+                WaveletToRGB(parameters->allocator,
+                             encoder.transform[0].wavelet[0]->data[LL_BAND], encoder.transform[1].wavelet[0]->data[LL_BAND], encoder.transform[2].wavelet[0]->data[LL_BAND],
+                             encoder.transform[0].wavelet[0]->width, encoder.transform[0].wavelet[0]->height, encoder.transform[0].wavelet[0]->width,
+                             rgb_image, 14, 8, &parameters->rgb_gain );
+                break;
+
+            case GPR_RGB_RESOLUTION_EIGHTH: // 8:1 -- second wavelet level
+                WaveletToRGB(parameters->allocator,
+                             encoder.transform[0].wavelet[1]->data[LL_BAND], encoder.transform[1].wavelet[1]->data[LL_BAND], encoder.transform[2].wavelet[1]->data[LL_BAND],
+                             encoder.transform[0].wavelet[1]->width, encoder.transform[0].wavelet[1]->height, encoder.transform[0].wavelet[1]->width,
+                             rgb_image, 14, 8, &parameters->rgb_gain );
+                break;
+
+            case GPR_RGB_RESOLUTION_SIXTEENTH: // 16:1 -- third wavelet level
+                WaveletToRGB(parameters->allocator,
+                             encoder.transform[0].wavelet[2]->data[LL_BAND], encoder.transform[1].wavelet[2]->data[LL_BAND], encoder.transform[2].wavelet[2]->data[LL_BAND],
+                             encoder.transform[0].wavelet[2]->width, encoder.transform[0].wavelet[2]->height, encoder.transform[0].wavelet[2]->width,
+                             rgb_image, 14, 8, &parameters->rgb_gain );
+                break;
+
+            default: // No preview for unsupported resolutions (e.g. 1:1 / NONE)
+                break;
+        }
     }
     
     error = ReleaseComponentArrays( &parameters->allocator, &unpacked_image, unpacked_image.component_count );

@@ -108,6 +108,25 @@ static int parse_input_pixel_format( const char* s, GPR_PIXEL_FORMAT* out )
     return 0;
 }
 
+static GPR_RGB_RESOLUTION parse_resolution(const char* resolution)
+{
+    if( strcmp(resolution, "") != 0 )
+    {
+        if( strcmp(resolution, "2:1") == 0 )
+            return GPR_RGB_RESOLUTION_HALF;
+        else if( strcmp(resolution, "4:1") == 0 )
+            return GPR_RGB_RESOLUTION_QUARTER;
+        else if( strcmp(resolution, "8:1") == 0 )
+            return GPR_RGB_RESOLUTION_EIGHTH;
+        else if( strcmp(resolution, "16:1") == 0 )
+            return GPR_RGB_RESOLUTION_SIXTEENTH;
+        else
+            fprintf( stderr, "Unsupported resolution `%s'; using default. Valid values: 2:1, 4:1, 8:1, 16:1\n", resolution );
+    } else {
+        return GPR_RGB_RESOLUTION_DEFAULT;
+    }
+}
+
 int dng_convert_main( const dng_convert_params* convert_params )
 {
     if( convert_params == NULL )
@@ -131,6 +150,7 @@ int dng_convert_main( const dng_convert_params* convert_params )
     const char*  rgb_file_resolution    = convert_params->rgb_file_resolution;
     int          rgb_file_bits          = convert_params->rgb_file_bits;
     int          jpg_quality            = convert_params->jpg_quality;
+    const char*  preview_resolution     = convert_params->preview_resolution;
     const char*  jpg_preview_file_path  = convert_params->jpg_preview_file_path;
     int          jpg_preview_file_width = convert_params->jpg_preview_file_width;
     int          jpg_preview_file_height = convert_params->jpg_preview_file_height;
@@ -291,7 +311,13 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         read_from_file( &params.gpmf_payload, gpmf_file_path, allocator.Alloc, allocator.Free );
     }
-    
+
+    // Resolution of the preview image embedded when writing a GPR/DNG file.
+    if( preview_resolution != NULL )
+    {
+        params.preview_resolution = parse_resolution(preview_resolution);
+    }
+
     gpr_buffer output_buffer = { NULL, 0 };
 
     if( input_skip_rows > 0 )
@@ -345,19 +371,8 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         gpr_rgb_buffer rgb_buffer = { NULL, 0, 0, 0 };
 
-        GPR_RGB_RESOLUTION rgb_resolution = GPR_RGB_RESOLUTION_DEFAULT;
+        GPR_RGB_RESOLUTION rgb_resolution = parse_resolution(rgb_file_resolution);
         
-        if( strcmp(rgb_file_resolution, "1:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_FULL;
-        else if( strcmp(rgb_file_resolution, "2:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_HALF;
-        else if( strcmp(rgb_file_resolution, "4:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_QUARTER;
-        else if( strcmp(rgb_file_resolution, "8:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_EIGHTH;
-        else if( strcmp(rgb_file_resolution, "16:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_SIXTEENTH;
-
         if( output_file_type == FILE_TYPE_JPG && rgb_file_bits == 16 )
         {
             printf( "Asked to output 16-bits RGB, but that is only possible in PPM format.\n");

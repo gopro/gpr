@@ -44,6 +44,8 @@ extern "C" {
         int             rgb_file_bits;
         int             jpg_quality;
 
+        const char*     preview_resolution;     /* Resolution of the embedded preview image (2:1, 4:1, 8:1, 16:1) */
+
         const char*     jpg_preview_file_path;
         int             jpg_preview_file_width;
         int             jpg_preview_file_height;

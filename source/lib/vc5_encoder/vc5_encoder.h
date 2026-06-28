@@ -91,7 +91,9 @@
         gpr_malloc                  mem_alloc;              // Callback function to allocate memory
         
         gpr_free                    mem_free;               // Callback function to free memory
-        
+
+        GPR_RGB_RESOLUTION          preview_resolution;     // Resolution of the RGB preview/thumbnail generated during encoding (Default: 16:1)
+
     } vc5_encoder_parameters;
 
     void vc5_encoder_parameters_set_default(vc5_encoder_parameters* encoding_parameters);

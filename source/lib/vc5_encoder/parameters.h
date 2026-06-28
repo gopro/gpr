@@ -120,7 +120,7 @@ typedef struct _encoder_parameters
 
     gpr_allocator       allocator;
     
-    GPR_RGB_RESOLUTION  rgb_resolution;
+    GPR_RGB_RESOLUTION  preview_resolution;
 
     gpr_rgb_gain        rgb_gain;
     

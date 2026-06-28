@@ -174,6 +174,8 @@ static void set_vc5_encoder_parameters( vc5_encoder_parameters& vc5_encoder_para
     }
     
     vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_DEFAULT;
+
+    vc5_encoder_params.preview_resolution = convert_params->preview_resolution;
 }
 #endif
 
@@ -186,7 +188,9 @@ void gpr_parameters_set_defaults(gpr_parameters* x)
     gpr_tuning_info_set_defaults(&x->tuning_info);
 
     x->enable_preview = true;
-    
+
+    x->preview_resolution = GPR_RGB_RESOLUTION_DEFAULT;
+
     x->compute_md5sum = false;
 }
 

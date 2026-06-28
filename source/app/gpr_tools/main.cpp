@@ -59,6 +59,8 @@ public:
     string  rgb_resolution;
     int     rgb_bits;
     int     jpg_quality;
+
+    string  preview_resolution;
     
 public:
 
@@ -96,7 +98,8 @@ public:
 
         ("rgb_resolution",              rgb_resolution,               string(""),             "Output RGB resolution \n[1:1, 2:1, [4:1], 8:1. 16:1]")
         ("rgb_bits,b",                  rgb_bits,                     8,                      "Output RGB bits [8]")
-        ("jpg_quality",                 jpg_quality,                  2,                      "Output JPG quality \n(1=lowest, [2], 3=highest)");
+        ("jpg_quality",                 jpg_quality,                  2,                      "Output JPG quality \n(1=lowest, [2], 3=highest)")
+        ("preview_resolution",          preview_resolution,           string(""),             "Resolution of preview image embedded in GPR/DNG output \n[2:1, [4:1], 8:1, 16:]]");
         ;
     }
 };
@@ -194,6 +197,7 @@ int main(int argc, char *argv [])
         convert_params.rgb_file_resolution     = args.rgb_resolution.c_str();
         convert_params.rgb_file_bits           = args.rgb_bits;
         convert_params.jpg_quality             = args.jpg_quality;
+        convert_params.preview_resolution      = args.preview_resolution.c_str();
         convert_params.jpg_preview_file_path   = args.preview_file_path.c_str();
         convert_params.jpg_preview_file_width  = args.preview_file_width;
         convert_params.jpg_preview_file_height = args.preview_file_height;
