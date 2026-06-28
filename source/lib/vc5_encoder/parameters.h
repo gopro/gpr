@@ -123,7 +123,9 @@ typedef struct _encoder_parameters
     GPR_RGB_RESOLUTION  preview_resolution;
 
     gpr_rgb_gain        rgb_gain;
-    
+
+    int                 black_level;        //!< Sensor black level (16-bit linear RGB domain) subtracted before applying rgb_gain
+
 } ENCODER_PARAMETERS;
 
 #ifdef __cplusplus

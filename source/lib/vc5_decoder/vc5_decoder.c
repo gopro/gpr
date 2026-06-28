@@ -28,6 +28,8 @@ void vc5_decoder_parameters_set_default(vc5_decoder_parameters* decoding_paramet
     decoding_parameters->rgb_bits = 8;
     
     gpr_rgb_gain_set_defaults(&decoding_parameters->rgb_gain);
+
+    decoding_parameters->black_level = 0;
 }
 
 CODEC_ERROR vc5_decoder_process(const vc5_decoder_parameters*   decoding_parameters,    /* vc5 decoding parameters */
@@ -52,6 +54,7 @@ CODEC_ERROR vc5_decoder_process(const vc5_decoder_parameters*   decoding_paramet
     parameters.rgb_resolution  = decoding_parameters->rgb_resolution;
     parameters.rgb_bits        = decoding_parameters->rgb_bits;
     parameters.rgb_gain        = decoding_parameters->rgb_gain;
+    parameters.black_level     = decoding_parameters->black_level;
     
     if( rgb_buffer == NULL )
     {

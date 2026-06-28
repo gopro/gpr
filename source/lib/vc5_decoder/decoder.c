@@ -214,21 +214,21 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
         case GPR_RGB_RESOLUTION_HALF:
             WaveletToRGB(parameters->allocator, (PIXEL*)unpacked_image.component_array_list[0].data, (PIXEL*)unpacked_image.component_array_list[1].data, (PIXEL*)unpacked_image.component_array_list[2].data,
                          unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / 2,
-                         rgb_image, 12, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, 12, parameters->rgb_bits, parameters->black_level, &parameters->rgb_gain );
             break;
             
         case GPR_RGB_RESOLUTION_QUARTER:
             
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[0]->data[0], decoder.transform[1].wavelet[0]->data[0], decoder.transform[2].wavelet[0]->data[0],
                          decoder.transform[2].wavelet[0]->width, decoder.transform[2].wavelet[0]->height, decoder.transform[2].wavelet[0]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, 14, parameters->rgb_bits, parameters->black_level, &parameters->rgb_gain );
             break;
             
         case GPR_RGB_RESOLUTION_EIGHTH:
             
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[1]->data[0], decoder.transform[1].wavelet[1]->data[0], decoder.transform[2].wavelet[1]->data[0],
                          decoder.transform[2].wavelet[1]->width, decoder.transform[2].wavelet[1]->height, decoder.transform[2].wavelet[1]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, 14, parameters->rgb_bits, parameters->black_level, &parameters->rgb_gain );
             
             break;
             
@@ -236,7 +236,7 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
 
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[2]->data[0], decoder.transform[1].wavelet[2]->data[0], decoder.transform[2].wavelet[2]->data[0],
                          decoder.transform[2].wavelet[2]->width, decoder.transform[2].wavelet[2]->height, decoder.transform[2].wavelet[2]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, 14, parameters->rgb_bits, parameters->black_level, &parameters->rgb_gain );
             break;
             
         default:

@@ -117,7 +117,7 @@ extern "C" {
     PIXEL *WaveletRowAddress(WAVELET *wavelet, int band, int row);
 
     void WaveletToRGB( gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL* BG_src, DIMENSION src_width, DIMENSION src_height, DIMENSION src_pitch, RGB_IMAGE *dst_image,
-                       int input_precision_bits, int output_precision_bits, gpr_rgb_gain* rgb_gain );
+                       int input_precision_bits, int output_precision_bits, int black_level, gpr_rgb_gain* rgb_gain );
     
 #ifdef __cplusplus
 }

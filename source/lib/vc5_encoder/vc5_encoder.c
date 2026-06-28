@@ -34,6 +34,10 @@ void vc5_encoder_parameters_set_default(vc5_encoder_parameters* encoding_paramet
     encoding_parameters->mem_free  = free;
 
     encoding_parameters->preview_resolution = VC5_ENCODER_RGB_RESOLUTION_DEFAULT;
+
+    gpr_rgb_gain_set_defaults(&encoding_parameters->rgb_gain);
+
+    encoding_parameters->black_level = 0;
 }
 
 CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_parameters,    /* vc5 encoding parameters */
@@ -72,8 +76,10 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
     parameters.enabled_parts  = encoding_parameters->enabled_parts;
     parameters.encoded.format = IMAGE_FORMAT_RAW;
 
-    // Resolution of the RGB preview/thumbnail produced alongside the encoded bitstream
+    // Resolution, white-balance gains and black level of the RGB preview/thumbnail produced alongside the encoded bitstream
     parameters.preview_resolution = encoding_parameters->preview_resolution;
+    parameters.rgb_gain           = encoding_parameters->rgb_gain;
+    parameters.black_level        = encoding_parameters->black_level;
     
 #if VC5_ENABLED_PART(VC5_PART_LAYERS)
     // Test interlaced encoding using one layer per field

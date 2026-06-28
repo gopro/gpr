@@ -94,6 +94,10 @@
 
         GPR_RGB_RESOLUTION          preview_resolution;     // Resolution of the RGB preview/thumbnail generated during encoding (Default: 16:1)
 
+        gpr_rgb_gain                rgb_gain;               // White-balance gains applied when generating the RGB preview/thumbnail
+
+        int                         black_level;            // Sensor black level (16-bit linear RGB domain) subtracted before applying rgb_gain
+
     } vc5_encoder_parameters;
 
     void vc5_encoder_parameters_set_default(vc5_encoder_parameters* encoding_parameters);

@@ -435,7 +435,7 @@ PIXEL *WaveletRowAddress(WAVELET *wavelet, int band, int row)
 }
 
 void WaveletToRGB( gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL* BG_src, DIMENSION src_width, DIMENSION src_height, DIMENSION src_pitch, RGB_IMAGE *dst_image,
-                   int input_precision_bits, int output_precision_bits, gpr_rgb_gain* rgb_gain  )
+                   int input_precision_bits, int output_precision_bits, int black_level, gpr_rgb_gain* rgb_gain  )
 {
     TIMESTAMP("[BEG]", 2)
     
@@ -478,6 +478,15 @@ void WaveletToRGB( gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL*
             R = DecoderLogCurve[ clamp_uint( (R >> shift), 12) ];
             G = DecoderLogCurve[ clamp_uint( (G >> shift), 12) ];
             B = DecoderLogCurve[ clamp_uint( (B >> shift), 12) ];
+
+            // Subtract the sensor black level (expressed in this 16-bit linear domain) before
+            // applying the white-balance gains. Otherwise the black pedestal is amplified
+            // unequally by the per-channel gains and tints the whole image (e.g. magenta for
+            // iPhone, whose black level is 528). Cameras with a zero black level (GoPro) are
+            // unaffected.
+            R = ( R > black_level ) ? ( R - black_level ) : 0;
+            G = ( G > black_level ) ? ( G - black_level ) : 0;
+            B = ( B > black_level ) ? ( B - black_level ) : 0;
 
             if( output_precision_bits == 8 )
             {

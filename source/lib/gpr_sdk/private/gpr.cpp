@@ -101,6 +101,23 @@ void find_rational(float number, float error_tolerance, int* numerator, int* den
     *denominator_pow2 = _den_pow2;
 }
 
+// Convert the sensor black level carried in the metadata into the 16-bit linear domain used
+// by WaveletToRGB. The unpack + log-curve pipeline maps a native raw value v to ~v*65535/white
+// in that domain, so the black pedestal must be scaled the same way. Returns 0 when there is no
+// black level (e.g. GoPro), which makes the subtraction a no-op.
+static int compute_rgb_black_level( const gpr_tuning_info* tuning_info )
+{
+    const gpr_static_black_level& b = tuning_info->static_black_level;
+
+    int black = ( b.r_black + b.g_r_black + b.g_b_black + b.b_black ) / 4;
+    int white = tuning_info->dgain_saturation_level.level_red;
+
+    if( black <= 0 || white <= 0 )
+        return 0;
+
+    return (int)( (int64_t)black * 65535 / white );
+}
+
 static void unpack_pixel_format( const gpr_buffer_auto* input_buffer, const gpr_parameters* convert_params, gpr_buffer_auto* output_buffer )
 {
     size_t buffer_size = convert_params->input_height * convert_params->input_width * 2;
@@ -176,6 +193,17 @@ static void set_vc5_encoder_parameters( vc5_encoder_parameters& vc5_encoder_para
     vc5_encoder_params.quality_setting = VC5_ENCODER_QUALITY_SETTING_DEFAULT;
 
     vc5_encoder_params.preview_resolution = convert_params->preview_resolution;
+
+    // Drive the preview's white balance from the image metadata (rather than the
+    // hardcoded GoPro defaults), so previews of non-GoPro sources (e.g. iPhone) are
+    // not colour-cast. Mirrors the gain setup on the decode path.
+    gpr_rgb_gain& rgb_gain = vc5_encoder_params.rgb_gain;
+    find_rational( convert_params->tuning_info.wb_gains.r_gain, 0.125, &rgb_gain.r_gain_num, &rgb_gain.r_gain_pow2_den );
+    find_rational( convert_params->tuning_info.wb_gains.g_gain, 0.125, &rgb_gain.g_gain_num, &rgb_gain.g_gain_pow2_den );
+    find_rational( convert_params->tuning_info.wb_gains.b_gain, 0.125, &rgb_gain.b_gain_num, &rgb_gain.b_gain_pow2_den );
+
+    // Remove the sensor black pedestal before the gains are applied, otherwise it tints the preview.
+    vc5_encoder_params.black_level = compute_rgb_black_level( &convert_params->tuning_info );
 }
 #endif
 
@@ -1791,7 +1819,10 @@ bool gpr_convert_gpr_to_rgb(const gpr_allocator*        allocator,
     find_rational( params.tuning_info.wb_gains.r_gain, 0.125, &rgb_gain.r_gain_num, &rgb_gain.r_gain_pow2_den );
     find_rational( params.tuning_info.wb_gains.g_gain, 0.125, &rgb_gain.g_gain_num, &rgb_gain.g_gain_pow2_den );
     find_rational( params.tuning_info.wb_gains.b_gain, 0.125, &rgb_gain.b_gain_num, &rgb_gain.b_gain_pow2_den );
-    
+
+    // Remove the sensor black pedestal before the gains are applied, otherwise it tints the RGB output.
+    vc5_decoder_params.black_level = compute_rgb_black_level( &params.tuning_info );
+
     vc5_decoder_params.rgb_resolution = rgb_resolution;
     
     if( vc5_decoder_process( &vc5_decoder_params, &vc5_buffer.get_gpr_buffer(), NULL, out_rgb_buffer ) != CODEC_ERROR_OKAY )

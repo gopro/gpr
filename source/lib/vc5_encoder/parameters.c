@@ -80,7 +80,9 @@ CODEC_ERROR InitEncoderParameters(ENCODER_PARAMETERS *parameters)
     gpr_rgb_gain_set_defaults(&parameters->rgb_gain);
     
     parameters->preview_resolution = VC5_ENCODER_RGB_RESOLUTION_DEFAULT;
-    
+
+    parameters->black_level = 0;
+
 	return CODEC_ERROR_OKAY;
 }
 

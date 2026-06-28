@@ -42,6 +42,8 @@ CODEC_ERROR InitDecoderParameters(DECODER_PARAMETERS *parameters)
     parameters->rgb_resolution = GPR_RGB_RESOLUTION_NONE;
     
     gpr_rgb_gain_set_defaults(&parameters->rgb_gain);
-    
+
+    parameters->black_level = 0;
+
 	return CODEC_ERROR_OKAY;
 }

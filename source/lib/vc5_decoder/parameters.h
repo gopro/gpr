@@ -99,9 +99,11 @@ typedef struct _decoder_parameters
     GPR_RGB_RESOLUTION  rgb_resolution;
     
     int                         rgb_bits;
-    
+
     gpr_rgb_gain                rgb_gain;
-    
+
+    int                         black_level;        //!< Sensor black level in the 16-bit linear RGB domain, subtracted before applying rgb_gain
+
     gpr_allocator allocator;
     
 } DECODER_PARAMETERS;

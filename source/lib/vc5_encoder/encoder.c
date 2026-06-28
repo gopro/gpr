@@ -378,28 +378,28 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
                 WaveletToRGB(parameters->allocator,
                              (PIXEL*)unpacked_image.component_array_list[0].data, (PIXEL*)unpacked_image.component_array_list[1].data, (PIXEL*)unpacked_image.component_array_list[2].data,
                              unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / 2,
-                             rgb_image, 12, 8, &parameters->rgb_gain );
+                             rgb_image, 12, 8, parameters->black_level, &parameters->rgb_gain );
                 break;
 
             case GPR_RGB_RESOLUTION_QUARTER: // 4:1 -- first wavelet level
                 WaveletToRGB(parameters->allocator,
                              encoder.transform[0].wavelet[0]->data[LL_BAND], encoder.transform[1].wavelet[0]->data[LL_BAND], encoder.transform[2].wavelet[0]->data[LL_BAND],
                              encoder.transform[0].wavelet[0]->width, encoder.transform[0].wavelet[0]->height, encoder.transform[0].wavelet[0]->width,
-                             rgb_image, 14, 8, &parameters->rgb_gain );
+                             rgb_image, 14, 8, parameters->black_level, &parameters->rgb_gain );
                 break;
 
             case GPR_RGB_RESOLUTION_EIGHTH: // 8:1 -- second wavelet level
                 WaveletToRGB(parameters->allocator,
                              encoder.transform[0].wavelet[1]->data[LL_BAND], encoder.transform[1].wavelet[1]->data[LL_BAND], encoder.transform[2].wavelet[1]->data[LL_BAND],
                              encoder.transform[0].wavelet[1]->width, encoder.transform[0].wavelet[1]->height, encoder.transform[0].wavelet[1]->width,
-                             rgb_image, 14, 8, &parameters->rgb_gain );
+                             rgb_image, 14, 8, parameters->black_level, &parameters->rgb_gain );
                 break;
 
             case GPR_RGB_RESOLUTION_SIXTEENTH: // 16:1 -- third wavelet level
                 WaveletToRGB(parameters->allocator,
                              encoder.transform[0].wavelet[2]->data[LL_BAND], encoder.transform[1].wavelet[2]->data[LL_BAND], encoder.transform[2].wavelet[2]->data[LL_BAND],
                              encoder.transform[0].wavelet[2]->width, encoder.transform[0].wavelet[2]->height, encoder.transform[0].wavelet[2]->width,
-                             rgb_image, 14, 8, &parameters->rgb_gain );
+                             rgb_image, 14, 8, parameters->black_level, &parameters->rgb_gain );
                 break;
 
             default: // No preview for unsupported resolutions (e.g. 1:1 / NONE)
