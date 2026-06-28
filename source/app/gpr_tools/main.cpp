@@ -41,8 +41,8 @@ public:
     int     preview_file_width;
     int     preview_file_height;
 
-    bool    print_gpr_json;
-    string  apply_gpr_json;
+    bool    print_metadata;
+    string  apply_metadata;
 
     string  input_path;
     int     input_width;
@@ -78,8 +78,8 @@ public:
         ("preview_file_width",          preview_file_width,           0,                      "Input Preview file width. Use this option to supply jpg preview when writing GPR file")
         ("preview_file_height",         preview_file_height,          0,                      "Input Preview file height. Use this option to supply jpg preview when writing GPR file")
         
-        ("print_gpr_json,d",            print_gpr_json,               false,                  "Print gpr params (as json) to standard output")
-        ("apply_gpr_json,a",            apply_gpr_json,               string(""),             "Use gpr params for dng metadata")
+        ("print_metadata,d",            print_metadata,               false,                  "Print gpr params (as json) to standard output")
+        ("apply_metadata,a",            apply_metadata,               string(""),             "Use gpr params for dng metadata")
 
         ("input_path,i",                input_path,                   string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
         ("input_width,w",               input_width,                  0,                      "Input image width in pixel samples [4000]. Overrides metadata when set")
@@ -157,7 +157,7 @@ int main(int argc, char *argv [])
         return -1;
     }
     
-    if( args.print_gpr_json )
+    if( args.print_metadata )
     {
         if( dng_dump(args.input_path.c_str()) != 0 )
             return -1;
@@ -180,9 +180,25 @@ int main(int argc, char *argv [])
 
     if( args.output_path != "" )
     {
-        return dng_convert_main(args.input_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_skip_cols, args.input_pixel_format.c_str(),
-                                args.output_path.c_str(), args.apply_gpr_json.c_str(), args.gpmf_path.c_str(), args.rgb_resolution.c_str(), args.rgb_bits, args.jpg_quality,
-                                args.preview_file_path.c_str(), args.preview_file_width, args.preview_file_height );
+        dng_convert_params convert_params;
+        convert_params.input_file_path         = args.input_path.c_str();
+        convert_params.input_width             = args.input_width;
+        convert_params.input_height            = args.input_height;
+        convert_params.input_pitch             = args.input_pitch;
+        convert_params.input_skip_rows         = args.input_skip_rows;
+        convert_params.input_skip_cols         = args.input_skip_cols;
+        convert_params.input_pixel_format      = args.input_pixel_format.c_str();
+        convert_params.output_file_path        = args.output_path.c_str();
+        convert_params.metadata_file_path      = args.apply_metadata.c_str();
+        convert_params.gpmf_file_path          = args.gpmf_path.c_str();
+        convert_params.rgb_file_resolution     = args.rgb_resolution.c_str();
+        convert_params.rgb_file_bits           = args.rgb_bits;
+        convert_params.jpg_quality             = args.jpg_quality;
+        convert_params.jpg_preview_file_path   = args.preview_file_path.c_str();
+        convert_params.jpg_preview_file_width  = args.preview_file_width;
+        convert_params.jpg_preview_file_height = args.preview_file_height;
+
+        return dng_convert_main( &convert_params );
     }
     
     return 0;

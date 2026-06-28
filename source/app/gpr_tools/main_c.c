@@ -108,10 +108,33 @@ static int parse_input_pixel_format( const char* s, GPR_PIXEL_FORMAT* out )
     return 0;
 }
 
-int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, size_t input_skip_cols, const char* input_pixel_format,
-                     const char*  output_file_path, const char*  metadata_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits, int jpg_quality,
-                     const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height )
+int dng_convert_main( const dng_convert_params* convert_params )
 {
+    if( convert_params == NULL )
+    {
+        printf( "No conversion parameters provided" );
+        return -1;
+    }
+
+    // Unpack into local working copies. Several of these are mutated below, so we
+    // deliberately keep the caller's dng_convert_params untouched.
+    const char*  input_file_path        = convert_params->input_file_path;
+    unsigned int input_width            = convert_params->input_width;
+    unsigned int input_height           = convert_params->input_height;
+    size_t       input_pitch            = convert_params->input_pitch;
+    size_t       input_skip_rows        = convert_params->input_skip_rows;
+    size_t       input_skip_cols        = convert_params->input_skip_cols;
+    const char*  input_pixel_format     = convert_params->input_pixel_format;
+    const char*  output_file_path       = convert_params->output_file_path;
+    const char*  metadata_file_path     = convert_params->metadata_file_path;
+    const char*  gpmf_file_path         = convert_params->gpmf_file_path;
+    const char*  rgb_file_resolution    = convert_params->rgb_file_resolution;
+    int          rgb_file_bits          = convert_params->rgb_file_bits;
+    int          jpg_quality            = convert_params->jpg_quality;
+    const char*  jpg_preview_file_path  = convert_params->jpg_preview_file_path;
+    int          jpg_preview_file_width = convert_params->jpg_preview_file_width;
+    int          jpg_preview_file_height = convert_params->jpg_preview_file_height;
+
     bool success;
     bool write_buffer_to_file = true;
     
