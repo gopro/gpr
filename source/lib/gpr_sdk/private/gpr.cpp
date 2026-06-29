@@ -1096,7 +1096,10 @@ static void write_dng(const gpr_allocator*          allocator,
     AutoPtr<dng_image> image(new dng_simple_image(rect, 1, ttShort, memalloc));
     
     gpr_buffer_auto raw_allocated_buffer( allocator->Alloc, allocator->Free );
-    
+
+    gpr_buffer_auto normalized_buffer( allocator->Alloc, allocator->Free );
+    bool black_normalized = false;
+
     if( raw_image_buffer == NULL && vc5_image_buffer )
     {
 #if GPR_READING
@@ -1162,7 +1165,44 @@ static void write_dng(const gpr_allocator*          allocator,
         
         input_pitch = convert_params->input_width * 2;
     }
-    
+
+    // The protune log curve applied during VC5 encoding assumes a near-zero black level
+    // (as on GoPro sensors). For sensors with a significant black pedestal (e.g. iPhone,
+    // black level 528) the curve spends most of its codes on the sub-black region, starving
+    // the real signal of precision and crushing mid-tone detail once a DNG reader expands it.
+    // Subtract the black level and stretch to the full range before encoding so the curve's
+    // precision lands on the actual signal; BlackLevel is then written as 0 below so any DNG
+    // reader (including Lightroom, which uses its own decoder) reconstructs correct linear
+    // values. This only affects the VC5/GPR path; uncompressed DNG output is unchanged.
+    if( vc5_dng )
+    {
+        const gpr_static_black_level& sbl = convert_params->tuning_info.static_black_level;
+        int black = ( sbl.r_black + sbl.g_r_black + sbl.g_b_black + sbl.b_black ) / 4;
+        int white = convert_params->tuning_info.dgain_saturation_level.level_red;
+
+        if( black > 0 && white > black )
+        {
+            size_t count = raw_image_buffer->get_size() / sizeof(uint16_t);
+            normalized_buffer.allocate( raw_image_buffer->get_size() );
+
+            const uint16_t* src = raw_image_buffer->to_uint16_t();
+            uint16_t*       dst = normalized_buffer.to_uint16_t();
+
+            const int range = white - black;
+            for( size_t i = 0; i < count; i++ )
+            {
+                int v = (int)src[i] - black;
+                if( v < 0 ) v = 0;
+                v = (int)( (int64_t)v * white / range );
+                if( v > white ) v = white;
+                dst[i] = (uint16_t)v;
+            }
+
+            raw_image_buffer = &normalized_buffer;
+            black_normalized = true;
+        }
+    }
+
     if( vc5_dng == false )
     {
         CopyBufferToRawImage( *raw_image_buffer, input_pitch / sizeof(short), *(image.Get()) );
@@ -1177,8 +1217,18 @@ static void write_dng(const gpr_allocator*          allocator,
     { // Set Tuning Info
         const gpr_tuning_info*  tuning_info       = &convert_params->tuning_info;
 
-        const gpr_static_black_level static_black_level    = tuning_info->static_black_level;
-        
+        gpr_static_black_level static_black_level    = tuning_info->static_black_level;
+
+        // The raw was black-subtracted before encoding (see above), so the stored data
+        // already has a zero pedestal -- record that in the DNG.
+        if( black_normalized )
+        {
+            static_black_level.r_black   = 0;
+            static_black_level.g_r_black = 0;
+            static_black_level.g_b_black = 0;
+            static_black_level.b_black   = 0;
+        }
+
         switch( convert_params->tuning_info.pixel_format )
         {
             case PIXEL_FORMAT_RGGB_12:
@@ -1449,7 +1499,18 @@ static void write_dng(const gpr_allocator*          allocator,
     if( vc5_dng )
     {
         gpr_image_writer* gpr_writer = new gpr_image_writer(raw_image_buffer, convert_params->input_width, convert_params->input_height, convert_params->input_pitch, vc5_image_buffer );
-        set_vc5_encoder_parameters( gpr_writer->GetVc5EncoderParams(), convert_params );
+
+        // The preview is generated from the (already black-subtracted) encoded data, so its
+        // black level must be 0 too -- otherwise it would be subtracted a second time.
+        gpr_parameters enc_params = *convert_params;
+        if( black_normalized )
+        {
+            enc_params.tuning_info.static_black_level.r_black   = 0;
+            enc_params.tuning_info.static_black_level.g_r_black = 0;
+            enc_params.tuning_info.static_black_level.g_b_black = 0;
+            enc_params.tuning_info.static_black_level.b_black   = 0;
+        }
+        set_vc5_encoder_parameters( gpr_writer->GetVc5EncoderParams(), &enc_params );
       
         gpr_writer->EncodeVc5Image();
                 
