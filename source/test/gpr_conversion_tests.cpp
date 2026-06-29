@@ -220,8 +220,8 @@ static unsigned int tiff_u32( const unsigned char* p, bool le )
 }
 
 // Returns true if any IFD (including SubIFDs) sets Compression (259) to ccVc5 (9).
-// Self-contained so the test does not depend on the public gpr_check_vc5 symbol
-// (whose declaration does not match its definition in the current SDK).
+// An independent ground truth (reads the TIFF tag directly) that the test cross-checks
+// against the public gpr_check_vc5() at every call site.
 static bool tiff_has_vc5_compression( const gpr_buffer& buf )
 {
     if( !buf.buffer || buf.size < 8 ) return false;
@@ -283,7 +283,13 @@ static void validate_dng_like( const Buffer& out, unsigned int expect_w, unsigne
         check( h == expect_h, "height matches source" );
     }
 
-    check( tiff_has_vc5_compression( out.b ) == expect_vc5, "vc5 compression flag as expected" );
+    check( tiff_has_vc5_compression( out.b ) == expect_vc5, "vc5 compression flag as expected (TIFF tag)" );
+
+    // gpr_check_vc5's declaration in gpr.h previously did not match its definition (mismatched
+    // signature and C/C++ linkage), so it could not be linked from a C consumer. Now that it is
+    // fixed, cross-check it against the independent TIFF-tag reading above.
+    gpr_buffer tmp = out.b;
+    check( gpr_check_vc5( &g_alloc, &tmp ) == expect_vc5, "vc5 compression flag as expected (gpr_check_vc5)" );
 }
 
 static void validate_raw( const Buffer& out, unsigned int w, unsigned int h )
@@ -362,7 +368,9 @@ static void run_sample( const std::string& sample_path )
                g_params.tuning_info.wb_gains.b_gain > 0, "white-balance gains positive" );
         check( g_params.tuning_info.pixel_format >= PIXEL_FORMAT_RGGB_12 &&
                g_params.tuning_info.pixel_format <= PIXEL_FORMAT_BGGR_14, "pixel format in range" );
-        check( tiff_has_vc5_compression( g_gpr.b ), "source GPR detected as VC5" );
+        check( tiff_has_vc5_compression( g_gpr.b ), "source GPR detected as VC5 (TIFF tag)" );
+        gpr_buffer tmp = g_gpr.b;
+        check( gpr_check_vc5( &g_alloc, &tmp ), "source GPR detected as VC5 (gpr_check_vc5)" );
     });
 
     // -------- decode paths (GPR -> *) ------------------------------------
@@ -497,7 +505,11 @@ static void run_sample( const std::string& sample_path )
         Buffer dng;
         check( make_dng( dng ), "gpr_to_dng ok" );
         if( dng.valid() )
-            check( tiff_has_vc5_compression( dng.b ) == false, "plain DNG is not VC5" );
+        {
+            check( tiff_has_vc5_compression( dng.b ) == false, "plain DNG is not VC5 (TIFF tag)" );
+            gpr_buffer tmp = dng.b;
+            check( gpr_check_vc5( &g_alloc, &tmp ) == false, "plain DNG is not VC5 (gpr_check_vc5)" );
+        }
     });
 
     gpr_parameters_destroy( &g_params, g_alloc.Free );

@@ -29,9 +29,8 @@ suite) and an unexpected pass is reported as `XPASS` (which does fail the suite,
 as a reminder to remove the marker). There are currently no xfail cases — all
 conversions pass.
 
-Note: the public `gpr_check_vc5` declaration in `gpr.h` does not match its
-definition, so the test detects VC5 compression by reading the TIFF Compression
-tag directly instead of calling it.
+VC5-compression detection is cross-checked two ways at every call site: an
+independent read of the TIFF Compression tag, and the public `gpr_check_vc5()`.
 
 ## Running
 

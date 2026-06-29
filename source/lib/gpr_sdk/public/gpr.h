@@ -82,7 +82,8 @@
                                       gpr_parameters*   parameters);
         
         //!< CHECK IF DNG IS VC5 COMPRESSED
-        bool gpr_check_vc5( gpr_buffer* inp_dng_buffer, gpr_malloc mem_alloc, gpr_free mem_free );
+        bool gpr_check_vc5(const gpr_allocator*     allocator,
+                           gpr_buffer*              inp_dng_buffer);
         
         //!< CONVERSION FUNCTIONS
         
