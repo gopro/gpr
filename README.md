@@ -1,3 +1,10 @@
+# TODO
+
+- Input / Output Matrix showing which inputs work with which outputs
+- Doc explaining why vc5 compression is superior than anything else out there
+- NEON Code Matching
+- Being able to write DNG file that is internally GPR so that preview works on MAC
+
 # GPR Introduction
 
 The General Purpose Raw (GPR) is 12-bit raw image coding format that is based on [Adobe DNG®](https://helpx.adobe.com/photoshop/digital-negative.html) standard. Image compression is a balance of speed, file size and photo quality, and typically one can only choose two. GPR was designed to provide a better tradeoff for all three parameters than what's possible with DNG or any other raw format. The intention of GPR is not to compete with DNG, rather to be as close as possible to DNG. This guarantees compatibility with applications that already understand DNG, but provide an alternate compression scheme in situations where compression and encoding/decoding speed matter.
