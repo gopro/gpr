@@ -21,19 +21,13 @@ For every sample (Hero5/6/7/9 and both Fusion lenses):
 Each case runs in an isolated child process (on POSIX), so a crash in one
 conversion is reported as a failure and the rest of the suite still runs.
 
-## Known issues (xfail)
+## Known-issue (xfail) support
 
-Three VC5-only library paths are currently broken and are marked as expected
-failures so the suite stays green for the working surface. They are never
-exercised by `gpr_tools` (which has no VC5 file type):
-
-- `gpr_convert_dng_to_vc5` — returns an empty buffer (it reads the DNG but never
-  runs the encoder).
-- `gpr_convert_vc5_to_gpr` / `gpr_convert_vc5_to_dng` — segfault in the DNG
-  writer when given a raw VC5 bitstream.
-
-When any of these is fixed its case will report `XPASS`, which fails the suite as
-a reminder to remove the `expect_fail` marker.
+`run_case(..., expect_fail=true)` marks a case that exercises a currently-broken
+path: a failure/crash is recorded as an expected `XFAIL` (does not fail the
+suite) and an unexpected pass is reported as `XPASS` (which does fail the suite,
+as a reminder to remove the marker). There are currently no xfail cases — all
+conversions pass.
 
 Note: the public `gpr_check_vc5` declaration in `gpr.h` does not match its
 definition, so the test detects VC5 compression by reading the TIFF Compression

@@ -453,14 +453,12 @@ static void run_sample( const std::string& sample_path )
         validate_dng_like( dng_gpr, g_W, g_H, /*vc5=*/true );
     });
 
-    // Known issue: gpr_convert_dng_to_vc5 calls read_dng without a vc5 output
-    // buffer, so it never runs the encoder and returns an empty buffer.
     run_case( name + ": dng_to_vc5", []{
         Buffer dng, dng_vc5;
         check( make_dng( dng ), "gpr_to_dng ok" );
         check( gpr_convert_dng_to_vc5( &g_alloc, &dng.b, &dng_vc5.b ), "dng_to_vc5 ok" );
         check( dng_vc5.valid(), "output non-empty" );
-    }, /*expect_fail=*/true );
+    });
 
     // -------- RAW -> * (params from source metadata) ---------------------
     run_case( name + ": raw_to_dng", []{
@@ -478,21 +476,21 @@ static void run_sample( const std::string& sample_path )
     });
 
     // -------- VC5 -> * ---------------------------------------------------
-    // Known issue: gpr_convert_vc5_to_gpr / vc5_to_dng crash (null fTileOffsetData
-    // in the DNG writer) when fed a raw VC5 bitstream produced by gpr_to_vc5.
+    // Both wrap the supplied VC5 bitstream into a DNG container, so both outputs
+    // are VC5-compressed (a GPR is just a VC5-compressed DNG).
     run_case( name + ": vc5_to_gpr", []{
         Buffer vc5, vc5_gpr;
         check( make_vc5( vc5 ), "gpr_to_vc5 ok" );
         check( gpr_convert_vc5_to_gpr( &g_alloc, &g_params, &vc5.b, &vc5_gpr.b ), "vc5_to_gpr ok" );
         validate_dng_like( vc5_gpr, g_W, g_H, /*vc5=*/true );
-    }, /*expect_fail=*/true );
+    });
 
     run_case( name + ": vc5_to_dng", []{
         Buffer vc5, vc5_dng;
         check( make_vc5( vc5 ), "gpr_to_vc5 ok" );
         check( gpr_convert_vc5_to_dng( &g_alloc, &g_params, &vc5.b, &vc5_dng.b ), "vc5_to_dng ok" );
-        validate_dng_like( vc5_dng, g_W, g_H, /*vc5=*/false );
-    }, /*expect_fail=*/true );
+        validate_dng_like( vc5_dng, g_W, g_H, /*vc5=*/true );
+    });
 
     // -------- negative: uncompressed DNG must not be flagged VC5 ---------
     run_case( name + ": uncompressed DNG not flagged VC5", []{
