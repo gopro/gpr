@@ -36,6 +36,20 @@ static void _wb_gains_set_defaults(gpr_white_balance_gains* x)
     x->b_gain   = (float_t)8371.0 / 4096.0;
 }
 
+static void _crop_info_set_defaults(gpr_crop_info* x)
+{
+    x->active_area_top      = 0;
+    x->active_area_left     = 0;
+    x->active_area_bottom   = 0;
+    x->active_area_right    = 0;
+
+    x->default_crop_origin_h = 0;
+    x->default_crop_origin_v = 0;
+
+    x->default_crop_size_h   = 0;
+    x->default_crop_size_v   = 0;
+}
+
 static void _gain_map_set_defaults( gpr_tuning_info* tuning_info )
 {
     tuning_info->gain_map.size = 0;
@@ -85,6 +99,8 @@ void gpr_tuning_info_set_defaults( gpr_tuning_info* x )
     x->baseline_sharpness = 1.0;
 
     x->baseline_noise = 1.0;
+
+    _crop_info_set_defaults(&x->crop_info);
 }
 
 

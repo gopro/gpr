@@ -149,6 +149,23 @@ static void unpack_pixel_format( const gpr_buffer_auto* input_buffer, const gpr_
     }
 }
 
+static inline gpr_crop_info parse_crop_info(const dng_ifd &rawIFD, const AutoPtr<dng_negative>& negative )
+{
+    gpr_crop_info crop_info;
+
+    crop_info.active_area_top    = rawIFD.fActiveArea.t;
+    crop_info.active_area_left   = rawIFD.fActiveArea.l;
+    crop_info.active_area_bottom = rawIFD.fActiveArea.b;
+    crop_info.active_area_right  = rawIFD.fActiveArea.r;
+
+    crop_info.default_crop_origin_h = (uint32_t)( negative->DefaultCropOriginH().As_real64() + 0.5 );
+    crop_info.default_crop_origin_v = (uint32_t)( negative->DefaultCropOriginV().As_real64() + 0.5 );
+
+    crop_info.default_crop_size_h   = (uint32_t)( negative->DefaultCropSizeH().As_real64() + 0.5 );
+    crop_info.default_crop_size_v   = (uint32_t)( negative->DefaultCropSizeV().As_real64() + 0.5 );
+    return crop_info;
+}
+
 #if GPR_WRITING
 static void set_vc5_encoder_parameters( vc5_encoder_parameters& vc5_encoder_params, const gpr_parameters* convert_params )
 {
@@ -767,6 +784,10 @@ static bool read_dng(const gpr_allocator*       allocator,
                 {
                     dng_ifd &rawIFD = *info.fIFD [info.fMainIndex].Get ();
 
+                    // Record how the (possibly larger) raw buffer relates to the final visible
+                    // image, so callers can crop correctly without re-parsing the DNG themselves.
+                    tuning_info.crop_info = parse_crop_info(rawIFD, negative);
+
                     // gpr/VC5 only supports single-channel Bayer CFA mosaics. Reject DNGs
                     // that store already-demosaiced/linear data (e.g. Apple ProRAW from the
                     // stock iOS Camera app, PhotometricInterpretation = LinearRaw) with a
@@ -907,9 +928,47 @@ static bool read_dng(const gpr_allocator*       allocator,
             }
         }
         
+        // If the DNG carries a valid crop (ActiveArea + DefaultCrop) smaller than the full raw
+        // buffer -- e.g. some sensors such as iPhone include extra border pixels outside the
+        // visible image -- extract only that region, so the resulting raw buffer (and a GPR
+        // encoded from it) is at the actual visible resolution rather than the full sensor size.
+        dng_rect crop_rect;
+        bool     have_crop = false;
+        {
+            dng_ifd &rawIFD = *info.fIFD [info.fMainIndex].Get ();
+            gpr_crop_info crop_info = parse_crop_info(rawIFD, negative);
+            
+            dng_rect full_bounds = raw_image.Bounds();
+
+            dng_rect candidate(  crop_info.active_area_top  + (int32)crop_info.default_crop_origin_v,
+                                 crop_info.active_area_left + (int32)crop_info.default_crop_origin_h,
+                                 crop_info.active_area_top  + (int32)crop_info.default_crop_origin_v + (int32)crop_info.default_crop_size_v,
+                                 crop_info.active_area_left + (int32)crop_info.default_crop_origin_h + (int32)crop_info.default_crop_size_h );
+
+            if( crop_info.default_crop_size_h > 0 && crop_info.default_crop_size_v > 0 &&
+                candidate.l >= full_bounds.l && candidate.t >= full_bounds.t &&
+                candidate.r <= full_bounds.r && candidate.b <= full_bounds.b &&
+                ( candidate.W() < full_bounds.W() || candidate.H() < full_bounds.H() ) )
+            {
+                crop_rect = candidate;
+                have_crop = true;
+            }
+
+            // Only override input_width/height/pitch when a smaller crop was actually found --
+            // otherwise leave them as already set above (the full raw buffer's dimensions).
+            // crop_rect is (0,0,0,0) when have_crop is false, so this must not run unconditionally.
+            if( convert_params && have_crop )
+            {
+                convert_params->input_width  = crop_rect.W();
+                convert_params->input_height = crop_rect.H();
+                convert_params->input_pitch  = convert_params->input_width * 2;
+            }
+        }
+
+
         if( raw_image_buffer )
         {
-            CopyRawImageToBuffer( raw_image, *raw_image_buffer );
+            CopyRawImageToBuffer( raw_image, *raw_image_buffer, have_crop ? &crop_rect : NULL );
         }
     }
 
@@ -1342,19 +1401,18 @@ static void write_dng(const gpr_allocator*          allocator,
     
     //GP!! NEED outputWidth, activeWidth, outputHeight, activeHeight here
     negative->SetDefaultScale(dng_urational(outputWidth, activeWidth), dng_urational(outputHeight, activeHeight));
-    
-    uint32 crop_size_val = 0;
-    dng_point crop_origin( 0, 0 );
-    dng_point crop_size( activeHeight - 2 * crop_size_val, activeWidth - 2 * crop_size_val );
-    
-    negative->SetDefaultCropOrigin( crop_origin.h, crop_origin.v );
-    negative->SetDefaultCropSize( crop_size.h, crop_size.v );
-    
-    negative->SetOriginalDefaultCropSize( dng_urational(crop_size.h, 1), dng_urational(crop_size.v, 1) );
 
     {
+        dng_point crop_origin( 0, 0 );
+        dng_point crop_size( activeHeight, activeWidth );
+
+        negative->SetDefaultCropOrigin( crop_origin.h, crop_origin.v );
+        negative->SetDefaultCropSize( crop_size.h, crop_size.v );
+
+        negative->SetOriginalDefaultCropSize( dng_urational(crop_size.h, 1), dng_urational(crop_size.v, 1) );
+
         dng_rect activeArea = dng_rect(activeHeight, activeWidth);
-        
+
         negative->SetActiveArea(activeArea);
     }
     

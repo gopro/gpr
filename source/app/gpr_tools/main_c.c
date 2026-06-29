@@ -307,16 +307,23 @@ int dng_convert_main( const dng_convert_params* convert_params )
 
     gpr_buffer output_buffer = { NULL, 0 };
 
-    if( input_skip_rows > 0 )
+    // This only makes sense for FILE_TYPE_RAW input, where input_buffer is a headerless pixel dump; for DNG/GPR input,
+    //  input_buffer is the whole file (TIFF header + IFDs + pixel data), and shifting it corrupts the container before it can even be parsed.
+    if( input_file_type == FILE_TYPE_RAW )
     {
-        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_rows * input_pitch);
-    }
+        // input_skip_rows/cols shift the start of the raw pixel buffer to adjust the Bayer phase
+        // (e.g. BGGR -> GBRG).
+        if( input_skip_rows > 0 )
+        {
+            input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_rows * input_pitch);
+        }
 
-    // Skipping columns shifts the horizontal Bayer phase (e.g. BGGR -> GBRG).
-    // Each pixel sample is 16 bits, so advance by 2 bytes per column.
-    if( input_skip_cols > 0 )
-    {
-        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_cols * sizeof(uint16_t));
+        // Skipping columns shifts the horizontal Bayer phase (e.g. BGGR -> GBRG).
+        // Each pixel sample is 16 bits, so advance by 2 bytes per column.
+        if( input_skip_cols > 0 )
+        {
+            input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_cols * sizeof(uint16_t));
+        }
     }
 
     gpr_buffer preview = { NULL, 0 };
@@ -444,15 +451,19 @@ int dng_convert_main( const dng_convert_params* convert_params )
         write_to_file( &output_buffer, output_file_path );
     }
     
-    if( input_skip_rows > 0 )
+    if( input_file_type == FILE_TYPE_RAW )
     {
-		input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_rows * input_pitch);
-    }
+        if( input_skip_rows > 0 )
+        {
+            input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_rows * input_pitch);
+        }
 
-    if( input_skip_cols > 0 )
-    {
-        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_cols * sizeof(uint16_t));
+        if( input_skip_cols > 0 )
+        {
+            input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_cols * sizeof(uint16_t));
+        }
     }
+    
     
     if( preview.buffer )
     {

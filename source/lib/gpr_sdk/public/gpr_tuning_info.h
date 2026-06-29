@@ -113,10 +113,32 @@
     typedef struct
     {
         char        *buffers[4];
-        
+
         uint32_t    size;
-        
+
     } gpr_gain_map;
+
+    // Describes how the (possibly larger) raw buffer relates to the final visible image, as
+    // carried by the DNG ActiveArea / DefaultCropOrigin / DefaultCropSize tags. The raw buffer
+    // returned by e.g. gpr_convert_dng_to_raw is always the full, uncropped sensor readout --
+    // (active_area_right - active_area_left) x (active_area_bottom - active_area_top); the
+    // final image is the default_crop_size_h x default_crop_size_v region starting at
+    // (active_area_left + default_crop_origin_h, active_area_top + default_crop_origin_v).
+    // All fields are 0 when the source had no crop tags (e.g. RAW input with no metadata).
+    typedef struct
+    {
+        int32_t     active_area_top;
+        int32_t     active_area_left;
+        int32_t     active_area_bottom;
+        int32_t     active_area_right;
+
+        uint32_t    default_crop_origin_h;
+        uint32_t    default_crop_origin_v;
+
+        uint32_t    default_crop_size_h;
+        uint32_t    default_crop_size_v;
+
+    } gpr_crop_info;
 
     typedef struct
     {
@@ -145,6 +167,8 @@
         double                  baseline_sharpness;     // DNG BaselineSharpness (default 1.0)
 
         double                  baseline_noise;         // DNG BaselineNoise (default 1.0)
+
+        gpr_crop_info           crop_info;              // Active area / crop relating the raw buffer to the final image
 
     } gpr_tuning_info;
 

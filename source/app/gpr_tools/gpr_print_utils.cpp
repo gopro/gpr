@@ -468,6 +468,31 @@ ostream& operator<<(ostream& output, const gpr_auto_exposure_info& x)
     return output;
 }
 
+ostream& operator<<(ostream& output, const gpr_crop_info& x)
+{
+    start_tag( "crop_info", output );
+
+    print_val( output, "active_area_top", x.active_area_top );
+
+    print_val( output, "active_area_left", x.active_area_left );
+
+    print_val( output, "active_area_bottom", x.active_area_bottom );
+
+    print_val( output, "active_area_right", x.active_area_right );
+
+    print_val( output, "default_crop_origin_h", x.default_crop_origin_h );
+
+    print_val( output, "default_crop_origin_v", x.default_crop_origin_v );
+
+    print_val( output, "default_crop_size_h", x.default_crop_size_h );
+
+    print_val( output, "default_crop_size_v", x.default_crop_size_v, 0, true );
+
+    end_tag( "crop_info", output );
+
+    return output;
+}
+
 ostream& operator<<(ostream& output, const gpr_tuning_info& x)
 {
     start_tag( "tuning_info", output );
@@ -498,7 +523,9 @@ ostream& operator<<(ostream& output, const gpr_tuning_info& x)
 
     print_val( output, "baseline_sharpness", x.baseline_sharpness );
 
-    print_val( output, "baseline_noise", x.baseline_noise, 0, true );
+    print_val( output, "baseline_noise", x.baseline_noise );
+
+    print_val( output, "crop_info", x.crop_info, 0, true );
 
     end_tag( "tuning_info", output );
 

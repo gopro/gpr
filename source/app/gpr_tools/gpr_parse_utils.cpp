@@ -507,6 +507,36 @@ void parse_tuning_info( cJSON* pTuningInfo, gpr_tuning_info& tuning_info )
         pJSON = pJSON->next;
     if( pJSON )
         tuning_info.baseline_noise = pJSON->valuedouble;
+
+    if( pJSON )
+        pJSON = pJSON->next;
+    if( pJSON )
+    {
+        cJSON* child = pJSON->child;
+
+        tuning_info.crop_info.active_area_top = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.active_area_left = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.active_area_bottom = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.active_area_right = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.default_crop_origin_h = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.default_crop_origin_v = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.default_crop_size_h = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.default_crop_size_v = child->valueint;
+    }
 }
 
 int gpr_parameters_parse( gpr_parameters* parameters, const char* input_file_path )

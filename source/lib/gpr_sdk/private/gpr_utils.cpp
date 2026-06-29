@@ -28,17 +28,19 @@
 #include "gpr_platform.h"
 #include "gpr_buffer_auto.h"
 
-void CopyRawImageToBuffer( const dng_image& raw_image, gpr_buffer_auto& buffer )
+void CopyRawImageToBuffer( const dng_image& raw_image, gpr_buffer_auto& buffer, const dng_rect* crop_area )
 {
-    dng_point size = raw_image.Bounds().Size();
-    
+    dng_rect area = crop_area ? *crop_area : raw_image.Bounds();
+
+    dng_point size = area.Size();
+
     const int raw_image_size = size.h * size.v * 2;
-    
+
     buffer.allocate( raw_image_size );
-    
+
     dng_pixel_buffer pixel_buffer;
-    
-    pixel_buffer.fArea        = dng_rect(size.v, size.h);
+
+    pixel_buffer.fArea        = area;
     pixel_buffer.fPlane       = 0;
     pixel_buffer.fPlanes      = 1;
     pixel_buffer.fRowStep     = size.h;
@@ -46,9 +48,9 @@ void CopyRawImageToBuffer( const dng_image& raw_image, gpr_buffer_auto& buffer )
     pixel_buffer.fPlaneStep   = 1;
     pixel_buffer.fPixelType   = ttShort;
     pixel_buffer.fPixelSize   = TagTypeSize(ttShort);
-    
+
     pixel_buffer.fData        = buffer.get_buffer();
-    
+
     raw_image.Get(pixel_buffer);
 }
 
