@@ -1837,6 +1837,39 @@ bool gpr_convert_dng_to_vc5(const gpr_allocator*    allocator,
 
 #endif // GPR_WRITING
 
+#if GPR_WRITING && GPR_READING
+// This decodes the input GPR to raw and re-encodes it from scratch, so callers can add or refresh the
+// embedded preview by setting parameters->enable_preview / preview_resolution.
+bool gpr_convert_gpr_to_gpr(const gpr_allocator*    allocator,
+                            const gpr_parameters*   parameters,
+                                  gpr_buffer*       inp_gpr_buffer,
+                                  gpr_buffer*       out_gpr_buffer)
+{
+    TIMESTAMP("[BEG]", 1)
+
+    gpr_buffer_auto raw_buffer(allocator->Alloc, allocator->Free);
+
+    dng_memory_stream inp_gpr_stream( gDefaultDNGMemoryAllocator );
+    inp_gpr_stream.Put( inp_gpr_buffer->buffer, inp_gpr_buffer->size );
+    inp_gpr_stream.SetReadPosition(0);
+
+    if( read_dng( allocator, &inp_gpr_stream, &raw_buffer, NULL, NULL ) == false )
+    {
+        assert(0); return false;
+    }
+
+    dng_memory_stream out_gpr_stream( gDefaultDNGMemoryAllocator );
+
+    write_dng( allocator, &out_gpr_stream, &raw_buffer, true, NULL, parameters );
+
+    write_dngstream_to_buffer( &out_gpr_stream, out_gpr_buffer, allocator->Alloc, allocator->Free );
+
+    TIMESTAMP("[END]", 1)
+
+    return true;
+}
+#endif // GPR_WRITING && GPR_READING
+
 #if GPR_READING
 
 bool gpr_convert_gpr_to_rgb(const gpr_allocator*        allocator,

@@ -133,7 +133,16 @@
                                           gpr_buffer*       inp_dng_buffer,
                                           gpr_buffer*       out_vc5_buffer);
 #endif // GPR_WRITING
-        
+
+#if GPR_WRITING && GPR_READING
+        //!< gpr to gpr conversion: fully decodes then re-encodes, so it can add or refresh the
+        //!< embedded preview/thumbnail (parameters->enable_preview / preview_resolution) on a
+        //!< GPR file that was written without one, or with a different preview resolution.
+        bool gpr_convert_gpr_to_gpr(const gpr_allocator*    allocator,
+                                    const gpr_parameters*   parameters,
+                                          gpr_buffer*       inp_gpr_buffer,
+                                          gpr_buffer*       out_gpr_buffer);
+#endif // GPR_WRITING && GPR_READING
 
 #if GPR_READING
 

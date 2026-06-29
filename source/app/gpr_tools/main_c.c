@@ -173,19 +173,6 @@ int dng_convert_main( const dng_convert_params* convert_params )
         return -1;
     }
 
-    // DNG -> DNG is a legitimate conversion (e.g. reapplying metadata via -a),
-    // so it is exempt from this check. Every other same-format pair (GPR -> GPR,
-    // RAW -> RAW, PPM -> PPM, JPG -> JPG) is not a supported conversion -- this is
-    // usually an output file extension typo, so fail with a clear message instead
-    // of falling through to the generic "Unsupported conversion" error below.
-    if( input_file_type == output_file_type && input_file_type != FILE_TYPE_DNG )
-    {
-        fprintf( stderr, "Error: input file `%s' and output file `%s' have the same format; there is no conversion to perform.\n"
-                          "Check that the output file extension (-o) is correct.\n",
-                          input_file_path, output_file_path );
-        return -1;
-    }
-
     gpr_allocator allocator;
     allocator.Alloc = malloc;
     allocator.Free = free;
@@ -430,6 +417,15 @@ int dng_convert_main( const dng_convert_params* convert_params )
     else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_RAW )
     {
         success = gpr_convert_gpr_to_raw( &allocator, &input_buffer, &output_buffer );
+    }
+#endif
+#if GPR_WRITING && GPR_READING
+    else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_GPR )
+    {
+        // Re-encodes from scratch (rather than copying the input bytes), so this can be used to
+        // add or refresh the embedded preview/thumbnail on a GPR file, e.g. one that was written
+        // without a preview -- see preview_resolution / preview_file_path options.
+        success = gpr_convert_gpr_to_gpr( &allocator, &params, &input_buffer, &output_buffer );
     }
 #endif
     else
