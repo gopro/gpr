@@ -2,6 +2,8 @@
 
 - Doc explaining why vc5 compression is superior than anything else out there
 - NEON Code Matching
+- Apple ProRAW support
+- Fix orientation issue on portrait photos
 
 # Conversion Matrix
 
