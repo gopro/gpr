@@ -14,7 +14,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-GPR_TOOLS="${GPR_TOOLS:-$SCRIPT_DIR/../../gpr-src/build/source/app/gpr_tools/Debug/gpr_tools}"
+GPR_TOOLS="${GPR_TOOLS:-$SCRIPT_DIR/../../../build/source/app/gpr_tools/Debug/gpr_tools}"
 if [ ! -x "$GPR_TOOLS" ]; then
     GPR_TOOLS="$(command -v gpr_tools || true)"
 fi
