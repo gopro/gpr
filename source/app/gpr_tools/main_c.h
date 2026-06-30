@@ -46,9 +46,7 @@ extern "C" {
 
         const char*     preview_resolution;     /* Resolution of the embedded preview image (2:1, 4:1, 8:1, 16:1) */
 
-        const char*     jpg_preview_file_path;
-        int             jpg_preview_file_width;
-        int             jpg_preview_file_height;
+        const char*     jpg_preview_file_path;   /* External JPEG preview to embed; dimensions are read from its header */
 
     } dng_convert_params;
 

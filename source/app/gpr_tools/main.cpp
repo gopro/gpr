@@ -38,8 +38,6 @@ class my_argument_parser : public argument_parser
 public:
 
     string  preview_file_path;
-    int     preview_file_width;
-    int     preview_file_height;
 
     bool    print_metadata;
     string  apply_metadata;
@@ -73,35 +71,38 @@ public:
     void set_options()
     {
         command_options.addOptions()
-        /* long and short name */      /* variable to update */       /* default value */     /* help text */
-        ("help",                        help,                         false,                  "Prints this help text")
+        /* long and short name */   /* variables */       /* default value */     /* help text */
+        ("help",                    help,                 false,            "Prints this help text")
         
-        ("verbose,v",                   verbose,                      false,                  "Verbosity of the output")
+        ("verbose,v",               verbose,              false,            "Verbosity of the output")
 
-        ("preview_file_path",           preview_file_path,            string(""),             "Input Preview file path. Use this option to supply jpg preview when writing GPR file")
-        ("preview_file_width",          preview_file_width,           0,                      "Input Preview file width. Use this option to supply jpg preview when writing GPR file")
-        ("preview_file_height",         preview_file_height,          0,                      "Input Preview file height. Use this option to supply jpg preview when writing GPR file")
+        ("preview_file_path",       preview_file_path,    string(""),       "Use to set jpg preview from external file when writing GPR file")
+        ("preview_resolution",      preview_resolution,   string(""),       "Embedded preview image resolution, only applicable when writing GPR and the preview_file_path is empty \n"
+                                                                            "Choices: 2:1, [4:1], 8:1, 16:]")
         
-        ("print_metadata,d",            print_metadata,               false,                  "Print gpr params (as json) to standard output")
-        ("apply_metadata,a",            apply_metadata,               string(""),             "Use gpr params for dng metadata")
+        ("print_metadata,d",        print_metadata,       false,            "Print gpr params (as json) to standard output")
+        ("apply_metadata,a",        apply_metadata,       string(""),       "Use gpr params for GPR/DNG metadata")
 
-        ("input_path,i",                input_path,                   string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
-        ("input_width,w",               input_width,                  0,                      "Input image width in pixel samples [4000]. Overrides metadata when set")
-        ("input_height,h",              input_height,                 0,                      "Input image height in pixel samples [3000]. Overrides metadata when set")
-        ("input_pitch,p",               input_pitch,                  0,                      "Input image pitch in bytes [8000]. Overrides metadata when set")
-        ("input_pixel_format,x",        input_pixel_format,           string(""),             "Input pixel format \n"
-                                                                                              "(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p, bggr12, bggr14). Only use it when input format is RAW\n"
-                                                                                              "(bggr12/bggr14 are for DNG output only)")
-        ("input_skip_rows",             input_skip_rows,              0,                      "Input image rows to skip (shifts Bayer phase, e.g. BGGR->GRBG). Only use it when input format is RAW")        
-        ("input_skip_cols",             input_skip_cols,              0,                      "Input image columns to skip (shifts Bayer phase, e.g. BGGR->GBRG). Only use it when input format is RAW")
+        ("input_path,i",            input_path,           string(""),       "Input file path \n"
+                                                                            "File Choices: GPR, DNG, RAW")
+        
+        ("input_width,w",           input_width,          0,                "Input image width in pixel samples")
+        ("input_height,h",          input_height,         0,                "Input image height in pixel samples")
+        ("input_pitch,p",           input_pitch,          0,                "Input image pitch in pixel samples")
+        ("input_pixel_format,x",    input_pixel_format,   string(""),       "Input pixel format \n"
+                                                                            "Choices: rggb12, rggb12p, [rggb14], gbrg12, gbrg12p, bggr12, bggr14 \n")
+        ("input_skip_rows",         input_skip_rows,      0,                "Input image rows to skip (shifts Bayer phase, e.g. BGGR->GRBG)")
+        ("input_skip_cols",         input_skip_cols,      0,                "Input image columns to skip (shifts Bayer phase, e.g. BGGR->GBRG)")
 
-        ("output_path,o",               output_path,                  string(""),             "Output file path.\n(files types: GPR, DNG, PPM, RAW, JPG)")
-        ("gpmf_path,g",                 gpmf_path,                    string(""),             "GPMF file path")
+        ("output_path,o",           output_path,          string(""),       "Output file path.\n"
+                                                                            "File choices: GPR, DNG, PPM, RAW, JPG")
+        ("gpmf_path,g",             gpmf_path,            string(""),       "GPMF file path")
 
-        ("rgb_resolution",              rgb_resolution,               string(""),             "Output RGB resolution \n[1:1, 2:1, [4:1], 8:1. 16:1]")
-        ("output_ppm_bits",             output_ppm_bits,                     8,                      "Output RGB bits [8]")
-        ("output_jpg_quality",          output_jpg_quality,                  2,                      "Output JPG quality \n(1=lowest, [2], 3=highest)")
-        ("preview_resolution",          preview_resolution,           string(""),             "Resolution of preview image embedded in GPR/DNG output \n[2:1, [4:1], 8:1, 16:]]");
+        ("rgb_resolution",          rgb_resolution,       string(""),       "Output RGB resolution. Only applicable when output format is PPM or JPG \n"
+                                                                            "Choices: 1:1, 2:1, [4:1], 8:1. 16:1")
+        ("output_ppm_bits",         output_ppm_bits,      8,                "Output bits, use only with PPM output. Choices [8], 16")
+        ("output_jpg_quality",      output_jpg_quality,   2,                "Output quality for JPG output \n "
+                                                                            "Choices: (1=lowest, [2]balanced, 3=highest)");
         ;
     }
 };
@@ -146,6 +147,10 @@ int main(int argc, char *argv [])
     
     if( args.parse(argc, argv, line, zerotag) )
     {
+        printf("\n");
+        printf("Following parameters override metadata when set and are only used when the input format is RAW: \n");
+        printf("    input_width, input_height, input_pitch, input_pixel_format, input_skip_rows and input_skip_cols \n");
+        printf("\n");
         printf("\n");
         printf("-- Example Commnads (please see data/tests/run_tests.sh for more examples) --\n");
         printf("GPR to DNG: \n");
@@ -201,8 +206,6 @@ int main(int argc, char *argv [])
         convert_params.jpg_quality             = args.output_jpg_quality;
         convert_params.preview_resolution      = args.preview_resolution.c_str();
         convert_params.jpg_preview_file_path   = args.preview_file_path.c_str();
-        convert_params.jpg_preview_file_width  = args.preview_file_width;
-        convert_params.jpg_preview_file_height = args.preview_file_height;
 
         return dng_convert_main( &convert_params );
     }

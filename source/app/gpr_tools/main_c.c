@@ -95,6 +95,56 @@ static FILE_TYPE GetFileType( const char* file_path )
     return FILE_TYPE_UNKNOWN;
 }
 
+// Read the pixel dimensions of a JPEG image from its header, without decoding it.
+// Walks the marker segments until the Start-Of-Frame (SOF) marker, which carries the
+// height and width. Returns 1 and fills *width/*height on success, 0 otherwise.
+static int jpeg_get_dimensions( const unsigned char* d, size_t n, int* width, int* height )
+{
+    size_t i;
+
+    if( d == NULL || n < 4 || d[0] != 0xFF || d[1] != 0xD8 ) // SOI
+        return 0;
+
+    i = 2;
+    while( i + 1 < n )
+    {
+        unsigned char marker;
+        int seg_len;
+        bool is_sof;
+
+        if( d[i] != 0xFF ) { i++; continue; }    // skip fill bytes until a marker
+        marker = d[i + 1];
+        i += 2;
+
+        // Standalone markers carry no length: SOI, EOI, TEM and the restart markers.
+        if( marker == 0xD8 || marker == 0xD9 || marker == 0x01 || ( marker >= 0xD0 && marker <= 0xD7 ) )
+            continue;
+
+        if( i + 2 > n )
+            break;
+
+        seg_len = ( d[i] << 8 ) | d[i + 1];      // length includes these 2 bytes
+        if( seg_len < 2 )
+            break;
+
+        // SOF markers (0xC0-0xCF) carry the frame dimensions, except DHT(C4), JPG(C8), DAC(CC).
+        is_sof = ( marker >= 0xC0 && marker <= 0xCF ) && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
+        if( is_sof )
+        {
+            if( i + 7 > n )                      // length(2) precision(1) height(2) width(2)
+                break;
+
+            *height = ( d[i + 3] << 8 ) | d[i + 4];
+            *width  = ( d[i + 5] << 8 ) | d[i + 6];
+            return ( *width > 0 && *height > 0 ) ? 1 : 0;
+        }
+
+        i += seg_len;                            // skip this segment
+    }
+
+    return 0;
+}
+
 // Map a -x pixel format string to its enum. Returns 1 on match, 0 otherwise.
 static int parse_input_pixel_format( const char* s, GPR_PIXEL_FORMAT* out )
 {
@@ -152,8 +202,6 @@ int dng_convert_main( const dng_convert_params* convert_params )
     int          jpg_quality            = convert_params->jpg_quality;
     const char*  preview_resolution     = convert_params->preview_resolution;
     const char*  jpg_preview_file_path  = convert_params->jpg_preview_file_path;
-    int          jpg_preview_file_width = convert_params->jpg_preview_file_width;
-    int          jpg_preview_file_height = convert_params->jpg_preview_file_height;
 
     bool success;
     bool write_buffer_to_file = true;
@@ -332,9 +380,17 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         if( read_from_file( &preview, jpg_preview_file_path, allocator.Alloc, allocator.Free) == 0 )
         {
+            // Read the preview dimensions straight from the JPEG header (no decode needed).
+            int jpg_width = 0, jpg_height = 0;
+
+            if( jpeg_get_dimensions( (const unsigned char*)preview.buffer, preview.size, &jpg_width, &jpg_height ) == 0 )
+            {
+                fprintf( stderr, "Warning: could not read preview dimensions from `%s'; preview may be malformed.\n", jpg_preview_file_path );
+            }
+
             params.preview_image.jpg_preview    = preview;
-            params.preview_image.preview_width  = jpg_preview_file_width;
-            params.preview_image.preview_height = jpg_preview_file_height;
+            params.preview_image.preview_width  = jpg_width;
+            params.preview_image.preview_height = jpg_height;
         }
     }
     

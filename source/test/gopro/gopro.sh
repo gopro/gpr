@@ -48,6 +48,9 @@ for SOURCE in "${SOURCES[@]}"; do
     # GPR -> GPR (re-encode, refreshing the embedded preview)
     "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/GPR_FROM_GPR.GPR"
 
+    # DNG -> GPR with external preview
+    "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/GPR_FROM_GPR_PREV.GPR" --preview_file_path=../lena.jpg
+
     # GPR -> DNG (also dumps metadata)
     "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/DNG_FROM_GPR.DNG" -d > "$OUT_DIR/$NAME.JSON"
     # GPR -> RAW
