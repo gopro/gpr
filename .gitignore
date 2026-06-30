@@ -1,3 +1,8 @@
+source/test/gopro/out/
+source/test/gopro/src/
+source/test/iphone/out/
+source/test/iphone/src/
+
 .DS_Store
 build/
 scripts/*.pyc
