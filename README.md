@@ -1,8 +1,9 @@
 # TODO
 
 - Doc explaining why vc5 compression is superior than anything else out there
-- NEON Code Matching
+- NEON code matching
 - Apple ProRAW support
+- Being able to write gpr files with DNG extension 
 - Fix orientation issue on portrait photos
 
 # Conversion Matrix
