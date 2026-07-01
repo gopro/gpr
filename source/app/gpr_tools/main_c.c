@@ -177,6 +177,105 @@ static GPR_RGB_RESOLUTION parse_resolution(const char* resolution)
     }
 }
 
+#if GPR_JPEG_AVAILABLE
+
+// Convert a DNG/Adobe orientation (0-7) to its EXIF/TIFF Orientation value (1-8).
+static int adobe_orientation_to_exif( int adobe_orientation )
+{
+    // Indexed by the Adobe orientation enum (kNormal=0 .. kMirror90CCW=7).
+    static const int exif[8] = { 1, 6, 3, 8, 2, 7, 4, 5 };
+    return ( adobe_orientation >= 0 && adobe_orientation < 8 ) ? exif[adobe_orientation] : 1;
+}
+
+// Collects the JPEG bytes produced by tje_encode_with_func into a growable buffer.
+typedef struct
+{
+    unsigned char*  data;
+    size_t          size;
+    size_t          capacity;
+
+} jpg_mem_buffer;
+
+static void jpg_mem_sink( void* context, void* data, int size )
+{
+    jpg_mem_buffer* buf = (jpg_mem_buffer*)context;
+
+    if( buf->size + (size_t)size > buf->capacity )
+    {
+        size_t new_capacity = buf->capacity ? buf->capacity : ( 1 << 20 );
+        while( new_capacity < buf->size + (size_t)size )
+            new_capacity *= 2;
+
+        buf->data = (unsigned char*)realloc( buf->data, new_capacity );
+        buf->capacity = new_capacity;
+    }
+
+    memcpy( buf->data + buf->size, data, (size_t)size );
+    buf->size += (size_t)size;
+}
+
+// Encode interleaved RGB to a JPEG file, embedding an EXIF Orientation tag so viewers
+// display it the right way up without the pixels being physically rotated. Returns 1 on
+// success, 0 on failure.
+static int write_jpg_with_exif_orientation( const char* output_file_path, int quality,
+                                            int width, int height, const unsigned char* rgb,
+                                            int exif_orientation )
+{
+    // Minimal EXIF APP1 segment (little-endian TIFF) with two IFD0 tags in ascending order:
+    // Orientation (0x0112) and YCbCrPositioning (0x0213, required for a conformant JPEG EXIF).
+    unsigned char app1[] =
+    {
+        0xFF, 0xE1, 0x00, 0x2E,                          // APP1 marker, segment length = 46
+        'E',  'x',  'i',  'f',  0x00, 0x00,              // "Exif\0\0"
+        'I',  'I',  0x2A, 0x00, 0x08, 0x00, 0x00, 0x00,  // TIFF header (LE), IFD0 at offset 8
+        0x02, 0x00,                                      // IFD0: 2 entries
+        0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00,  // tag 0x0112 Orientation, SHORT, count 1
+        0x00, 0x00, 0x00, 0x00,                          // Orientation value (set below) + padding
+        0x13, 0x02, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00,  // tag 0x0213 YCbCrPositioning, SHORT, count 1
+        0x01, 0x00, 0x00, 0x00,                          // YCbCrPositioning value = 1 (centered) + padding
+        0x00, 0x00, 0x00, 0x00                           // next IFD offset = 0
+    };
+
+    jpg_mem_buffer jpg = { NULL, 0, 0 };
+    FILE* f;
+    int ok = 1;
+
+    app1[28] = (unsigned char)( exif_orientation & 0xFF ); // Orientation SHORT (low byte)
+    app1[29] = 0x00;
+
+    if( tje_encode_with_func( jpg_mem_sink, &jpg, quality, width, height, 3, rgb ) == 0 )
+    {
+        free( jpg.data );
+        return 0;
+    }
+
+    f = fopen( output_file_path, "wb" );
+    if( f == NULL )
+    {
+        free( jpg.data );
+        return 0;
+    }
+
+    // Insert the EXIF segment right after the SOI marker (FFD8) so it is the first segment.
+    if( jpg.size >= 2 && jpg.data[0] == 0xFF && jpg.data[1] == 0xD8 )
+    {
+        ok = ok && ( fwrite( jpg.data, 1, 2, f ) == 2 );
+        ok = ok && ( fwrite( app1, 1, sizeof(app1), f ) == sizeof(app1) );
+        ok = ok && ( fwrite( jpg.data + 2, 1, jpg.size - 2, f ) == jpg.size - 2 );
+    }
+    else
+    {
+        ok = ok && ( fwrite( jpg.data, 1, jpg.size, f ) == jpg.size );
+    }
+
+    fclose( f );
+    free( jpg.data );
+
+    return ok;
+}
+
+#endif // GPR_JPEG_AVAILABLE
+
 int dng_convert_main( const dng_convert_params* convert_params )
 {
     if( convert_params == NULL )
@@ -433,6 +532,12 @@ int dng_convert_main( const dng_convert_params* convert_params )
         
         if( output_file_type == FILE_TYPE_PPM )
         {
+            // PPM has no metadata channel, so orientation cannot be recorded; the pixels are
+            // written in sensor orientation. Warn when that differs from the display orientation.
+            if( (int)params.tuning_info.orientation != ORIENTATION_NORMAL )
+                fprintf( stderr, "Note: PPM cannot store orientation; output pixels are in sensor "
+                                 "orientation (not rotated). Use JPG output to preserve orientation.\n" );
+
 #define PPM_HEADER_SIZE 100
             char header_text[PPM_HEADER_SIZE];
 
@@ -465,7 +570,16 @@ int dng_convert_main( const dng_convert_params* convert_params )
                 fprintf( stderr, "JPG quality %d out of range, clamping to [1,3]\n", jpg_quality );
                 jpg_quality = jpg_quality < 1 ? 1 : 3;
             }
-            tje_encode_to_file_at_quality( output_file_path, jpg_quality, rgb_buffer.width, rgb_buffer.height, 3, rgb_buffer.buffer );
+
+            // The GPR/DNG store the image as a sensor buffer plus an orientation flag; carry the
+            // same hint into the JPG via an EXIF Orientation tag rather than rotating the pixels.
+            int exif_orientation = adobe_orientation_to_exif( (int)params.tuning_info.orientation );
+
+            if( write_jpg_with_exif_orientation( output_file_path, jpg_quality, rgb_buffer.width, rgb_buffer.height, (const unsigned char*)rgb_buffer.buffer, exif_orientation ) == 0 )
+            {
+                fprintf( stderr, "Failed to write JPG file %s\n", output_file_path );
+                success = false;
+            }
 #else
             printf("JPG writing capability is disabled. You could still write to a PPM file");
 #endif
