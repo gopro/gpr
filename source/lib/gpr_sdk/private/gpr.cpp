@@ -67,9 +67,7 @@
 #include "gpr_read_image.h"
 #endif
 
-#if GPR_JPEG_AVAILABLE
-#include "jpeg.h"
-#endif
+#include "jpeg.h" // Needed for calling gpr_jpeg_get_dimensions
 
 extern bool gDNGShowTimers;
 
@@ -1585,9 +1583,15 @@ static void write_dng(const gpr_allocator*          allocator,
                 jpeg_preview->fPhotometricInterpretation = piYCbCr;
                 
                 jpeg_preview->fInfo.fIsPrimary = true;
-                
-                jpeg_preview->fPreviewSize.v             = preview_image.preview_height;
-                jpeg_preview->fPreviewSize.h             = preview_image.preview_width;
+
+                // Read the preview's pixel dimensions straight from the JPEG header (no decode
+                // needed), so callers only have to supply the compressed JPEG bytes.
+                int preview_w = 0, preview_h = 0;
+                gpr_jpeg_get_dimensions( (const unsigned char*)preview_image.jpg_preview.buffer,
+                                         preview_image.jpg_preview.size, &preview_w, &preview_h );
+
+                jpeg_preview->fPreviewSize.v             = preview_h;
+                jpeg_preview->fPreviewSize.h             = preview_w;
                 jpeg_preview->fCompressedData.Reset(host.Allocate( preview_image.jpg_preview.size ));
                 memcpy( jpeg_preview->fCompressedData->Buffer_char(), preview_image.jpg_preview.buffer, preview_image.jpg_preview.size );
                 
@@ -2024,6 +2028,86 @@ bool gpr_convert_gpr_to_rgb(const gpr_allocator*        allocator,
     TIMESTAMP("[END]", 1)
 
     return true;
+}
+
+bool gpr_convert_gpr_to_ppm(const gpr_allocator*        allocator,
+                                  GPR_RGB_RESOLUTION    rgb_resolution,
+                                  int                   rgb_bits,
+                                  gpr_buffer*           inp_gpr_buffer,
+                                  gpr_buffer*           out_ppm_buffer)
+{
+    TIMESTAMP("[BEG]", 1)
+
+    gpr_rgb_buffer rgb_buffer = { NULL, 0, 0, 0 };
+
+    if( gpr_convert_gpr_to_rgb( allocator, rgb_resolution, rgb_bits, inp_gpr_buffer, &rgb_buffer ) == false )
+        return false;
+
+    // Assemble the PPM: a short ASCII header ("P6 <width> <height> <maxval>") followed by the
+    // interleaved RGB samples. PPM has no metadata channel, so orientation cannot be recorded here.
+    char header[64];
+    int  maxval     = ( rgb_bits == 8 ) ? 255 : 65535;
+    int  header_len = snprintf( header, sizeof(header), "P6\n%lu %lu\n%d\n",
+                                (unsigned long)rgb_buffer.width, (unsigned long)rgb_buffer.height, maxval );
+
+    out_ppm_buffer->size   = rgb_buffer.size + (size_t)header_len;
+    out_ppm_buffer->buffer = allocator->Alloc( out_ppm_buffer->size );
+
+    if( out_ppm_buffer->buffer == NULL )
+    {
+        allocator->Free( rgb_buffer.buffer );
+        return false;
+    }
+
+    memcpy( out_ppm_buffer->buffer, header, (size_t)header_len );
+    memcpy( (char*)out_ppm_buffer->buffer + header_len, rgb_buffer.buffer, rgb_buffer.size );
+
+    allocator->Free( rgb_buffer.buffer );
+
+    TIMESTAMP("[END]", 1)
+
+    return true;
+}
+
+bool gpr_convert_gpr_to_jpg(const gpr_allocator*        allocator,
+                                  GPR_RGB_RESOLUTION    rgb_resolution,
+                                  int                   jpg_quality,
+                                  gpr_buffer*           inp_gpr_buffer,
+                                  gpr_buffer*           out_jpg_buffer)
+{
+    TIMESTAMP("[BEG]", 1)
+
+#if GPR_JPEG_AVAILABLE
+    gpr_rgb_buffer rgb_buffer = { NULL, 0, 0, 0 };
+    gpr_parameters params;
+    int  exif_orientation = 1;
+    bool ok;
+
+    // JPG output is always 8-bit interleaved RGB.
+    if( gpr_convert_gpr_to_rgb( allocator, rgb_resolution, 8, inp_gpr_buffer, &rgb_buffer ) == false )
+        return false;
+
+    // Carry the image orientation into the JPG as an EXIF tag (metadata only, no pixel rotation)
+    // so the JPG displays the same way up as the source GPR/DNG.
+    gpr_parameters_set_defaults( &params );
+
+    if( gpr_parse_metadata( allocator, inp_gpr_buffer, &params ) )
+        exif_orientation = gpr_adobe_orientation_to_exif( (int)params.tuning_info.orientation );
+
+    ok = gpr_encode_rgb_to_jpg( allocator, (const unsigned char*)rgb_buffer.buffer,
+                                (int)rgb_buffer.width, (int)rgb_buffer.height,
+                                jpg_quality, exif_orientation, out_jpg_buffer );
+
+    gpr_parameters_destroy( &params, allocator->Free );
+    allocator->Free( rgb_buffer.buffer );
+
+    TIMESTAMP("[END]", 1)
+
+    return ok;
+#else
+    (void)allocator; (void)rgb_resolution; (void)jpg_quality; (void)inp_gpr_buffer; (void)out_jpg_buffer;
+    return false;
+#endif
 }
 
 bool gpr_convert_gpr_to_dng(const gpr_allocator*    allocator,

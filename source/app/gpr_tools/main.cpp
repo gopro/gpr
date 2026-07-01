@@ -78,7 +78,7 @@ public:
 
         ("preview_file_path",       preview_file_path,    string(""),       "Use to set jpg preview from external file when writing GPR file")
         ("preview_resolution",      preview_resolution,   string(""),       "Embedded preview image resolution, only applicable when writing GPR and the preview_file_path is empty \n"
-                                                                            "Choices: 2:1, [4:1], 8:1, 16:]")
+                                                                            "Choices: 2:1, [4:1], 8:1, 16:1")
         
         ("print_metadata,d",        print_metadata,       false,            "Print gpr params (as json) to standard output")
         ("apply_metadata,a",        apply_metadata,       string(""),       "Use gpr params for GPR/DNG metadata")

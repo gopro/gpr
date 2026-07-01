@@ -36,11 +36,8 @@
 
         typedef struct
         {
-          gpr_buffer            jpg_preview;                     /* Address to the memory location that this buffer points to */
-          
-          unsigned int          preview_width;                   /* Width of input source in pixels (only applies to raw input) */
-          
-          unsigned int          preview_height;                  /* Height of input source in pixels (only applies to raw input) */
+          gpr_buffer            jpg_preview;                     /* Compressed JPEG bytes to embed as the preview; its pixel
+                                                                    dimensions are read from the JPEG header when written */
 
         } gpr_preview_image;
       
@@ -153,7 +150,24 @@
                                           int                   rgb_bits,                                    
                                           gpr_buffer*           inp_gpr_buffer,
                                           gpr_rgb_buffer*       out_rgb_buffer);
-        
+
+        //!< gpr to ppm conversion. Decodes to RGB (via gpr_convert_gpr_to_rgb) and prepends a
+        //!< PPM (P6) header. rgb_bits selects 8- or 16-bit samples. PPM cannot carry orientation.
+        bool gpr_convert_gpr_to_ppm(const gpr_allocator*        allocator,
+                                          GPR_RGB_RESOLUTION    rgb_resolution,
+                                          int                   rgb_bits,
+                                          gpr_buffer*           inp_gpr_buffer,
+                                          gpr_buffer*           out_ppm_buffer);
+
+        //!< gpr to jpg conversion. Decodes to 8-bit RGB (via gpr_convert_gpr_to_rgb) and encodes a
+        //!< JPEG, embedding the image orientation as an EXIF tag. jpg_quality is 1 (lowest) to 3
+        //!< (highest). Returns false if JPEG support is not compiled in (GPR_JPEG_AVAILABLE).
+        bool gpr_convert_gpr_to_jpg(const gpr_allocator*        allocator,
+                                          GPR_RGB_RESOLUTION    rgb_resolution,
+                                          int                   jpg_quality,
+                                          gpr_buffer*           inp_gpr_buffer,
+                                          gpr_buffer*           out_jpg_buffer);
+
         //!< gpr to dng conversion
         bool gpr_convert_gpr_to_dng(const gpr_allocator*    allocator,
                                     const gpr_parameters*   parameters,

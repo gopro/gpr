@@ -32,10 +32,6 @@
 #include "gpr_parse_utils.h"
 #include "gpr_print_utils.h"
 
-#if GPR_JPEG_AVAILABLE
-#include "jpeg.h"
-#endif
-
 #define MAX_FILE_PATH 256
 
 typedef enum
@@ -95,56 +91,6 @@ static FILE_TYPE GetFileType( const char* file_path )
     return FILE_TYPE_UNKNOWN;
 }
 
-// Read the pixel dimensions of a JPEG image from its header, without decoding it.
-// Walks the marker segments until the Start-Of-Frame (SOF) marker, which carries the
-// height and width. Returns 1 and fills *width/*height on success, 0 otherwise.
-static int jpeg_get_dimensions( const unsigned char* d, size_t n, int* width, int* height )
-{
-    size_t i;
-
-    if( d == NULL || n < 4 || d[0] != 0xFF || d[1] != 0xD8 ) // SOI
-        return 0;
-
-    i = 2;
-    while( i + 1 < n )
-    {
-        unsigned char marker;
-        int seg_len;
-        bool is_sof;
-
-        if( d[i] != 0xFF ) { i++; continue; }    // skip fill bytes until a marker
-        marker = d[i + 1];
-        i += 2;
-
-        // Standalone markers carry no length: SOI, EOI, TEM and the restart markers.
-        if( marker == 0xD8 || marker == 0xD9 || marker == 0x01 || ( marker >= 0xD0 && marker <= 0xD7 ) )
-            continue;
-
-        if( i + 2 > n )
-            break;
-
-        seg_len = ( d[i] << 8 ) | d[i + 1];      // length includes these 2 bytes
-        if( seg_len < 2 )
-            break;
-
-        // SOF markers (0xC0-0xCF) carry the frame dimensions, except DHT(C4), JPG(C8), DAC(CC).
-        is_sof = ( marker >= 0xC0 && marker <= 0xCF ) && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
-        if( is_sof )
-        {
-            if( i + 7 > n )                      // length(2) precision(1) height(2) width(2)
-                break;
-
-            *height = ( d[i + 3] << 8 ) | d[i + 4];
-            *width  = ( d[i + 5] << 8 ) | d[i + 6];
-            return ( *width > 0 && *height > 0 ) ? 1 : 0;
-        }
-
-        i += seg_len;                            // skip this segment
-    }
-
-    return 0;
-}
-
 // Map a -x pixel format string to its enum. Returns 1 on match, 0 otherwise.
 static int parse_input_pixel_format( const char* s, GPR_PIXEL_FORMAT* out )
 {
@@ -176,105 +122,6 @@ static GPR_RGB_RESOLUTION parse_resolution(const char* resolution)
         return GPR_RGB_RESOLUTION_DEFAULT;
     }
 }
-
-#if GPR_JPEG_AVAILABLE
-
-// Convert a DNG/Adobe orientation (0-7) to its EXIF/TIFF Orientation value (1-8).
-static int adobe_orientation_to_exif( int adobe_orientation )
-{
-    // Indexed by the Adobe orientation enum (kNormal=0 .. kMirror90CCW=7).
-    static const int exif[8] = { 1, 6, 3, 8, 2, 7, 4, 5 };
-    return ( adobe_orientation >= 0 && adobe_orientation < 8 ) ? exif[adobe_orientation] : 1;
-}
-
-// Collects the JPEG bytes produced by tje_encode_with_func into a growable buffer.
-typedef struct
-{
-    unsigned char*  data;
-    size_t          size;
-    size_t          capacity;
-
-} jpg_mem_buffer;
-
-static void jpg_mem_sink( void* context, void* data, int size )
-{
-    jpg_mem_buffer* buf = (jpg_mem_buffer*)context;
-
-    if( buf->size + (size_t)size > buf->capacity )
-    {
-        size_t new_capacity = buf->capacity ? buf->capacity : ( 1 << 20 );
-        while( new_capacity < buf->size + (size_t)size )
-            new_capacity *= 2;
-
-        buf->data = (unsigned char*)realloc( buf->data, new_capacity );
-        buf->capacity = new_capacity;
-    }
-
-    memcpy( buf->data + buf->size, data, (size_t)size );
-    buf->size += (size_t)size;
-}
-
-// Encode interleaved RGB to a JPEG file, embedding an EXIF Orientation tag so viewers
-// display it the right way up without the pixels being physically rotated. Returns 1 on
-// success, 0 on failure.
-static int write_jpg_with_exif_orientation( const char* output_file_path, int quality,
-                                            int width, int height, const unsigned char* rgb,
-                                            int exif_orientation )
-{
-    // Minimal EXIF APP1 segment (little-endian TIFF) with two IFD0 tags in ascending order:
-    // Orientation (0x0112) and YCbCrPositioning (0x0213, required for a conformant JPEG EXIF).
-    unsigned char app1[] =
-    {
-        0xFF, 0xE1, 0x00, 0x2E,                          // APP1 marker, segment length = 46
-        'E',  'x',  'i',  'f',  0x00, 0x00,              // "Exif\0\0"
-        'I',  'I',  0x2A, 0x00, 0x08, 0x00, 0x00, 0x00,  // TIFF header (LE), IFD0 at offset 8
-        0x02, 0x00,                                      // IFD0: 2 entries
-        0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00,  // tag 0x0112 Orientation, SHORT, count 1
-        0x00, 0x00, 0x00, 0x00,                          // Orientation value (set below) + padding
-        0x13, 0x02, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00,  // tag 0x0213 YCbCrPositioning, SHORT, count 1
-        0x01, 0x00, 0x00, 0x00,                          // YCbCrPositioning value = 1 (centered) + padding
-        0x00, 0x00, 0x00, 0x00                           // next IFD offset = 0
-    };
-
-    jpg_mem_buffer jpg = { NULL, 0, 0 };
-    FILE* f;
-    int ok = 1;
-
-    app1[28] = (unsigned char)( exif_orientation & 0xFF ); // Orientation SHORT (low byte)
-    app1[29] = 0x00;
-
-    if( tje_encode_with_func( jpg_mem_sink, &jpg, quality, width, height, 3, rgb ) == 0 )
-    {
-        free( jpg.data );
-        return 0;
-    }
-
-    f = fopen( output_file_path, "wb" );
-    if( f == NULL )
-    {
-        free( jpg.data );
-        return 0;
-    }
-
-    // Insert the EXIF segment right after the SOI marker (FFD8) so it is the first segment.
-    if( jpg.size >= 2 && jpg.data[0] == 0xFF && jpg.data[1] == 0xD8 )
-    {
-        ok = ok && ( fwrite( jpg.data, 1, 2, f ) == 2 );
-        ok = ok && ( fwrite( app1, 1, sizeof(app1), f ) == sizeof(app1) );
-        ok = ok && ( fwrite( jpg.data + 2, 1, jpg.size - 2, f ) == jpg.size - 2 );
-    }
-    else
-    {
-        ok = ok && ( fwrite( jpg.data, 1, jpg.size, f ) == jpg.size );
-    }
-
-    fclose( f );
-    free( jpg.data );
-
-    return ok;
-}
-
-#endif // GPR_JPEG_AVAILABLE
 
 int dng_convert_main( const dng_convert_params* convert_params )
 {
@@ -479,17 +326,9 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         if( read_from_file( &preview, jpg_preview_file_path, allocator.Alloc, allocator.Free) == 0 )
         {
-            // Read the preview dimensions straight from the JPEG header (no decode needed).
-            int jpg_width = 0, jpg_height = 0;
-
-            if( jpeg_get_dimensions( (const unsigned char*)preview.buffer, preview.size, &jpg_width, &jpg_height ) == 0 )
-            {
-                fprintf( stderr, "Warning: could not read preview dimensions from `%s'; preview may be malformed.\n", jpg_preview_file_path );
-            }
-
-            params.preview_image.jpg_preview    = preview;
-            params.preview_image.preview_width  = jpg_width;
-            params.preview_image.preview_height = jpg_height;
+            // The SDK reads the preview dimensions from the JPEG header itself when embedding it,
+            // so the app only needs to hand over the compressed JPEG bytes.
+            params.preview_image.jpg_preview = preview;
         }
     }
     
@@ -516,76 +355,36 @@ int dng_convert_main( const dng_convert_params* convert_params )
     }
 #endif
 #if GPR_READING
-    else if( input_file_type == FILE_TYPE_GPR && ( output_file_type == FILE_TYPE_PPM || output_file_type == FILE_TYPE_JPG ) )
+    else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_PPM )
     {
-        gpr_rgb_buffer rgb_buffer = { NULL, 0, 0, 0 };
-
         GPR_RGB_RESOLUTION rgb_resolution = parse_resolution(rgb_file_resolution);
-        
-        if( output_file_type == FILE_TYPE_JPG && rgb_file_bits == 16 )
-        {
+
+        // PPM has no metadata channel, so orientation cannot be recorded; the pixels are
+        // written in sensor orientation. Warn when that differs from the display orientation.
+        if( (int)params.tuning_info.orientation != ORIENTATION_NORMAL )
+            fprintf( stderr, "Note: PPM cannot store orientation; output pixels are in sensor "
+                             "orientation (not rotated). Use JPG output to preserve orientation.\n" );
+
+        success = gpr_convert_gpr_to_ppm( &allocator, rgb_resolution, rgb_file_bits, &input_buffer, &output_buffer );
+    }
+    else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_JPG )
+    {
+        GPR_RGB_RESOLUTION rgb_resolution = parse_resolution(rgb_file_resolution);
+
+        if( rgb_file_bits == 16 )
             printf( "Asked to output 16-bits RGB, but that is only possible in PPM format.\n");
-            rgb_file_bits = 8;
-        }
-            
-        success = gpr_convert_gpr_to_rgb( &allocator, rgb_resolution, rgb_file_bits,  &input_buffer, &rgb_buffer );
-        
-        if( output_file_type == FILE_TYPE_PPM )
+
+        // tinyjpeg only supports quality levels 1 (lowest), 2, or 3 (highest)
+        if( jpg_quality < 1 || jpg_quality > 3 )
         {
-            // PPM has no metadata channel, so orientation cannot be recorded; the pixels are
-            // written in sensor orientation. Warn when that differs from the display orientation.
-            if( (int)params.tuning_info.orientation != ORIENTATION_NORMAL )
-                fprintf( stderr, "Note: PPM cannot store orientation; output pixels are in sensor "
-                                 "orientation (not rotated). Use JPG output to preserve orientation.\n" );
-
-#define PPM_HEADER_SIZE 100
-            char header_text[PPM_HEADER_SIZE];
-
-            if( rgb_file_bits == 8 )
-            {
-                // 8 bits
-                sprintf( header_text, "P6\n%ld %ld\n255\n", rgb_buffer.width, rgb_buffer.height );
-            }
-            else
-            {
-                // 16 bits
-                sprintf( header_text, "P6\n%ld %ld\n65535\n", rgb_buffer.width, rgb_buffer.height );
-            }
-            
-            output_buffer.size   = rgb_buffer.size + strlen( header_text );
-            output_buffer.buffer = allocator.Alloc( output_buffer.size );
-            char* buffer_c = (char*)output_buffer.buffer;
-            
-            memcpy( buffer_c, header_text, strlen( header_text ) );
-            memcpy( buffer_c + strlen( header_text ), rgb_buffer.buffer, rgb_buffer.size );
-#undef PPM_HEADER_SIZE
+            fprintf( stderr, "JPG quality %d out of range, clamping to [1,3]\n", jpg_quality );
+            jpg_quality = jpg_quality < 1 ? 1 : 3;
         }
-        else if( output_file_type == FILE_TYPE_JPG )
-        {
-            write_buffer_to_file = false;
-#if GPR_JPEG_AVAILABLE
-            // tinyjpeg only supports quality levels 1 (lowest), 2, or 3 (highest)
-            if( jpg_quality < 1 || jpg_quality > 3 )
-            {
-                fprintf( stderr, "JPG quality %d out of range, clamping to [1,3]\n", jpg_quality );
-                jpg_quality = jpg_quality < 1 ? 1 : 3;
-            }
 
-            // The GPR/DNG store the image as a sensor buffer plus an orientation flag; carry the
-            // same hint into the JPG via an EXIF Orientation tag rather than rotating the pixels.
-            int exif_orientation = adobe_orientation_to_exif( (int)params.tuning_info.orientation );
+        success = gpr_convert_gpr_to_jpg( &allocator, rgb_resolution, jpg_quality, &input_buffer, &output_buffer );
 
-            if( write_jpg_with_exif_orientation( output_file_path, jpg_quality, rgb_buffer.width, rgb_buffer.height, (const unsigned char*)rgb_buffer.buffer, exif_orientation ) == 0 )
-            {
-                fprintf( stderr, "Failed to write JPG file %s\n", output_file_path );
-                success = false;
-            }
-#else
-            printf("JPG writing capability is disabled. You could still write to a PPM file");
-#endif
-        }
-        
-        allocator.Free( rgb_buffer.buffer );
+        if( success == 0 )
+            fprintf( stderr, "Failed to convert GPR to JPG (is JPEG support compiled in?)\n" );
     }
     else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_DNG )
     {
