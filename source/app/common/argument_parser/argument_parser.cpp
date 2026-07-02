@@ -22,6 +22,12 @@
 
 using namespace std;
 
+#if (NEON == 1)
+#define OPTIMIZATIONS "[NEON]"
+#else
+#define OPTIMIZATIONS "[UNOPTIMIZED]"
+#endif
+
 #ifdef __GNUC__
 #define COMPILER  "[GCC %d.%d.%d]", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__
 #elif __INTEL_COMPILER
@@ -85,6 +91,7 @@ int argument_parser::parse(int argc, char *argv [], const char* application_text
             fprintf( stderr, OPERATING_SYSTEM );
             fprintf( stderr, COMPILER );
             fprintf( stderr, NUMBER_OF_BITS );
+            fprintf( stderr, OPTIMIZATIONS );
             fprintf( stderr, "\n" );
         }
         
