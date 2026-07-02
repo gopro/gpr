@@ -1,5 +1,6 @@
 # TODO
 
+- GPR from iphone file look and IQ
 - Doc explaining why vc5 compression is superior than anything else out there
 - NEON code matching
 - Apple ProRAW support
