@@ -1677,20 +1677,27 @@ bool write_dngstream_to_buffer( dng_stream* stream, gpr_buffer* output_buffer, g
     return true;
 }
 
-bool gpr_parse_metadata(const gpr_allocator*        allocator,
-                              gpr_buffer*           inp_dng_buffer,
-                              gpr_parameters*       parameters)
+bool gpr_parameters_parse_dng(const gpr_allocator*  allocator,
+                                    gpr_buffer*     inp_dng_buffer,
+                                    gpr_parameters* parameters)
 {
     dng_memory_stream inp_dng_stream( gDefaultDNGMemoryAllocator );
     inp_dng_stream.Put( inp_dng_buffer->buffer, inp_dng_buffer->size );
     inp_dng_stream.SetReadPosition(0);
-    
+
     if( read_dng( allocator, &inp_dng_stream, NULL, NULL, parameters ) == false )
     {
         return false;
     }
 
     return true;
+}
+
+bool gpr_parse_metadata(const gpr_allocator*        allocator,
+                              gpr_buffer*           inp_dng_buffer,
+                              gpr_parameters*       parameters)
+{
+    return gpr_parameters_parse_dng( allocator, inp_dng_buffer, parameters );
 }
 
 // Shift the start of a raw image by input_skip_rows/cols to adjust its Bayer phase
@@ -2121,7 +2128,7 @@ bool gpr_convert_gpr_to_jpg(const gpr_allocator*        allocator,
     // so the JPG displays the same way up as the source GPR/DNG.
     gpr_parameters_set_defaults( &params );
 
-    if( gpr_parse_metadata( allocator, inp_gpr_buffer, &params ) )
+    if( gpr_parameters_parse_dng( allocator, inp_gpr_buffer, &params ) )
         exif_orientation = gpr_adobe_orientation_to_exif( (int)params.tuning_info.orientation );
 
     ok = gpr_encode_rgb_to_jpg( allocator, (const unsigned char*)rgb_buffer.buffer,

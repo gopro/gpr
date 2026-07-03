@@ -183,7 +183,7 @@ int dng_convert_main( const dng_convert_params* convert_params )
   
     if( metadata_file_path && strcmp(metadata_file_path, "") )
     {
-        if( gpr_parameters_parse( &params, metadata_file_path ) != 0 )
+        if( gpr_parameters_parse_json( &params, metadata_file_path ) != 0 )
             return -1;
 
 
@@ -198,7 +198,7 @@ int dng_convert_main( const dng_convert_params* convert_params )
     }
     else if( input_file_type == FILE_TYPE_GPR || input_file_type == FILE_TYPE_DNG )
     {
-        if( gpr_parse_metadata( &allocator, &input_buffer, &params ) == false )
+        if( gpr_parameters_parse_dng( &allocator, &input_buffer, &params ) == false )
             return -1;
     }
     else

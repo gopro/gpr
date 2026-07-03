@@ -79,7 +79,12 @@
         
         void gpr_parameters_destroy(gpr_parameters* x, gpr_free mem_free);
         
-        //!< Parse Metadata of DNG File and return in gpr_parameters struct
+        //!< Fill gpr_parameters from the metadata (EXIF, profile, tuning) of a DNG/GPR file
+        bool gpr_parameters_parse_dng(const gpr_allocator*      allocator,
+                                            gpr_buffer*         inp_dng_buffer,
+                                            gpr_parameters*     parameters);
+
+        //!< Deprecated alias of gpr_parameters_parse_dng, kept for source compatibility
         bool gpr_parse_metadata(const gpr_allocator*            allocator,
                                       gpr_buffer*               inp_dng_buffer,
                                       gpr_parameters*   parameters);

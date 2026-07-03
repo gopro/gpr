@@ -124,11 +124,11 @@ int dng_dump(const char*  input_file_path)
         return -1;
     }
     
-    int success = gpr_parse_metadata( &allocator, &input_buffer, &params );
+    int success = gpr_parameters_parse_dng( &allocator, &input_buffer, &params );
 
     if( success )
     {
-        gpr_parameters_print( &params, NULL );
+        gpr_parameters_print_json( &params, NULL );
     }
 
     return success ? 0 : -1;

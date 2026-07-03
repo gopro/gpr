@@ -553,7 +553,7 @@ ostream& operator<<(ostream& output, const gpr_parameters& x)
     return output;
 }
 
-int gpr_parameters_print( const gpr_parameters* parameters, const char* output_file_path )
+int gpr_parameters_print_json( const gpr_parameters* parameters, const char* output_file_path )
 {
     ofstream output;
     ostream* output_ref = &cout;

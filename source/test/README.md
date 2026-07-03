@@ -10,7 +10,7 @@ lossless decode round-trip equality) — not just that a call returned.
 
 For every sample (Hero5/6/7/9 and both Fusion lenses):
 
-- `gpr_parse_metadata` (dimensions, black/white levels, white-balance gains, pixel format)
+- `gpr_parameters_parse_dng` (dimensions, black/white levels, white-balance gains, pixel format)
 - `gpr_to_raw`, `gpr_to_dng`, `gpr_to_vc5`, `gpr_to_gpr`
 - `gpr_to_rgb` at every resolution (2:1, 4:1, 8:1, 16:1) in 8- and 16-bit,
   plus JPEG encoding of the 8-bit RGB (SOI/EOI marker check)

@@ -539,7 +539,7 @@ void parse_tuning_info( cJSON* pTuningInfo, gpr_tuning_info& tuning_info )
     }
 }
 
-int gpr_parameters_parse( gpr_parameters* parameters, const char* input_file_path )
+int gpr_parameters_parse_json( gpr_parameters* parameters, const char* input_file_path )
 {
     gpr_buffer buffer;
     

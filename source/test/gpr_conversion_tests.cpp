@@ -200,8 +200,8 @@ static bool parse_dims( const gpr_buffer& in, unsigned int& w, unsigned int& h )
     gpr_parameters params;
     gpr_parameters_set_defaults( &params );
 
-    gpr_buffer tmp = in; // gpr_parse_metadata takes a non-const pointer; share memory
-    bool ok = gpr_parse_metadata( &g_alloc, &tmp, &params );
+    gpr_buffer tmp = in; // gpr_parameters_parse_dng takes a non-const pointer; share memory
+    bool ok = gpr_parameters_parse_dng( &g_alloc, &tmp, &params );
 
     if( ok ) { w = params.input_width; h = params.input_height; }
 
@@ -350,16 +350,16 @@ static void run_sample( const std::string& sample_path )
     gpr_parameters_set_defaults( &g_params );
     {
         gpr_buffer in = g_gpr.b;
-        if( !gpr_parse_metadata( &g_alloc, &in, &g_params ) )
+        if( !gpr_parameters_parse_dng( &g_alloc, &in, &g_params ) )
         {
-            run_case( name + ": parse metadata", []{ check( false, "gpr_parse_metadata failed" ); } );
+            run_case( name + ": parse metadata", []{ check( false, "gpr_parameters_parse_dng failed" ); } );
             return;
         }
     }
     g_W = g_params.input_width;
     g_H = g_params.input_height;
 
-    run_case( name + ": gpr_parse_metadata", []{
+    run_case( name + ": gpr_parameters_parse_dng", []{
         check( g_W > 0 && g_H > 0, "input dimensions positive" );
         check( g_params.tuning_info.dgain_saturation_level.level_red >
                g_params.tuning_info.static_black_level.r_black, "white level > black level" );
