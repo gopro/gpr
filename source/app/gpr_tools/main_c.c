@@ -207,9 +207,11 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         if( gpr_parameters_parse_json( &params, metadata_file_path ) != 0 )
             return -1;
-        
-        if( parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format) == 0 ) {
-            fprintf( stderr, "Invalid pixel format %s ", input_pixel_format);
+
+        // -x is optional here: when absent, keep the pixel format from the metadata file.
+        if( strcmp(input_pixel_format, "") != 0 &&
+            parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format) == 0 ) {
+            fprintf( stderr, "Invalid pixel format %s\n", input_pixel_format);
             return -1;
         }
     }
@@ -217,9 +219,11 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         if( gpr_parameters_parse_dng( &allocator, &input_buffer, &params ) == false )
             return -1;
-        
-        if( parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format) == 0 ) {
-            fprintf( stderr, "Invalid pixel format %s ", input_pixel_format);
+
+        // -x is optional here: when absent, keep the pixel format read from the DNG/GPR.
+        if( strcmp(input_pixel_format, "") != 0 &&
+            parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format) == 0 ) {
+            fprintf( stderr, "Invalid pixel format %s\n", input_pixel_format);
             return -1;
         }
     }
@@ -229,7 +233,10 @@ int dng_convert_main( const dng_convert_params* convert_params )
         if( strcmp(input_pixel_format, "") == 0 )
             input_pixel_format = "rggb14";
 
-        parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format);
+        if( parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format) == 0 ) {
+            fprintf( stderr, "Invalid pixel format %s\n", input_pixel_format);
+            return -1;
+        }
 
         if( params.input_pitch <= 0 )
         {
