@@ -134,8 +134,6 @@ int dng_convert_main( const dng_convert_params* convert_params )
     // Unpack into local working copies. Several of these are mutated below, so we
     // deliberately keep the caller's dng_convert_params untouched.
     const char*  input_file_path        = convert_params->input_file_path;
-    unsigned int input_width            = convert_params->input_width;
-    unsigned int input_height           = convert_params->input_height;
     size_t       input_pitch            = convert_params->input_pitch;
     size_t       input_skip_rows        = convert_params->input_skip_rows;
     size_t       input_skip_cols        = convert_params->input_skip_cols;
@@ -172,6 +170,9 @@ int dng_convert_main( const dng_convert_params* convert_params )
     allocator.Free = free;
     
     gpr_parameters params;
+    params.input_width  = convert_params->input_width;
+    params.input_height = convert_params->input_height;
+
     gpr_parameters_set_defaults(&params);
     
     gpr_buffer input_buffer  = { NULL, 0 };
@@ -185,16 +186,6 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         if( gpr_parameters_parse_json( &params, metadata_file_path ) != 0 )
             return -1;
-
-
-        // Explicit dimensions on the command line override those from the metadata file.
-        // Relevant for RAW input, where -w/-h/-p define how the raw bytes are interpreted.
-        if( input_file_type == FILE_TYPE_RAW )
-        {
-            if( input_width  != 0 ) params.input_width  = input_width;
-            if( input_height != 0 ) params.input_height = input_height;
-            if( input_pitch  != 0 ) params.input_pitch  = input_pitch;
-        }
     }
     else if( input_file_type == FILE_TYPE_GPR || input_file_type == FILE_TYPE_DNG )
     {
@@ -203,11 +194,6 @@ int dng_convert_main( const dng_convert_params* convert_params )
     }
     else
     {
-        // 0 means "not specified on the command line"; fall back to legacy defaults.
-        params.input_width  = ( input_width  != 0 ) ? input_width  : 4000;
-        params.input_height = ( input_height != 0 ) ? input_height : 3000;
-        params.input_pitch  = ( input_pitch  != 0 ) ? input_pitch  : params.input_width * 2;
-
         // Default RAW pixel format when -x is not specified.
         if( strcmp(input_pixel_format, "") == 0 )
             input_pixel_format = "rggb14";
@@ -219,44 +205,49 @@ int dng_convert_main( const dng_convert_params* convert_params )
         else if( output_file_type == FILE_TYPE_DNG )
             saturation_level = (1 << 12) - 1;
         
+        unsigned int input_pitch = 0;
         if( strcmp(input_pixel_format, "rggb12") == 0 )
         {
             if( input_pitch == -1 )
-                input_pitch = input_width * 2;
+                input_pitch = params.input_width * 2;
         }
         if( strcmp(input_pixel_format, "rggb12p") == 0 )
         {
             if( input_pitch == -1 )
-                input_pitch = (input_width * 3 / 4) * 2;
+                input_pitch = (params.input_width * 3 / 4) * 2;
         }
         else if( strcmp(input_pixel_format, "rggb14") == 0 )
         {
             saturation_level = (1 << 14) - 1;
 
             if( input_pitch == -1 )
-                input_pitch = input_width * 2;
+                input_pitch = params.input_width * 2;
         }
         else if( strcmp(input_pixel_format, "gbrg12") == 0 )
         {
             if( input_pitch == -1 )
-                input_pitch = input_width * 2;
+                input_pitch = params.input_width * 2;
         }
         else if( strcmp(input_pixel_format, "gbrg12p") == 0 )
         {
             if( input_pitch == -1 )
-                input_pitch = (input_width * 3 / 4) * 2;
+                input_pitch = (params.input_width * 3 / 4) * 2;
         }
         else if( strcmp(input_pixel_format, "bggr12") == 0 )
         {
             if( input_pitch == -1 )
-                input_pitch = input_width * 2;
+                input_pitch = params.input_width * 2;
         }
         else if( strcmp(input_pixel_format, "bggr14") == 0 )
         {
             saturation_level = (1 << 14) - 1;
 
             if( input_pitch == -1 )
-                input_pitch = input_width * 2;
+                input_pitch = params.input_width * 2;
+        }
+        
+        if( input_pitch != 0 && params.input_pitch == 0 ) {
+            params.input_pitch = input_pitch;
         }
 
         params.tuning_info.dgain_saturation_level.level_red         = saturation_level;
@@ -389,20 +380,6 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         write_to_file( &output_buffer, output_file_path );
     }
-    
-    if( input_file_type == FILE_TYPE_RAW )
-    {
-        if( input_skip_rows > 0 )
-        {
-            input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_rows * input_pitch);
-        }
-
-        if( input_skip_cols > 0 )
-        {
-            input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_cols * sizeof(uint16_t));
-        }
-    }
-    
     
     if( preview.buffer )
     {
