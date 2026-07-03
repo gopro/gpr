@@ -283,24 +283,12 @@ int dng_convert_main( const dng_convert_params* convert_params )
 
     gpr_buffer output_buffer = { NULL, 0 };
 
-    // This only makes sense for FILE_TYPE_RAW input, where input_buffer is a headerless pixel dump; for DNG/GPR input,
-    //  input_buffer is the whole file (TIFF header + IFDs + pixel data), and shifting it corrupts the container before it can even be parsed.
-    if( input_file_type == FILE_TYPE_RAW )
-    {
-        // input_skip_rows/cols shift the start of the raw pixel buffer to adjust the Bayer phase
-        // (e.g. BGGR -> GBRG).
-        if( input_skip_rows > 0 )
-        {
-            input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_rows * input_pitch);
-        }
-
-        // Skipping columns shifts the horizontal Bayer phase (e.g. BGGR -> GBRG).
-        // Each pixel sample is 16 bits, so advance by 2 bytes per column.
-        if( input_skip_cols > 0 )
-        {
-            input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_cols * sizeof(uint16_t));
-        }
-    }
+    // input_skip_rows/cols shift the start of the raw image to adjust its Bayer phase
+    // (e.g. BGGR -> GBRG). The shift is applied inside the SDK, right before encoding:
+    // for RAW input on the loaded pixel buffer, for DNG input on the decoded raw image
+    // (it cannot happen here for DNG, where input_buffer is the whole TIFF container).
+    params.input_skip_rows = input_skip_rows;
+    params.input_skip_cols = input_skip_cols;
 
     gpr_buffer preview = { NULL, 0 };
 

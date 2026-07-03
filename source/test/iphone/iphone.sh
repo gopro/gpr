@@ -46,10 +46,10 @@ for SOURCE in "${SOURCES[@]}"; do
     echo "== $NAME ($SOURCE) =="
 
     # Direct DNG -> GPR, for quick comparison against the RAW round-trip below.
-    "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/GPR_FROM_DNG.GPR"
+    "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/GPR_FROM_DNG.GPR" --input_skip_cols=1 --input_pixel_format=gbrg12
 
     # DNG -> GPR with external preview
-    "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/GPR_FROM_DNG_PREV.GPR" --preview_file_path=../lena.jpg
+    "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/GPR_FROM_DNG_PREV.GPR" --preview_file_path=../lena.jpg --input_skip_cols=1 --input_pixel_format=gbrg12
 
     # DNG -> RAW (also dumps metadata, needed to re-interpret the raw bytes below)
     "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/RAW_FROM_DNG.RAW" -d > "$OUT_DIR/$NAME.JSON"

@@ -49,6 +49,12 @@
             
             unsigned int        input_pitch;                   /* Pitch of input source in pixels (only applies to raw input) */
 
+            unsigned int        input_skip_rows;               /* Rows to skip at the top of the raw image before encoding,
+                                                                  to shift the vertical Bayer phase (e.g. BGGR -> GBRG) */
+
+            unsigned int        input_skip_cols;               /* Columns to skip at the left of the raw image before encoding,
+                                                                  to shift the horizontal Bayer phase (e.g. BGGR -> GBRG) */
+
             bool                compute_md5sum;
             
             gpr_buffer          gpmf_payload;   /* GPMF payload of image file */

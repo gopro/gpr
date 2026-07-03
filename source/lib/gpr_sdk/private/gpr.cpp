@@ -1693,6 +1693,28 @@ bool gpr_parse_metadata(const gpr_allocator*        allocator,
     return true;
 }
 
+// Shift the start of a raw image by input_skip_rows/cols to adjust its Bayer phase
+// (e.g. BGGR -> GBRG). The shift is pure pointer arithmetic: when a shift is needed,
+// shifted_view is filled as a non-owning alias into raw_buffer (set() leaves
+// free_in_destructor false) and returned, so raw_buffer's destructor still frees the
+// original, unshifted pointer. The encoder then reads the last skipped rows/columns
+// from just past the image end, as the historical pointer shift for RAW input did;
+// that garbage only ever lands in the frame's outermost right/bottom edge.
+static const gpr_buffer_auto* adjust_bayer_phase( const gpr_parameters* parameters,
+                                                  const gpr_buffer_auto* raw_buffer,
+                                                        gpr_buffer_auto* shifted_view )
+{
+    const size_t phase_offset = (size_t)parameters->input_skip_rows * parameters->input_pitch
+                              + (size_t)parameters->input_skip_cols * sizeof(uint16_t);
+
+    if( phase_offset == 0 || phase_offset >= raw_buffer->get_size() )
+        return raw_buffer;
+
+    shifted_view->set( (char*)raw_buffer->get_buffer() + phase_offset, raw_buffer->get_size() - phase_offset );
+
+    return shifted_view;
+}
+
 bool gpr_convert_raw_to_dng(const gpr_allocator*    allocator,
                             const gpr_parameters*   parameters,
                                   gpr_buffer*       inp_raw_buffer,
@@ -1702,10 +1724,12 @@ bool gpr_convert_raw_to_dng(const gpr_allocator*    allocator,
     
     gpr_buffer_auto raw_buffer(allocator->Alloc, allocator->Free);
     raw_buffer.set( (char*)inp_raw_buffer->buffer, inp_raw_buffer->size );
-    
+
+    gpr_buffer_auto shifted_view(allocator->Alloc, allocator->Free);
+
     dng_memory_stream out_dng_stream( gDefaultDNGMemoryAllocator );
-    
-    write_dng( allocator, &out_dng_stream, &raw_buffer, false, NULL, parameters );
+
+    write_dng( allocator, &out_dng_stream, adjust_bayer_phase( parameters, &raw_buffer, &shifted_view ), false, NULL, parameters );
     
     write_dngstream_to_buffer( &out_dng_stream, out_dng_buffer, allocator->Alloc, allocator->Free );
     
@@ -1759,10 +1783,12 @@ bool gpr_convert_dng_to_dng(const gpr_allocator*    allocator,
     {
         assert(0); return false;
     }
-    
+
+    gpr_buffer_auto shifted_view(allocator->Alloc, allocator->Free);
+
     dng_memory_stream out_dng_stream( gDefaultDNGMemoryAllocator );
-    
-    write_dng( allocator, &out_dng_stream, &raw_buffer, false, NULL, parameters );
+
+    write_dng( allocator, &out_dng_stream, adjust_bayer_phase( parameters, &raw_buffer, &shifted_view ), false, NULL, parameters );
     
     write_dngstream_to_buffer( &out_dng_stream, out_dng_buffer, allocator->Alloc, allocator->Free );
     
@@ -1833,12 +1859,14 @@ bool gpr_convert_raw_to_gpr(const gpr_allocator*    allocator,
     TIMESTAMP("[BEG]", 1)
     
     gpr_buffer_auto raw_buffer(allocator->Alloc, allocator->Free);
-    
+
     raw_buffer.set(inp_raw_buffer->buffer, inp_raw_buffer->size);
-    
+
+    gpr_buffer_auto shifted_view(allocator->Alloc, allocator->Free);
+
     dng_memory_stream out_gpr_stream( gDefaultDNGMemoryAllocator );
-    
-    write_dng( allocator, &out_gpr_stream, &raw_buffer, true, NULL, parameters );
+
+    write_dng( allocator, &out_gpr_stream, adjust_bayer_phase( parameters, &raw_buffer, &shifted_view ), true, NULL, parameters );
 
     write_dngstream_to_buffer( &out_gpr_stream, out_gpr_buffer, allocator->Alloc, allocator->Free );
 
@@ -1864,10 +1892,12 @@ bool gpr_convert_dng_to_gpr(const gpr_allocator*    allocator,
     {
         assert(0); return false;
     }
-    
+
+    gpr_buffer_auto shifted_view(allocator->Alloc, allocator->Free);
+
     dng_memory_stream out_gpr_stream( gDefaultDNGMemoryAllocator );
-    
-    write_dng( allocator, &out_gpr_stream, &raw_buffer, true, NULL, parameters );
+
+    write_dng( allocator, &out_gpr_stream, adjust_bayer_phase( parameters, &raw_buffer, &shifted_view ), true, NULL, parameters );
     
     write_dngstream_to_buffer( &out_gpr_stream, out_gpr_buffer, allocator->Alloc, allocator->Free );
     
