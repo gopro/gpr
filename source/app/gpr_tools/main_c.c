@@ -186,15 +186,6 @@ int dng_convert_main( const dng_convert_params* convert_params )
         if( gpr_parameters_parse( &params, metadata_file_path ) != 0 )
             return -1;
 
-        // An explicit -x overrides the Bayer pattern carried in the metadata file.
-        // This matters for RAW input, where the metadata may have been dumped from a
-        // file whose detected pixel_format does not match the raw's actual layout.
-        if( input_file_type == FILE_TYPE_RAW && strcmp(input_pixel_format, "") != 0 )
-        {
-            GPR_PIXEL_FORMAT pf;
-            if( parse_input_pixel_format(input_pixel_format, &pf) )
-                params.tuning_info.pixel_format = pf;
-        }
 
         // Explicit dimensions on the command line override those from the metadata file.
         // Relevant for RAW input, where -w/-h/-p define how the raw bytes are interpreted.
@@ -230,22 +221,16 @@ int dng_convert_main( const dng_convert_params* convert_params )
         
         if( strcmp(input_pixel_format, "rggb12") == 0 )
         {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_RGGB_12;
-            
             if( input_pitch == -1 )
                 input_pitch = input_width * 2;
         }
         if( strcmp(input_pixel_format, "rggb12p") == 0 )
         {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_RGGB_12P;
-            
             if( input_pitch == -1 )
                 input_pitch = (input_width * 3 / 4) * 2;
         }
         else if( strcmp(input_pixel_format, "rggb14") == 0 )
         {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_RGGB_14;
-            
             saturation_level = (1 << 14) - 1;
 
             if( input_pitch == -1 )
@@ -253,29 +238,21 @@ int dng_convert_main( const dng_convert_params* convert_params )
         }
         else if( strcmp(input_pixel_format, "gbrg12") == 0 )
         {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_GBRG_12;
-            
             if( input_pitch == -1 )
                 input_pitch = input_width * 2;
         }
         else if( strcmp(input_pixel_format, "gbrg12p") == 0 )
         {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_GBRG_12P;
-
             if( input_pitch == -1 )
                 input_pitch = (input_width * 3 / 4) * 2;
         }
         else if( strcmp(input_pixel_format, "bggr12") == 0 )
         {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_BGGR_12;
-
             if( input_pitch == -1 )
                 input_pitch = input_width * 2;
         }
         else if( strcmp(input_pixel_format, "bggr14") == 0 )
         {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_BGGR_14;
-
             saturation_level = (1 << 14) - 1;
 
             if( input_pitch == -1 )
@@ -288,6 +265,11 @@ int dng_convert_main( const dng_convert_params* convert_params )
         params.tuning_info.dgain_saturation_level.level_blue        = saturation_level;
     }
     
+    // An explicit -x overrides the Bayer pattern carried in the metadata file.
+    // This matters for RAW input, where the metadata may have been dumped from a
+    // file whose detected pixel_format does not match the raw's actual layout.
+    parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format);
+
     if( gpmf_file_path != NULL && strcmp(gpmf_file_path, "") )
     {
         read_from_file( &params.gpmf_payload, gpmf_file_path, allocator.Alloc, allocator.Free );

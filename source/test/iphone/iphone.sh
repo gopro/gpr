@@ -57,7 +57,7 @@ for SOURCE in "${SOURCES[@]}"; do
     # RAW -> GPR (Apple iPhone encodes in BGGR format - when we shift by one
     # column, it becomes GRBG)
     "$GPR_TOOLS" -i "$OUT_DIR/RAW_FROM_DNG.RAW" -o "$OUT_DIR/GPR_FROM_RAW.GPR" \
-        -a "$OUT_DIR/$NAME.JSON"
+        -a "$OUT_DIR/$NAME.JSON" --input_skip_cols=1 --input_pixel_format=gbrg12
 
     # GPR -> DNG
     "$GPR_TOOLS" -i "$OUT_DIR/GPR_FROM_RAW.GPR" -o "$OUT_DIR/DNG_FROM_GPR.DNG"
