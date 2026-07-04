@@ -14,7 +14,25 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-GPR_TOOLS="${GPR_TOOLS:-$SCRIPT_DIR/../../../build/source/app/gpr_tools/Debug/gpr_tools}"
+# Print the command, then run it. Takes the full command as one string so that
+# redirections are part of it and the echoed line matches what actually ran,
+# ready to be copy-pasted when re-running a single step by hand.
+# Terminates the whole script if the command fails, reporting the failed
+# command and its exit status.
+ExecuteCommand()
+{
+    echo "\$ $1"
+
+    local status=0
+    eval "$1" || status=$?
+
+    if [ "$status" -ne 0 ]; then
+        echo "error: command failed with exit status $status: $1" >&2
+        exit "$status"
+    fi
+}
+
+GPR_TOOLS="${GPR_TOOLS:-$SCRIPT_DIR/../../../build/source/app/gpr_tools/Release/gpr_tools}"
 if [ ! -x "$GPR_TOOLS" ]; then
     GPR_TOOLS="$(command -v gpr_tools || true)"
 fi
@@ -46,35 +64,30 @@ for SOURCE in "${SOURCES[@]}"; do
     echo "== $NAME ($SOURCE) =="
 
     # Direct DNG -> GPR, for quick comparison against the RAW round-trip below.
-    "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/GPR_FROM_DNG.GPR" --input_skip_cols=1 --input_pixel_format=gbrg12
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/GPR_FROM_DNG.GPR\" --input_skip_cols=1 --input_pixel_format=gbrg12"
 
     # DNG -> GPR with external preview
-    "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/GPR_FROM_DNG_PREV.GPR" --preview_file_path=../lena.jpg --input_skip_cols=1 --input_pixel_format=gbrg12
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/GPR_FROM_DNG_PREV.GPR\" --preview_file_path=../lena.jpg --input_skip_cols=1 --input_pixel_format=gbrg12"
 
     # DNG -> RAW (also dumps metadata, needed to re-interpret the raw bytes below)
-    "$GPR_TOOLS" -i "$SOURCE" -o "$OUT_DIR/RAW_FROM_DNG.RAW" -d > "$OUT_DIR/$NAME.JSON"
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/RAW_FROM_DNG.RAW\" -d > \"$OUT_DIR/$NAME.JSON\""
 
     # RAW -> GPR (Apple iPhone encodes in BGGR format - when we shift by one
     # column, it becomes GRBG)
-    "$GPR_TOOLS" -i "$OUT_DIR/RAW_FROM_DNG.RAW" -o "$OUT_DIR/GPR_FROM_RAW.GPR" \
-        -a "$OUT_DIR/$NAME.JSON" --input_skip_cols=1 --input_pixel_format=gbrg12
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$OUT_DIR/RAW_FROM_DNG.RAW\" -o \"$OUT_DIR/GPR_FROM_RAW.GPR\" -a \"$OUT_DIR/$NAME.JSON\" --input_skip_cols=1 --input_pixel_format=gbrg12"
 
     # GPR -> DNG
-    "$GPR_TOOLS" -i "$OUT_DIR/GPR_FROM_RAW.GPR" -o "$OUT_DIR/DNG_FROM_GPR.DNG"
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$OUT_DIR/GPR_FROM_RAW.GPR\" -o \"$OUT_DIR/DNG_FROM_GPR.DNG\""
 
     # GPR -> PPM
-    "$GPR_TOOLS" -i "$OUT_DIR/GPR_FROM_RAW.GPR" -o "$OUT_DIR/PPM_FROM_GPR-8bits.PPM" \
-        --output_ppm_bits=8 --rgb_resolution=2:1
-    "$GPR_TOOLS" -i "$OUT_DIR/GPR_FROM_RAW.GPR" -o "$OUT_DIR/PPM_FROM_GPR-16bits.PPM" \
-        --output_ppm_bits=16 --rgb_resolution=2:1
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$OUT_DIR/GPR_FROM_RAW.GPR\" -o \"$OUT_DIR/PPM_FROM_GPR-8bits.PPM\" --output_ppm_bits=8 --rgb_resolution=2:1"
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$OUT_DIR/GPR_FROM_RAW.GPR\" -o \"$OUT_DIR/PPM_FROM_GPR-16bits.PPM\" --output_ppm_bits=16 --rgb_resolution=2:1"
 
     # GPR -> JPG
-    "$GPR_TOOLS" -i "$OUT_DIR/GPR_FROM_RAW.GPR" -o "$OUT_DIR/JPG_FROM_GPR.JPG" \
-        --rgb_resolution=2:1
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$OUT_DIR/GPR_FROM_RAW.GPR\" -o \"$OUT_DIR/JPG_FROM_GPR.JPG\" --rgb_resolution=2:1"
 
     # RAW -> DNG
-    "$GPR_TOOLS" -i "$OUT_DIR/RAW_FROM_DNG.RAW" -o "$OUT_DIR/DNG_FROM_RAW.DNG" \
-        -a "$OUT_DIR/$NAME.JSON"
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$OUT_DIR/RAW_FROM_DNG.RAW\" -o \"$OUT_DIR/DNG_FROM_RAW.DNG\" -a \"$OUT_DIR/$NAME.JSON\""
 
     echo
 done
