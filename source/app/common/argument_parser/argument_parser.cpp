@@ -122,6 +122,7 @@ int argument_parser::parse(int argc, char *argv [], const char* application_text
         fprintf( stderr, OPERATING_SYSTEM );
         fprintf( stderr, COMPILER );
         fprintf( stderr, NUMBER_OF_BITS );
+        fprintf( stderr, OPTIMIZATIONS );
         fprintf( stderr, "\n" );
     }
     
