@@ -51,7 +51,9 @@ public:
     int     input_skip_cols;
 
     string  output_path;
-    
+
+    string  output_format;
+
     string  gpmf_path;
 
     string  rgb_resolution;
@@ -96,6 +98,9 @@ public:
 
         ("output_path,o",           output_path,          string(""),       "Output file path.\n"
                                                                             "File choices: GPR, DNG, PPM, RAW, JPG")
+        ("output_format,f",         output_format,        string(""),       "Output file format, overrides the format implied by output file extension \n"
+                                                                            "Choices: GPR, DNG. Use to write a GPR encoded file with DNG extension \n"
+                                                                            "(DNG format with GPR extension is not allowed)")
         ("gpmf_path,g",             gpmf_path,            string(""),       "GPMF file path")
 
         ("rgb_resolution",          rgb_resolution,       string(""),       "Output RGB resolution. Only applicable when output format is PPM or JPG \n"
@@ -199,6 +204,7 @@ int main(int argc, char *argv [])
         convert_params.input_skip_cols         = args.input_skip_cols;
         convert_params.input_pixel_format      = args.input_pixel_format.c_str();
         convert_params.output_file_path        = args.output_path.c_str();
+        convert_params.output_format           = args.output_format.c_str();
         convert_params.metadata_file_path      = args.apply_metadata.c_str();
         convert_params.gpmf_file_path          = args.gpmf_path.c_str();
         convert_params.rgb_file_resolution     = args.rgb_resolution.c_str();

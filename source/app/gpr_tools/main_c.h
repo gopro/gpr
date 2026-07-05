@@ -37,6 +37,7 @@ extern "C" {
         const char*     input_pixel_format;
 
         const char*     output_file_path;
+        const char*     output_format;           /* Optional override of the format implied by the output file extension (GPR or DNG) */
         const char*     metadata_file_path;
         const char*     gpmf_file_path;
 

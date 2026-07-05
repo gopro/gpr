@@ -160,6 +160,7 @@ int dng_convert_main( const dng_convert_params* convert_params )
     size_t       input_skip_cols        = convert_params->input_skip_cols;
     const char*  input_pixel_format     = convert_params->input_pixel_format;
     const char*  output_file_path       = convert_params->output_file_path;
+    const char*  output_format          = convert_params->output_format;
     const char*  metadata_file_path     = convert_params->metadata_file_path;
     const char*  gpmf_file_path         = convert_params->gpmf_file_path;
     const char*  rgb_file_resolution    = convert_params->rgb_file_resolution;
@@ -184,6 +185,32 @@ int dng_convert_main( const dng_convert_params* convert_params )
     {
         printf( "Unsupported output file type" );
         return -1;
+    }
+
+    if( output_format != NULL && strcmp(output_format, "") != 0 )
+    {
+        FILE_TYPE forced_output_type;
+
+        if( stricmp(output_format, "gpr") == 0 )
+            forced_output_type = FILE_TYPE_GPR;
+        else if( stricmp(output_format, "dng") == 0 )
+            forced_output_type = FILE_TYPE_DNG;
+        else
+        {
+            fprintf( stderr, "Invalid output_format `%s'; valid choices: GPR, DNG\n", output_format );
+            return -1;
+        }
+
+        // A GPR file is a valid DNG container, so GPR encoded data may carry a .DNG
+        // extension (Apple apps then render its preview), but not the other way around.
+        if( forced_output_type == FILE_TYPE_DNG && output_file_type == FILE_TYPE_GPR )
+        {
+            fprintf( stderr, "output_format DNG is not allowed with a .GPR output file; "
+                             "a DNG encoded file must not carry the GPR extension\n" );
+            return -1;
+        }
+
+        output_file_type = forced_output_type;
     }
 
     gpr_allocator allocator;
