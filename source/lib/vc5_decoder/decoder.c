@@ -2001,28 +2001,36 @@ CODEC_ERROR DecodeBandRuns(BITSTREAM *stream, CODEBOOK *codebook, PIXEL *data,
     int index = 0;
     //BITWORD special;
     RUN run = RUN_INITIALIZER;
-    
+    VLC_CURSOR cursor;
+
     // Convert the pitch to units of pixels
     pitch /= sizeof(PIXEL);
-    
+
     // Check that the band dimensions are reasonable
     assert(width <= pitch);
-    
+
     // Compute the number of pixels encoded into the band
     data_count = height * width;
     row_padding = pitch - width;
-    
+
+    // A band holds hundreds of thousands of codewords, so decode them through a cursor that
+    // keeps the bitstream state local across the whole band (see VLC_CURSOR in vlc.h). When the
+    // byte stream cannot be decoded by the cursor, fall back to the per-codeword accessors.
+    VlcCursorInit(&cursor, stream, codebook);
+
     while (data_count > 0)
     {
         // Get the next run length and value
-        error = GetRun(stream, codebook, &run);
+        error = cursor.usable ? VlcCursorGetRun(&cursor, codebook, &run)
+                              : GetRun(stream, codebook, &run);
         if (error != CODEC_ERROR_OKAY) {
+            VlcCursorFlush(&cursor);
             return error;
         }
-        
+
         // Check that the run does not extend past the end of the band
         assert(run.count <= data_count);
-        
+
         // Copy the value into the specified number of pixels in the band
         while (run.count > 0)
         {
@@ -2037,30 +2045,34 @@ CODEC_ERROR DecodeBandRuns(BITSTREAM *stream, CODEBOOK *codebook, PIXEL *data,
                         data[index++] = 0;
                     }
                 }
-                
+
                 // Advance to the next row
                 row++;
                 column = 0;
             }
-            
+
             data[index++] = (PIXEL)run.value;
             column++;
             run.count--;
             data_count--;
         }
     }
-    
+
     // The last run should have ended at the end of the band
     assert(data_count == 0 && run.count == 0);
-    
+
     // Check for the special codeword that marks the end of the highpass band
-    error = GetRlv(stream, codebook, &run);
+    error = cursor.usable ? VlcCursorGetRlv(&cursor, codebook, &run)
+                          : GetRlv(stream, codebook, &run);
     if (error == CODEC_ERROR_OKAY) {
         if (! (run.count == 0 || run.value == SPECIAL_MARKER_BAND_END)) {
             error = CODEC_ERROR_BAND_END_MARKER;
         }
     }
-    
+
+    // Hand the bitstream state back so the band trailer parses through the regular accessors
+    VlcCursorFlush(&cursor);
+
     return error;
 }
 

@@ -89,12 +89,38 @@ typedef struct _run {
 //! Initializer for the run length data structure
 #define RUN_INITIALIZER		{0, 0}
 
+/*!
+	@brief Decode cursor holding the bitstream state across the codewords of a band
+
+	Decoding a highpass band reads hundreds of thousands of codewords, and going through the
+	BITSTREAM accessors for each one (refilling a 32-bit buffer word by word, re-validating its
+	invariants on every read) dominates the decode time. The cursor snapshots the bitstream into
+	a local 64-bit bit cache over the underlying memory buffer, decodes codewords against a
+	lookup table built from the codebook, and writes the state back into the BITSTREAM once, when
+	the band is finished (VlcCursorFlush). Only usable when the byte stream is a memory buffer;
+	otherwise the caller must fall back to GetRun/GetRlv, which work on any stream.
+*/
+typedef struct _vlc_cursor {
+	BITSTREAM *stream;		//!< Bitstream this cursor was opened on
+	const uint8_t *base;	//!< Start of the memory buffer holding the byte stream
+	size_t byte_size;		//!< Length of the byte stream (in bytes)
+	size_t byte_count;		//!< Read position in the byte stream (whole words, like GetBuffer)
+	uint64_t cache;			//!< Unread bits, left justified
+	int bits;				//!< Number of valid bits in the cache
+	int usable;				//!< Zero when the byte stream cannot be decoded by the cursor
+} VLC_CURSOR;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
     CODEC_ERROR GetRlv(BITSTREAM *stream, CODEBOOK *codebook, RUN *run);
     CODEC_ERROR GetRun(BITSTREAM *stream, CODEBOOK *codebook, RUN *run);
+
+    void VlcCursorInit(VLC_CURSOR *cursor, BITSTREAM *stream, CODEBOOK *codebook);
+    CODEC_ERROR VlcCursorGetRlv(VLC_CURSOR *cursor, CODEBOOK *codebook, RUN *run);
+    CODEC_ERROR VlcCursorGetRun(VLC_CURSOR *cursor, CODEBOOK *codebook, RUN *run);
+    void VlcCursorFlush(VLC_CURSOR *cursor);
 
 #ifdef __cplusplus
 }
