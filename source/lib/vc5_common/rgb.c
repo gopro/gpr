@@ -73,16 +73,49 @@ static float linear16_to_srgb_unit( int linear )
     return x;
 }
 
+// Tone-curve lookup tables over the full 16-bit linear domain. linear16_to_srgb_unit costs
+// four powf calls, and WaveletToRGB evaluates it three times per output pixel -- by far the
+// hottest spot of a GPR->RGB decode. Precomputing all 65536 results (one pass, ~1 ms) turns the
+// per-pixel work into an array index. Filled from linear16_to_srgb_unit with the same rounding
+// as the direct computation, so the output stays bit-identical.
+#define SRGB_LUT_SIZE 65536
+
+static uint8_t  srgb8_lut [SRGB_LUT_SIZE];
+static uint16_t srgb16_lut[SRGB_LUT_SIZE];
+static int      srgb_luts_ready = 0;
+
+// Called once per WaveletToRGB invocation (the decode path is single-threaded; a concurrent
+// re-init would be harmless anyway since every fill writes the same values).
+static void init_srgb_luts( void )
+{
+    int i;
+
+    if( srgb_luts_ready )
+        return;
+
+    for( i = 0; i < SRGB_LUT_SIZE; i++ )
+    {
+        float unit = linear16_to_srgb_unit( i );
+
+        srgb8_lut[i]  = (uint8_t) (int)( unit * 255.0f   + 0.5f );
+        srgb16_lut[i] = (uint16_t)(int)( unit * 65535.0f + 0.5f );
+    }
+
+    srgb_luts_ready = 1;
+}
+
+// White-balance gains can push the linear value past 16 bits; clamping the index to the top
+// entry matches the x >= 1 branch of linear16_to_srgb_unit.
 static int linear16_to_srgb8( int linear )
 {
-    int v = (int)( linear16_to_srgb_unit( linear ) * 255.0f + 0.5f );
-    return ( v < 0 ) ? 0 : ( ( v > 255 ) ? 255 : v );
+    int idx = ( linear < 0 ) ? 0 : ( ( linear >= SRGB_LUT_SIZE ) ? SRGB_LUT_SIZE - 1 : linear );
+    return srgb8_lut[idx];
 }
 
 static int linear16_to_srgb16( int linear )
 {
-    int v = (int)( linear16_to_srgb_unit( linear ) * 65535.0f + 0.5f );
-    return ( v < 0 ) ? 0 : ( ( v > 65535 ) ? 65535 : v );
+    int idx = ( linear < 0 ) ? 0 : ( ( linear >= SRGB_LUT_SIZE ) ? SRGB_LUT_SIZE - 1 : linear );
+    return srgb16_lut[idx];
 }
 
 // Vibrance boost for punchier colors: push each channel away from the pixel luma (Rec.601
@@ -109,7 +142,9 @@ void WaveletToRGB(gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL* 
                   RGB_IMAGE *dst_image, int input_precision_bits, int output_precision_bits, int black_level, gpr_rgb_gain* rgb_gain)
 {
     TIMESTAMP("[BEG]", 2)
-    
+
+    init_srgb_luts();
+
     assert( dst_image );
     assert( dst_image->buffer == NULL );
     
