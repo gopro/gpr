@@ -88,7 +88,7 @@ public:
         
         ("input_width,w",           input_width,          0,                "Input image width in pixel samples")
         ("input_height,h",          input_height,         0,                "Input image height in pixel samples")
-        ("input_pitch,p",           input_pitch,          0,                "Input image pitch in pixel samples")
+        ("input_pitch,p",           input_pitch,          0,                "Input image pitch in bytes")
         ("input_pixel_format,x",    input_pixel_format,   string(""),       "Input pixel format \n"
                                                                             "Choices: rggb12, rggb12p, [rggb14], gbrg12, gbrg12p, bggr12, bggr14 \n")
         ("input_skip_rows",         input_skip_rows,      0,                "Input image rows to skip (shifts Bayer phase, e.g. BGGR->GRBG)")
