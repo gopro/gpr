@@ -28,6 +28,14 @@
 // faithful linear->sRGB render of a dim scene looks crushed/dark. >1 brightens.
 #define PREVIEW_MIDTONE_LIFT_GAMMA  1.25f
 
+// Contrast S-curve strength, applied to the gamma-encoded value around a mid-gray pivot of 0.5.
+// DNG renderers (Adobe, macOS Preview) apply a contrasty default tone curve on top of the raw
+// data, so without an equivalent curve here the embedded preview looks flat/washed-out next to
+// the rendered DNG. Uses the Schlick bias/gain curve x^c / (x^c + (1-x)^c), which keeps black,
+// mid-gray and white fixed while darkening shadows and brightening highlights. 1.0 = off,
+// larger = more contrast.
+#define PREVIEW_CONTRAST  1.6f
+
 // Vibrance boost for punchier colors, applied in the gamma-encoded (8-bit) domain. Unlike a
 // flat saturation multiplier, vibrance boosts muted colors the most and tapers to no change as
 // a pixel approaches full saturation -- so already-vivid colors (and skin tones) are protected
@@ -51,8 +59,18 @@ static float linear16_to_srgb_unit( int linear )
 
     x = powf( x, 1.0f / PREVIEW_MIDTONE_LIFT_GAMMA );
 
-    return ( x <= 0.0031308f ) ? ( 12.92f * x )
-                               : ( 1.055f * powf( x, 1.0f / 2.4f ) - 0.055f );
+    x = ( x <= 0.0031308f ) ? ( 12.92f * x )
+                            : ( 1.055f * powf( x, 1.0f / 2.4f ) - 0.055f );
+
+    // Contrast S-curve (see PREVIEW_CONTRAST above), applied to the gamma-encoded value so the
+    // pivot sits at perceptual mid-gray.
+    {
+        float xc  = powf( x, PREVIEW_CONTRAST );
+        float ixc = powf( 1.0f - x, PREVIEW_CONTRAST );
+        x = xc / ( xc + ixc );
+    }
+
+    return x;
 }
 
 static int linear16_to_srgb8( int linear )
