@@ -66,8 +66,14 @@ for SOURCE in "${SOURCES[@]}"; do
     # Direct DNG -> GPR, for quick comparison against the RAW round-trip below.
     ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/GPR_FROM_DNG.GPR\" --input_skip_cols=1 --input_pixel_format=gbrg12"
 
+    # Direct DNG -> GPR, for quick comparison against the RAW round-trip below.
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/GPR_FROM_DNG.DNG\" --output_format=gpr --input_skip_cols=1 --input_pixel_format=gbrg12"
+
     # DNG -> GPR with external preview
-    ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/GPR_FROM_DNG_PREV.GPR\" --preview_file_path=../lena.jpg --input_skip_cols=1 --input_pixel_format=gbrg12"
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/GPR_FROM_DNG_WITH_PREVIEW.GPR\" --input_skip_cols=1 --input_pixel_format=gbrg12" --preview_file_path=../lena.jpg 
+
+    # DNG -> GPR with external preview
+    ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/GPR_FROM_DNG_WITH_PREVIEW.DNG\" --output_format=gpr --input_skip_cols=1 --input_pixel_format=gbrg12" --preview_file_path=../lena.jpg 
 
     # DNG -> RAW (also dumps metadata, needed to re-interpret the raw bytes below)
     ExecuteCommand "\"$GPR_TOOLS\" -i \"$SOURCE\" -o \"$OUT_DIR/RAW_FROM_DNG.RAW\" -d > \"$OUT_DIR/$NAME.JSON\""
