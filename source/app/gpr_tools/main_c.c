@@ -389,9 +389,11 @@ int dng_convert_main( const dng_convert_params* convert_params )
 #if GPR_WRITING && GPR_READING
     else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_GPR )
     {
-        // Re-encodes from scratch (rather than copying the input bytes), so this can be used to
-        // add or refresh the embedded preview/thumbnail on a GPR file, e.g. one that was written
-        // without a preview -- see preview_resolution / preview_file_path options.
+        // Rewrites the container around the existing vc5 bitstream with updated metadata. Since
+        // enable_preview defaults to true and no preview JPEG is supplied here, the SDK falls back
+        // to a full re-encode to regenerate the embedded thumbnail -- so this can still be used to
+        // add or refresh the preview on a GPR file, e.g. one that was written without a preview;
+        // see preview_resolution / preview_file_path options.
         success = gpr_convert_gpr_to_gpr( &allocator, &params, &input_buffer, &output_buffer );
     }
 #endif

@@ -394,6 +394,25 @@ static void run_sample( const std::string& sample_path )
         validate_dng_like( gpr2, g_W, g_H, /*vc5=*/true );
     });
 
+    // With no auto-generated preview requested, gpr_to_gpr must repackage the vc5 bitstream
+    // instead of decoding and re-encoding; the output's bitstream is then byte-identical to
+    // the input's.
+    run_case( name + ": gpr_to_gpr (vc5 repackage, no re-encode)", []{
+        gpr_parameters params = g_params;   // shallow copy; g_params owns the buffers
+        params.enable_preview = false;
+
+        Buffer gpr2;
+        check( gpr_convert_gpr_to_gpr( &g_alloc, &params, &g_gpr.b, &gpr2.b ), "conversion returns true" );
+        validate_dng_like( gpr2, g_W, g_H, /*vc5=*/true );
+
+        Buffer vc5_in, vc5_out;
+        check( make_vc5( vc5_in ), "vc5 extract from input" );
+        check( gpr_convert_gpr_to_vc5( &g_alloc, &gpr2.b, &vc5_out.b ), "vc5 extract from output" );
+        check( vc5_in.b.size == vc5_out.b.size &&
+               std::memcmp( vc5_in.b.buffer, vc5_out.b.buffer, vc5_in.b.size ) == 0,
+               "vc5 bitstream byte-identical (repackaged, not re-encoded)" );
+    });
+
     // -------- decode to RGB (every resolution, both bit depths) ----------
     run_case( name + ": gpr_to_rgb (all resolutions/depths)", []{
         const GPR_RGB_RESOLUTION res[] = { GPR_RGB_RESOLUTION_HALF, GPR_RGB_RESOLUTION_QUARTER,

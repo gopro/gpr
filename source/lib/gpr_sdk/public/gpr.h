@@ -75,7 +75,7 @@
         
         void gpr_parameters_set_defaults(gpr_parameters* x);
         
-        void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x);
+        void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x, gpr_malloc mem_alloc);
         
         void gpr_parameters_destroy(gpr_parameters* x, gpr_free mem_free);
         
@@ -144,9 +144,11 @@
 #endif // GPR_WRITING
 
 #if GPR_WRITING && GPR_READING
-        //!< gpr to gpr conversion: fully decodes then re-encodes, so it can add or refresh the
-        //!< embedded preview/thumbnail (parameters->enable_preview / preview_resolution) on a
-        //!< GPR file that was written without one, or with a different preview resolution.
+        //!< gpr to gpr conversion: repackages the input's vc5 bitstream with the caller's
+        //!< metadata, without decoding or re-encoding the image. Falls back to a full decode +
+        //!< re-encode only when an auto-generated preview/thumbnail is requested (enable_preview
+        //!< set without supplying preview_image JPEG bytes), since that thumbnail is produced as
+        //!< a by-product of vc5 encoding.
         bool gpr_convert_gpr_to_gpr(const gpr_allocator*    allocator,
                                     const gpr_parameters*   parameters,
                                           gpr_buffer*       inp_gpr_buffer,
