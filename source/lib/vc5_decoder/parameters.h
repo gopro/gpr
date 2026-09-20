@@ -93,17 +93,13 @@ typedef struct _decoder_parameters
 	METADATA metadata;
 #endif
 
-	//! Flag that controls verbose output
-	bool verbose_flag;
-    
-    GPR_RGB_RESOLUTION  rgb_resolution;
-    
-    int                         rgb_bits;
-    
-    gpr_rgb_gain                rgb_gain;
-    
-    gpr_allocator allocator;
-    
+    //! Allocator
+    gpr_allocator       allocator;
+
+    //! RGB Conversion Params
+    RGB_PARAMETERS      rgb_params;         //!< Resolution and rendering parameters of the RGB output path
+
+
 } DECODER_PARAMETERS;
 
 #ifdef __cplusplus

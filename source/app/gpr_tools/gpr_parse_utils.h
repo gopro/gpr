@@ -25,7 +25,9 @@
 extern "C" {
 #endif
     
-    int gpr_parameters_parse( gpr_parameters* parameters, const char* input_file_path );
+    //!< Fill gpr_parameters from a JSON metadata file (as written by gpr_parameters_print_json).
+    //!< The SDK counterpart gpr_parameters_parse_dng fills the same struct from a DNG/GPR file.
+    int gpr_parameters_parse_json( gpr_parameters* parameters, const char* input_file_path );
 
 #ifdef __cplusplus
 }

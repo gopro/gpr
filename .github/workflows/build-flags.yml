@@ -1,0 +1,63 @@
+name: Build flag matrix
+
+# Builds the SDK in every compile-time flag configuration (baseline, each
+# GPR_* option off on its own, and all off) on x86_64 Linux and arm64 macOS,
+# then runs the conversion test suite against the baseline build of each.
+#
+# The arm64 leg is what exercises the NEON kernels in the encoder: a NEON
+# regression shows up there as a test failure, never as a build failure.
+#
+# Both path lists are duplicated rather than shared through a YAML anchor,
+# which the Actions parser rejects; keep them identical by hand. A flag
+# configuration can only be broken by a source file, a CMakeLists, or the
+# script that drives the passes, so documentation-only commits skip the run.
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '**/*.c'
+      - '**/*.cpp'
+      - '**/*.h'
+      - '**/*.hpp'
+      - '**/CMakeLists.txt'
+      - 'scripts/test_build_flags.sh'
+      - '.github/workflows/build-flags.yml'
+  pull_request:
+    paths:
+      - '**/*.c'
+      - '**/*.cpp'
+      - '**/*.h'
+      - '**/*.hpp'
+      - '**/CMakeLists.txt'
+      - 'scripts/test_build_flags.sh'
+      - '.github/workflows/build-flags.yml'
+
+# On a pull request only the newest push can teach us anything; on master the
+# run gates a commit that is already merged, so it is never cancelled.
+concurrency:
+  group: build-flags-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-flags:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest   # x86_64, scalar paths (GPR_NEON has no effect)
+          - os: macos-latest    # arm64, NEON kernels
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # Baseline, each feature flag off individually, and all off
+      - name: Build all flag configurations
+        run: scripts/test_build_flags.sh
+
+      # The conversion test suite, against the baseline build
+      - name: Run tests
+        run: ctest --test-dir build/flag_checks/baseline --output-on-failure

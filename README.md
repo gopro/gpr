@@ -10,6 +10,21 @@ DNG allows storage of RAW sensor data in three main formats: uncompressed, lossl
 
 The wavelet codec in GPR is not new, but has been a SMPTE® standard under the name  [VC-5](https://kws.smpte.org/higherlogic/ws/public/projects/15/details). VC-5 shares a lot of technical barebones with the [CineForm®](https://gopro.github.io/cineform-sdk/), an open and cross-platform intermediate codec designed for high-resolution video editing.
 
+## About this fork
+
+This repository is a fork of [gopro/gpr](https://github.com/gopro/gpr) that extends the GPR/VC-5 **encoder** and the **DNG writer**, so that raw images from more cameras and phones can be written as GPR files that open correctly in Apple, Adobe and other DNG readers. The decoder is functionally unchanged apart from the additions the encoder round-trips need. What is new:
+
+* **More sensor layouts.** BGGR Bayer mosaics at 12 and 14 bits (`bggr12`, `bggr14`) can be encoded alongside RGGB and GBRG, so a DNG from an Apple iPhone or another BGGR sensor converts to GPR. The raw's `ActiveArea` / `DefaultCrop` tags are honored (the visible crop is what gets encoded), a large sensor black level (iPhone: 528) is subtracted and the range stretched before the VC-5 log curve so the codec's precision lands on the signal, a `NoiseProfile` stored in the raw SubIFD is read, and already-demosaiced DNGs (Apple ProRAW) are rejected with a clear error instead of an assert.
+* **Faithful metadata.** `CalibrationIlluminant1/2`, `BaselineExposure`, `BaselineNoise`, `BaselineSharpness` and per-channel `BlackLevel` repeat patterns are carried through, and `OpcodeList3 WarpRectilinear` round-trips at full fidelity (planes, center, flags, all radial and tangential terms).
+* **Apple ImageIO compatibility.** Apple's RAW pipeline drops a DNG's entire `OpcodeList2` gain map unless the two green CFA planes carry byte-identical gains; the writer now equalizes them, identifying the greens by each opcode's own CFA cell rather than by list position.
+* **Lens-distortion correction on DNG output.** Built-in geometric profiles for HERO5 through HERO13 and MISSION 1 PRO write a synthesized `WarpRectilinear` (`gpr_tools --lens_correction=auto|k0,k1,k2,k3[,cx,cy]`, `--lens_correction_strength`), also exposed as `gpr_parameters_apply_lens_profile` in the SDK.
+* **Previews and thumbnails.** An embedded preview can be generated at 2:1, 4:1, 8:1 or 16:1 (`--preview=<ratio>`) or supplied as a JPEG whose dimensions are read from its header (`--preview=file.jpg`). The preview renders through the same pipeline as the RGB decode (camera color matrix with illuminant interpolation and Bradford adaptation, the ACR3 default tone curve, lens shading from the gain maps), so it matches a decode of the file it is embedded in. Plain DNG output gets a thumbnail in IFD 0, where readers look for it, and `dng_to_dng` carries an existing thumbnail across.
+* **New conversions.** `gpr_convert_gpr_to_gpr` repackages the VC-5 bitstream with new metadata without re-encoding, or re-encodes it on request (`gpr_parameters::reencode`); `gpr_convert_gpr_to_ppm` / `gpr_convert_gpr_to_jpg` (with the EXIF orientation) move into the SDK; `gpr_convert_dng_to_vc5` now actually encodes; `gpr_parameters_parse_dng` / `gpr_parameters_parse_dng_file` fill `gpr_parameters` from a file's metadata.
+* **Selectable encode quality.** `gpr_parameters::quality` (a `GPR_QUALITY_SETTING`) and `gpr_tools --quality` choose the VC-5 quantizer table (`low`, `medium`, `high`, `fs1`, `fsx`, `fs2`, `ultra`, the last of them new), defaulting to the encoder's own Filmscan-X; a GPR input is decoded and re-encoded at the requested level. The encoder's `VC5_ENCODER_QUALITY_SETTING` stays where upstream has it, and the SDK enum mirrors its values under a compile-time check.
+* **Robustness.** VC-5 memory streams refuse to write past their buffer (no more silent heap corruption on large frames), the thumbnail JPEG buffer grows instead of assuming a compression ratio, the Bayer-phase shift no longer reads past the end of the raw buffer, DNG SDK exceptions are caught at the C API and reported as `false`, and the XMP toolkit is built with real locks so several files can be processed concurrently in one process.
+* **Faster writing.** Output goes through a contiguous, growable stream handed to the caller without a final copy, `dng_to_dng` skips its redundant pixel copies (25-35% faster on large DNGs), and `tiny_jpeg` uses a batched bit-writer with 4:2:0 chroma at the two lower quality levels.
+* **Build and test.** The `GPR_READING`, `GPR_WRITING`, `GPR_JPEG_AVAILABLE`, `GPR_TIMING` and `GPR_NEON` switches are CMake options (NEON is enabled automatically on arm64), `scripts/test_build_flags.sh` and the GitHub Actions workflow build every configuration, and `source/test` holds a conversion test suite (`gpr_tools_tests`) that drives every `gpr_convert_*` entry point over the bundled samples.
+
 ## File Types
 
 Following file types are discussed in this document:
@@ -25,6 +40,14 @@ Following file types are discussed in this document:
 * `PPM` - [Portable Pixel Map](http://netpbm.sourceforge.net/doc/ppm.html) is one of the simplest storage formats of uncompressed debayered RGB image. It is very easy to write and analyze programs to process this format, and that is why it is used here.
 
 * `JPG or JPEG` One of the simplest formats for lossy compression of debayered RGB image.
+
+## Conversion Matrix
+
+| Input Format  | RAW | DNG | GPR | PPM | JPG |
+| --------      | --- | --- | --- | --- | --- |
+| RAW           |  N  |  Y  |  Y  |  N  |  N  |
+| DNG           |  Y  |  Y  |  Y  |  N  |  N  |
+| GPR           |  Y  |  Y  |  Y  |  Y  |  Y  |
 
 # Included Within This Repository
 
@@ -87,6 +110,13 @@ $ make
 $ ./source/app/gpr_tools/gpr_tools
 ```
 
+To build and run the conversion test suite (from the repository root):
+```
+$ cmake -S . -B build
+$ cmake --build build --target gpr_tools_tests
+$ ctest --test-dir build --output-on-failure
+```
+
 ## Using gpr_tools
 
 Some example commands are shown below:
@@ -109,10 +139,44 @@ Convert DNG to GPR:
 $ gpr_tools -i INPUT.DNG -o OUTPUT.GPR
 ```
 
+Repackage a GPR with new metadata, without decoding or re-encoding the image:
+
+```
+$ gpr_tools -i INPUT.GPR -o OUTPUT.GPR -a PARAMETERS.TXT
+```
+
+Embed a preview while writing a GPR, either generated at a downscale ratio (2:1, 4:1, 8:1, 16:1) or from a JPEG file (no preview is written unless `--preview` is given):
+
+```
+$ gpr_tools -i INPUT.DNG -o OUTPUT.GPR --preview=8:1
+$ gpr_tools -i INPUT.DNG -o OUTPUT.GPR --preview=THUMBNAIL.JPG
+```
+
+Choose the VC-5 quality, which selects the quantizer table for the wavelet highpass bands, when encoding to GPR. The levels, from the smallest files to the highest fidelity, are `low`, `medium`, `high`, `fs1`, `fsx` (the default), `fs2` and `ultra`. Without `--quality` a GPR input is repackaged as-is; with it, the image is decoded and encoded again at that level:
+
+```
+$ gpr_tools -i INPUT.DNG -o OUTPUT.GPR --quality=fs2
+$ gpr_tools -i INPUT.GPR -o OUTPUT.GPR --quality=low
+```
+
+Convert a BGGR DNG (for example from an iPhone) to GPR. Shifting the mosaic by one column turns BGGR into GBRG, the phase GoPro cameras write; the mosaic can also be encoded as-is with `--input_pixel_format=bggr12`:
+
+```
+$ gpr_tools -i IPHONE.DNG -o OUTPUT.GPR --input_skip_cols=1 --input_pixel_format=gbrg12
+```
+
+Write a DNG with a geometric lens-distortion correction (a synthesized OpcodeList3 WarpRectilinear that DNG readers apply when rendering), using the built-in profile for the source camera or explicit coefficients:
+
+```
+$ gpr_tools -i INPUT.GPR -o OUTPUT.DNG --lens_correction=auto
+$ gpr_tools -i INPUT.GPR -o OUTPUT.DNG --lens_correction=auto --lens_correction_strength=1
+$ gpr_tools -i INPUT.GPR -o OUTPUT.DNG --lens_correction=0.999,-0.547,0.410,-0.156
+```
+
 Analyze a GPR (or even DNG) and output parameters that define DNG metadata to a file:
 
 ```
-$ gpr_tools -i INPUT.GPR -d 1 > PARAMETERS.TXT
+$ gpr_tools -i INPUT.GPR -d > PARAMETERS.TXT
 ```      
 
 Read RAW pixel data, along with parameters that define DNG metadata and apply to an output GPR (or DNG) file:
@@ -121,19 +185,19 @@ Read RAW pixel data, along with parameters that define DNG metadata and apply to
 $ gpr_tools -i INPUT.RAW -o OUTPUT.DNG -a PARAMETERS.TXT
 ```
 
-Read GPR file and output PPM preview:
+Read GPR file and output PPM preview (4:1 unless `--rgb_resolution` says otherwise; `--output_ppm_bits=16` for 16-bit samples):
 
 ```
-$ gpr_tools -i INPUT.GPR -o OUTPUT.PPM
+$ gpr_tools -i INPUT.GPR -o OUTPUT.PPM --rgb_resolution=2:1
 ```
 
-Read GPR file and output JPG preview:
+Read GPR file and output JPG preview (the source orientation is written as an EXIF tag; `--output_jpg_quality` is 1 to 3):
 
 ```
-$ gpr_tools -i INPUT.GPR -o OUTPUT.JPG
+$ gpr_tools -i INPUT.GPR -o OUTPUT.JPG --rgb_resolution=2:1 --output_jpg_quality=3
 ```
 
-For a complete list of commands, please refer to data/tests/run_tests.sh 
+Run `gpr_tools --help` for the complete option list. `scripts/test_conversions.sh <folder>` runs every conversion over a folder of GPR and DNG files, and `source/test/README.md` describes the test suite.
 
 ## Using vc5_encoder_app
 
@@ -177,6 +241,8 @@ The `app` folder is made up of following folders:
 - `vc5_encoder_app` - sample vc5 encoder application
 - `gpr_tools` - utility to convert to/from various formats mentioned above and measure runtime
 
+The `source/test` folder holds `gpr_conversion_tests.cpp`, the conversion test suite (built as `gpr_tools_tests`, registered with CTest; see `source/test/README.md`), and `scripts` holds the build-flag matrix, the conversion pipeline over a folder of samples, and the tool that fits `WarpRectilinear` coefficients for new lens profiles.
+
 ### Important Defines
 
 Here are some important compile time definitions:
@@ -187,9 +253,11 @@ Here are some important compile time definitions:
 
 * `GPR_READING` enables all code that reads GPR files. If application does not need to read GPR, set `GPR_READING=0` to reduce code size.
 
-* `GPR_JPEG_AVAILABLE` enables lightweight jpeg encoder located in `source/lib/tiny_jpeg`. This is used to write a small thumbnail inside GPR file. If `GPR_JPEG_AVAILABLE=0`, thumbnail is not written, although you can still set pre-encoded jpeg file as thumbnail, by using -P, -W and -H command line options in `gpr_tools`.
+* `GPR_JPEG_AVAILABLE` enables lightweight jpeg encoder located in `source/lib/tiny_jpeg`. This is used to write a small thumbnail inside GPR file. If `GPR_JPEG_AVAILABLE=0`, thumbnail is not written, although you can still set pre-encoded jpeg file as thumbnail, by using the `--preview=file.jpg` command line option in `gpr_tools`.
 
-* `NEON` enables arm neon intrinsics (disabled by default). This can be enabled from CMake by `-DNEON=1` switch.
+* `GPR_NEON` enables arm neon intrinsics. The top-level CMakeLists.txt enables this automatically on arm64 targets; force the scalar path with `-DGPR_NEON=OFF`.
+
+All of the above are also exposed as CMake options (`-DGPR_TIMING=OFF`, `-DGPR_WRITING=OFF`, `-DGPR_READING=OFF`, `-DGPR_JPEG_AVAILABLE=OFF`, `-DGPR_NEON=OFF`). Run `scripts/test_build_flags.sh` to verify that the project builds with each flag disabled individually and with all of them disabled together; `.github/workflows/build-flags.yml` does the same on every push, on x86_64 Linux and arm64 macOS.
 
 ### GPR-SDK API
 

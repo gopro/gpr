@@ -368,11 +368,47 @@ void parse_tuning_info( cJSON* pTuningInfo, gpr_tuning_info& tuning_info )
     tuning_info.noise_offset = pJSON->valuedouble;
     pJSON = pJSON->next;
 
-    tuning_info.warp_red_coefficient = pJSON->valuedouble;
-    pJSON = pJSON->next;
+    {
+        cJSON* child = pJSON->child;
+        tuning_info.warp.planes = child->valueint;
+        child = child->next;
 
-    tuning_info.warp_blue_coefficient = pJSON->valuedouble;
-    pJSON = pJSON->next;
+        tuning_info.warp.flags = child->valueint;
+        child = child->next;
+
+        tuning_info.warp.center_x = child->valuedouble;
+        child = child->next;
+
+        tuning_info.warp.center_y = child->valuedouble;
+        child = child->next;
+
+        {
+            cJSON* val = child->child;
+            for (int p = 0; p < GPR_WARP_MAX_PLANES; p++)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    tuning_info.warp.radial[p][i] = val->valuedouble;
+                    val = val->next;
+                }
+            }
+            child = child->next;
+        }
+
+        {
+            cJSON* val = child->child;
+            for (int p = 0; p < GPR_WARP_MAX_PLANES; p++)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    tuning_info.warp.tangential[p][i] = val->valuedouble;
+                    val = val->next;
+                }
+            }
+        }
+
+        pJSON = pJSON->next;
+    }
 
     if( pJSON->child )
     {
@@ -492,9 +528,54 @@ void parse_tuning_info( cJSON* pTuningInfo, gpr_tuning_info& tuning_info )
     pJSON = pJSON->next;
 
     tuning_info.pixel_format = (GPR_PIXEL_FORMAT)pJSON->valueint;
+
+    // Optional trailing fields: tolerate JSON files written before they existed.
+    pJSON = pJSON->next;
+    if( pJSON )
+        tuning_info.baseline_exposure = pJSON->valuedouble;
+
+    if( pJSON )
+        pJSON = pJSON->next;
+    if( pJSON )
+        tuning_info.baseline_sharpness = pJSON->valuedouble;
+
+    if( pJSON )
+        pJSON = pJSON->next;
+    if( pJSON )
+        tuning_info.baseline_noise = pJSON->valuedouble;
+
+    if( pJSON )
+        pJSON = pJSON->next;
+    if( pJSON )
+    {
+        cJSON* child = pJSON->child;
+
+        tuning_info.crop_info.active_area_top = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.active_area_left = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.active_area_bottom = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.active_area_right = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.default_crop_origin_h = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.default_crop_origin_v = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.default_crop_size_h = child->valueint;
+        child = child->next;
+
+        tuning_info.crop_info.default_crop_size_v = child->valueint;
+    }
 }
 
-int gpr_parameters_parse( gpr_parameters* parameters, const char* input_file_path )
+int gpr_parameters_parse_json( gpr_parameters* parameters, const char* input_file_path )
 {
     gpr_buffer buffer;
     
@@ -525,8 +606,9 @@ int gpr_parameters_parse( gpr_parameters* parameters, const char* input_file_pat
     parameters->input_pitch = pJSON->valueint;
     pJSON = pJSON->next;
 
-    parameters->fast_encoding = pJSON->valueint > 0 ? true : false;
-    pJSON = pJSON->next;
+    // Tolerate older JSON files that still carry the (now removed) fast_encoding field.
+    if( pJSON->string && strcmp( pJSON->string, "fast_encoding" ) == 0 )
+        pJSON = pJSON->next;
 
     parameters->gpmf_payload.size = pJSON->valueint;
     pJSON = pJSON->next;

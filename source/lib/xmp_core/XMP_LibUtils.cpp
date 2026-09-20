@@ -115,11 +115,15 @@ void XMP_ReadWriteLock::Acquire ( bool forWriting )
 				  this, (forWriting ? "writing" : "reading"), this->lockCount, (this->beingWritten ? ", being written" : "") );
 	#endif
 
+	// Only the writer thread may touch beingWritten. Readers used to store
+	// false here while holding just the shared lock, racing each other; the
+	// rwlock already excludes readers whenever a writer set it to true.
 	if ( forWriting ) {
 		XMP_BasicRWLock_AcquireForWrite ( this->lock );
 		#if XMP_DebugBuild && HaveAtomicIncrDecr
 			XMP_Assert ( this->lockCount == 0 );
 		#endif
+		this->beingWritten = true;
 	} else {
 		XMP_BasicRWLock_AcquireForRead ( this->lock );
 		XMP_Assert ( ! this->beingWritten );
@@ -127,7 +131,6 @@ void XMP_ReadWriteLock::Acquire ( bool forWriting )
 	#if XMP_DebugBuild && HaveAtomicIncrDecr
 		XMP_AtomicIncrement ( this->lockCount );
 	#endif
-	this->beingWritten = forWriting;
 
 	#if TraceThreadLocks
 		fprintf ( stderr, "Acquired lock %.8X for %s, count %d%s\n",
@@ -147,10 +150,10 @@ void XMP_ReadWriteLock::Release()
 		XMP_Assert ( this->lockCount > 0 );
 		XMP_AtomicDecrement ( this->lockCount );	// ! Do these before unlocking, that might release a waiting thread.
 	#endif
-	bool forWriting = this->beingWritten;
-	this->beingWritten = false;
-
-	if ( forWriting ) {
+	// Readers see beingWritten == false: a writer can only set it while it
+	// holds the lock exclusively, and clears it before releasing.
+	if ( this->beingWritten ) {
+		this->beingWritten = false;
 		XMP_BasicRWLock_ReleaseFromWrite ( this->lock );
 	} else {
 		XMP_BasicRWLock_ReleaseFromRead ( this->lock );

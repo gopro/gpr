@@ -1,6 +1,9 @@
 # library
 set( LIB_NAME argument_parser )
 
+# for gpr_platform.h (GPR_NEON, reported in the version banner)
+include_directories( "../../../lib/common/public" )
+
 # get source files
 file( GLOB SRC_FILES "*.c" "*.cpp" )
 

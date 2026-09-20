@@ -80,6 +80,7 @@ WXMPIterator_TableCTor_1 ( XMP_StringPtr  schemaNS,
 void
 WXMPIterator_IncrementRefCount_1 ( XMPIteratorRef xmpObjRef )
 {
+	WXMP_Result void_wResult;				// Per-call dummy; the shared global raced across threads.
 	WXMP_Result * wResult = &void_wResult;	// ! Needed to "fool" the EnterWrapper macro.
 	XMP_ENTER_ObjWrite ( XMPIterator, "WXMPIterator_IncrementRefCount_1" )
 
@@ -94,6 +95,7 @@ WXMPIterator_IncrementRefCount_1 ( XMPIteratorRef xmpObjRef )
 void
 WXMPIterator_DecrementRefCount_1 ( XMPIteratorRef xmpObjRef )
 {
+	WXMP_Result void_wResult;				// Per-call dummy; the shared global raced across threads.
 	WXMP_Result * wResult = &void_wResult;	// ! Needed to "fool" the EnterWrapper macro.
 	XMP_ENTER_ObjWrite ( XMPIterator, "WXMPIterator_DecrementRefCount_1" )
 

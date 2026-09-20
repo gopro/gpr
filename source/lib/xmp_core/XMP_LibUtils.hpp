@@ -165,7 +165,17 @@ public:
 //   Mac OS X). For Windows there is a choice of critical section and condition variable for Vista
 //   and newer; or critical section, event, and semaphore for XP and newer.
 
-#define UseNoLock 1
+// UseNoLock is only valid for single-threaded clients. Applications may
+// want to decode several GPR files concurrently in one process, and
+// every XMP parse can touch the shared namespace table (the Expat adapter is
+// created with kUseGlobalNamespaces), so pthread platforms need real locks.
+// Platforms without pthreads (camera firmware, Windows tools) keep the
+// original single-threaded behavior.
+#if XMP_MacBuild || XMP_iOSBuild || XMP_UNIXBuild
+	#define UsePThreadLock 1
+#else
+	#define UseNoLock 1
+#endif
 
 // -------------------------------------------------------------------------------------------------
 // A basic exclusive access mutex and atomic increment/decrement operations.

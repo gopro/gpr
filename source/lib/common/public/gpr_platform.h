@@ -53,13 +53,8 @@
 // =================================================================================================
 
 // Neon code is implemented for encoder
-#ifndef NEON
-    #define NEON 0
-#endif
-
-// SSE code is not implemented yet
-#ifndef SSE
-    #define SSE 0
+#ifndef GPR_NEON
+    #define GPR_NEON 0
 #endif
 
 // =================================================================================================

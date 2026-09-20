@@ -25,7 +25,9 @@
 extern "C" {
 #endif
     
-    int gpr_parameters_print( const gpr_parameters* parameters, const char* output_file_path );
+    //!< Write gpr_parameters as JSON, to output_file_path or to stdout when it is NULL
+    //!< (readable back with gpr_parameters_parse_json).
+    int gpr_parameters_print_json( const gpr_parameters* parameters, const char* output_file_path );
     
 #ifdef __cplusplus
 }

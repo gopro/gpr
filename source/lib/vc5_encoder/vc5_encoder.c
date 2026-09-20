@@ -32,6 +32,8 @@ void vc5_encoder_parameters_set_default(vc5_encoder_parameters* encoding_paramet
 
     encoding_parameters->mem_alloc = malloc;
     encoding_parameters->mem_free  = free;
+
+    rgb_parameters_set_default(&encoding_parameters->rgb_params);
 }
 
 CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_parameters,    /* vc5 encoding parameters */
@@ -45,7 +47,8 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
     
     STREAM bitstream_file;
     
-    const int max_vc5_buffer_size = 10000000;
+    // It is assumed that vc5 will always encode at 2:1 compression ratio, compared to raw buffer
+    const int max_vc5_buffer_size = raw_buffer->size / 2;
 
     // Initialize the data structure for passing parameters to the encoder
     InitEncoderParameters(&parameters);
@@ -57,7 +60,8 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
             {1, 24, 24, 12, 32, 32, 24, 128, 128, 192}, // CineForm High
             {1, 24, 24, 12, 24, 24, 12, 96, 96, 144},   // CineForm Filmscan-1
             {1, 24, 24, 12, 24, 24, 12, 64, 64, 96},    // CineForm Filmscan-X
-            {1, 24, 24, 12, 24, 24, 12, 32, 32, 48}     // CineForm Filmscan-2
+            {1, 24, 24, 12, 24, 24, 12, 32, 32, 48},    // CineForm Filmscan-2
+            {1, 24, 24, 12, 24, 24, 12, 24, 24, 32}     // CineForm Ultra
         };
         
         if( encoding_parameters->quality_setting < VC5_ENCODER_QUALITY_SETTING_COUNT )
@@ -68,6 +72,10 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
     
     parameters.enabled_parts  = encoding_parameters->enabled_parts;
     parameters.encoded.format = IMAGE_FORMAT_RAW;
+
+    // Resolution and rendering parameters of the RGB preview/thumbnail produced alongside
+    // the encoded bitstream
+    parameters.rgb_params = encoding_parameters->rgb_params;
     
 #if VC5_ENABLED_PART(VC5_PART_LAYERS)
     // Test interlaced encoding using one layer per field
@@ -114,7 +122,15 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
         case VC5_ENCODER_PIXEL_FORMAT_GBRG_12P:
             image.format = PIXEL_FORMAT_RAW_GBRG_12P;
             break;
-            
+
+        case VC5_ENCODER_PIXEL_FORMAT_BGGR_12:
+            image.format = PIXEL_FORMAT_RAW_BGGR_12;
+            break;
+
+        case VC5_ENCODER_PIXEL_FORMAT_BGGR_14:
+            image.format = PIXEL_FORMAT_RAW_BGGR_14;
+            break;
+
         default:
             assert(0);
     }

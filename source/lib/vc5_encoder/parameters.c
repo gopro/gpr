@@ -74,13 +74,9 @@ CODEC_ERROR InitEncoderParameters(ENCODER_PARAMETERS *parameters)
         QUANT quant_table[] = {1, 24, 24, 12, 24, 24, 12, 32, 32, 48};
         memcpy(parameters->quant_table, quant_table, sizeof(parameters->quant_table));
     }
+    
+    rgb_parameters_set_default(&parameters->rgb_params);
 
-	parameters->verbose_flag = false;
-    
-    gpr_rgb_gain_set_defaults(&parameters->rgb_gain);
-    
-    parameters->rgb_resolution = VC5_ENCODER_RGB_RESOLUTION_DEFAULT;
-    
 	return CODEC_ERROR_OKAY;
 }
 

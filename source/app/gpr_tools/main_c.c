@@ -31,10 +31,7 @@
 #include "main_c.h"
 #include "gpr_parse_utils.h"
 #include "gpr_print_utils.h"
-
-#if GPR_JPEG_AVAILABLE
-#include "jpeg.h"
-#endif
+#include "gpr_lens_profiles.h"
 
 #define MAX_FILE_PATH 256
 
@@ -95,10 +92,126 @@ static FILE_TYPE GetFileType( const char* file_path )
     return FILE_TYPE_UNKNOWN;
 }
 
-int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, const char* input_pixel_format,
-                     const char*  output_file_path, const char*  metadata_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits,
-                     const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height )
+// Map a -x pixel format string to its enum. Returns 1 on match, 0 otherwise.
+static int parse_input_pixel_format( const char* s, GPR_PIXEL_FORMAT* out )
 {
+    if( strcmp(s, "rggb12")  == 0 ) { *out = PIXEL_FORMAT_RGGB_12;  return 1; }
+    if( strcmp(s, "rggb12p") == 0 ) { *out = PIXEL_FORMAT_RGGB_12P; return 1; }
+    if( strcmp(s, "rggb14")  == 0 ) { *out = PIXEL_FORMAT_RGGB_14;  return 1; }
+    if( strcmp(s, "gbrg12")  == 0 ) { *out = PIXEL_FORMAT_GBRG_12;  return 1; }
+    if( strcmp(s, "gbrg12p") == 0 ) { *out = PIXEL_FORMAT_GBRG_12P; return 1; }
+    if( strcmp(s, "bggr12")  == 0 ) { *out = PIXEL_FORMAT_BGGR_12;  return 1; }
+    if( strcmp(s, "bggr14")  == 0 ) { *out = PIXEL_FORMAT_BGGR_14;  return 1; }
+    return 0;
+}
+
+static bool pixel_format_is_packed(GPR_PIXEL_FORMAT p)
+{
+    switch( p ) {
+        case PIXEL_FORMAT_RGGB_12P:
+        case PIXEL_FORMAT_GBRG_12P:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static unsigned int pixel_format_get_bits(GPR_PIXEL_FORMAT p)
+{
+    switch( p ) {
+        case PIXEL_FORMAT_RGGB_14:
+        case PIXEL_FORMAT_BGGR_14:
+            return 14;
+        default:
+            return 12;
+    }
+}
+
+// The --quality level names, in quantizer order (smallest files first); parsing and the
+// diagnostic both read this table.
+static const struct
+{
+    const char*         name;
+    GPR_QUALITY_SETTING level;
+
+} quality_levels[] =
+{
+    { "low",    GPR_QUALITY_SETTING_LOW    },
+    { "medium", GPR_QUALITY_SETTING_MEDIUM },
+    { "high",   GPR_QUALITY_SETTING_HIGH   },
+    { "fs1",    GPR_QUALITY_SETTING_FS1    },
+    { "fsx",    GPR_QUALITY_SETTING_FSX    },
+    { "fs2",    GPR_QUALITY_SETTING_FS2    },
+    { "ultra",  GPR_QUALITY_SETTING_ULTRA  },
+};
+
+// Maps a --quality level name (any case, like the other option values) to its enum.
+// Returns 1 on match, 0 otherwise.
+static int parse_quality( const char* s, GPR_QUALITY_SETTING* out )
+{
+    size_t i;
+
+    for( i = 0; i < sizeof(quality_levels) / sizeof(quality_levels[0]); i++ )
+    {
+        if( stricmp( s, quality_levels[i].name ) == 0 )
+        {
+            *out = quality_levels[i].level;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+// Maps a downscale ratio string to its enum. Returns 1 on match, 0 otherwise.
+static int parse_ratio( const char* ratio, GPR_RGB_RESOLUTION* out )
+{
+    if( strcmp(ratio, "2:1")  == 0 ) { *out = GPR_RGB_RESOLUTION_HALF;      return 1; }
+    if( strcmp(ratio, "4:1")  == 0 ) { *out = GPR_RGB_RESOLUTION_QUARTER;   return 1; }
+    if( strcmp(ratio, "8:1")  == 0 ) { *out = GPR_RGB_RESOLUTION_EIGHTH;    return 1; }
+    if( strcmp(ratio, "16:1") == 0 ) { *out = GPR_RGB_RESOLUTION_SIXTEENTH; return 1; }
+    return 0;
+}
+
+static GPR_RGB_RESOLUTION parse_resolution(const char* resolution)
+{
+    // Default for RGB (PPM/JPG) output when -r is not given. Deliberately not
+    // GPR_RGB_RESOLUTION_DEFAULT: that now means "none", which would produce no image.
+    GPR_RGB_RESOLUTION res = GPR_RGB_RESOLUTION_QUARTER;
+
+    if( strcmp(resolution, "") != 0 && parse_ratio( resolution, &res ) == 0 )
+    {
+        fprintf( stderr, "Unsupported resolution `%s'; using 4:1. Valid values: 2:1, 4:1, 8:1, 16:1\n", resolution );
+    }
+    return res;
+}
+
+int dng_convert_main( const dng_convert_params* convert_params )
+{
+    if( convert_params == NULL )
+    {
+        printf( "No conversion parameters provided" );
+        return -1;
+    }
+
+    // Unpack into local working copies. Several of these are mutated below, so we
+    // deliberately keep the caller's dng_convert_params untouched.
+    const char*  input_file_path        = convert_params->input_file_path;
+    size_t       input_skip_rows        = convert_params->input_skip_rows;
+    size_t       input_skip_cols        = convert_params->input_skip_cols;
+    const char*  input_pixel_format     = convert_params->input_pixel_format;
+    const char*  output_file_path       = convert_params->output_file_path;
+    const char*  output_format          = convert_params->output_format;
+    const char*  metadata_file_path     = convert_params->metadata_file_path;
+    const char*  gpmf_file_path         = convert_params->gpmf_file_path;
+    const char*  lens_correction        = convert_params->lens_correction;
+    const char*  lens_strength_arg      = convert_params->lens_correction_strength;
+    const char*  rgb_file_resolution    = convert_params->rgb_file_resolution;
+    int          rgb_file_bits          = convert_params->rgb_file_bits;
+    int          jpg_quality            = convert_params->jpg_quality;
+    const char*  preview                = convert_params->preview;
+    const char*  quality                = convert_params->quality;
+
     bool success;
     bool write_buffer_to_file = true;
     
@@ -117,12 +230,41 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
         return -1;
     }
 
+    if( output_format != NULL && strcmp(output_format, "") != 0 )
+    {
+        FILE_TYPE forced_output_type;
+
+        if( stricmp(output_format, "gpr") == 0 )
+            forced_output_type = FILE_TYPE_GPR;
+        else if( stricmp(output_format, "dng") == 0 )
+            forced_output_type = FILE_TYPE_DNG;
+        else
+        {
+            fprintf( stderr, "Invalid output_format `%s'; valid choices: GPR, DNG\n", output_format );
+            return -1;
+        }
+
+        // A GPR file is a valid DNG container, so GPR encoded data may carry a .DNG
+        // extension (Apple apps then render its preview), but not the other way around.
+        if( forced_output_type == FILE_TYPE_DNG && output_file_type == FILE_TYPE_GPR )
+        {
+            fprintf( stderr, "output_format DNG is not allowed with a .GPR output file; "
+                             "a DNG encoded file must not carry the GPR extension\n" );
+            return -1;
+        }
+
+        output_file_type = forced_output_type;
+    }
+
     gpr_allocator allocator;
     allocator.Alloc = malloc;
     allocator.Free = free;
     
     gpr_parameters params;
     gpr_parameters_set_defaults(&params);
+    params.input_width  = convert_params->input_width;
+    params.input_height = convert_params->input_height;
+    params.input_pitch  = convert_params->input_pitch;
     
     gpr_buffer input_buffer  = { NULL, 0 };
     
@@ -133,63 +275,57 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
   
     if( metadata_file_path && strcmp(metadata_file_path, "") )
     {
-        if( gpr_parameters_parse( &params, metadata_file_path ) != 0 )
+        if( gpr_parameters_parse_json( &params, metadata_file_path ) != 0 )
             return -1;
+
+        // -x is optional here: when absent, keep the pixel format from the metadata file.
+        if( strcmp(input_pixel_format, "") != 0 &&
+            parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format) == 0 ) {
+            fprintf( stderr, "Invalid pixel format %s\n", input_pixel_format);
+            return -1;
+        }
     }
     else if( input_file_type == FILE_TYPE_GPR || input_file_type == FILE_TYPE_DNG )
     {
-        gpr_parse_metadata( &allocator, &input_buffer, &params );
+        if( gpr_parameters_parse_dng( &allocator, &input_buffer, &params ) == false )
+            return -1;
+
+        // -x is optional here: when absent, keep the pixel format read from the DNG/GPR.
+        if( strcmp(input_pixel_format, "") != 0 &&
+            parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format) == 0 ) {
+            fprintf( stderr, "Invalid pixel format %s\n", input_pixel_format);
+            return -1;
+        }
     }
     else
     {
-        params.input_width  = input_width;
-        params.input_height = input_height;
-        params.input_pitch  = input_pitch;
+        // Default RAW pixel format when -x is not specified.
+        if( strcmp(input_pixel_format, "") == 0 )
+            input_pixel_format = "rggb14";
+
+        if( parse_input_pixel_format(input_pixel_format, &params.tuning_info.pixel_format) == 0 ) {
+            fprintf( stderr, "Invalid pixel format %s\n", input_pixel_format);
+            return -1;
+        }
+
+        if( params.input_pitch <= 0 )
+        {
+            if( pixel_format_is_packed(params.tuning_info.pixel_format) ) {
+                params.input_pitch = (params.input_width * 3 / 4) * 2;
+            } else {
+                params.input_pitch = params.input_width * 2;
+            }
+        }
         
         int32_t saturation_level = params.tuning_info.dgain_saturation_level.level_red;
-        
-        if( output_file_type == FILE_TYPE_GPR )
+        if( pixel_format_get_bits(params.tuning_info.pixel_format) == 14 )
+            saturation_level = (1 << 14) - 1;
+        else if( output_file_type == FILE_TYPE_GPR )
             saturation_level = (1 << 14) - 1;
         else if( output_file_type == FILE_TYPE_DNG )
             saturation_level = (1 << 12) - 1;
-        
-        if( strcmp(input_pixel_format, "rggb12") == 0 )
-        {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_RGGB_12;
-            
-            if( input_pitch == -1 )
-                input_pitch = input_width * 2;
-        }
-        if( strcmp(input_pixel_format, "rggb12p") == 0 )
-        {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_RGGB_12P;
-            
-            if( input_pitch == -1 )
-                input_pitch = (input_width * 3 / 4) * 2;
-        }
-        else if( strcmp(input_pixel_format, "rggb14") == 0 )
-        {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_RGGB_14;
-            
-            saturation_level = (1 << 14) - 1;
-
-            if( input_pitch == -1 )
-                input_pitch = input_width * 2;
-        }
-        else if( strcmp(input_pixel_format, "gbrg12") == 0 )
-        {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_GBRG_12;
-            
-            if( input_pitch == -1 )
-                input_pitch = input_width * 2;
-        }
-        else if( strcmp(input_pixel_format, "gbrg12p") == 0 )
-        {
-            params.tuning_info.pixel_format = PIXEL_FORMAT_GBRG_12P;
-            
-            if( input_pitch == -1 )
-                input_pitch = (input_width * 3 / 4) * 2;
-        }
+        else
+            saturation_level = 0;
         
         params.tuning_info.dgain_saturation_level.level_red         = saturation_level;
         params.tuning_info.dgain_saturation_level.level_green_even  = saturation_level;
@@ -197,28 +333,167 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
         params.tuning_info.dgain_saturation_level.level_blue        = saturation_level;
     }
     
+
     if( gpmf_file_path != NULL && strcmp(gpmf_file_path, "") )
     {
         read_from_file( &params.gpmf_payload, gpmf_file_path, allocator.Alloc, allocator.Free );
     }
-    
+
+    // Synthesize a geometric lens-distortion warp (OpcodeList3 WarpRectilinear).
+    // DNG output only: GPR consumers expect camera-original metadata, and a GPR
+    // repackage must stay faithful, so this never applies to other output types.
+    if( ( lens_correction == NULL || strcmp(lens_correction, "") == 0 ) &&
+        lens_strength_arg != NULL && strcmp(lens_strength_arg, "") )
+    {
+        fprintf( stderr, "--lens_correction_strength requires --lens_correction\n" );
+        return -1;
+    }
+
+    if( lens_correction != NULL && strcmp(lens_correction, "") )
+    {
+        if( output_file_type != FILE_TYPE_DNG )
+        {
+            fprintf( stderr, "--lens_correction is only supported for DNG output\n" );
+            return -1;
+        }
+
+        // Strength: -1 = not given; "auto" then uses the profile's recommended
+        // strength, explicit coefficients are used as-is (strength 1).
+        double strength = -1.0;
+
+        if( lens_strength_arg != NULL && strcmp(lens_strength_arg, "") )
+        {
+            char trailing;
+
+            if( sscanf( lens_strength_arg, "%lf%c", &strength, &trailing ) != 1 ||
+                strength < 0.0 || strength > 1.0 )
+            {
+                fprintf( stderr, "Invalid lens_correction_strength `%s'; expected a value in 0..1\n",
+                         lens_strength_arg );
+                return -1;
+            }
+        }
+
+        GPR_LENS_PROFILE_RESULT lens_result;
+
+        if( stricmp(lens_correction, "auto") == 0 )
+        {
+            lens_result = gpr_parameters_apply_lens_profile( &params, strength );
+
+            if( lens_result == GPR_LENS_PROFILE_NOT_FOUND )
+            {
+                fprintf( stderr, "No built-in lens profile for camera model `%s'; "
+                                 "pass explicit coefficients as --lens_correction=k0,k1,k2,k3[,cx,cy]\n",
+                                 params.exif_info.camera_model );
+                return -1;
+            }
+        }
+        else
+        {
+            double k0, k1, k2, k3, cx = 0.5, cy = 0.5;
+
+            int scanned = sscanf( lens_correction, "%lf,%lf,%lf,%lf,%lf,%lf", &k0, &k1, &k2, &k3, &cx, &cy );
+
+            if( scanned != 4 && scanned != 6 )
+            {
+                fprintf( stderr, "Invalid lens_correction `%s'; valid choices: auto, or k0,k1,k2,k3[,cx,cy]\n",
+                         lens_correction );
+                return -1;
+            }
+
+            gpr_warp_rectilinear geo;
+            memset( &geo, 0, sizeof(geo) );
+
+            geo.planes   = 3;
+            geo.flags    = 0x02;    // mandatory, may be skipped for previews
+            geo.center_x = cx;
+            geo.center_y = cy;
+
+            for( int p = 0; p < 3; p++ )
+            {
+                geo.radial[p][0] = k0;
+                geo.radial[p][1] = k1;
+                geo.radial[p][2] = k2;
+                geo.radial[p][3] = k3;
+            }
+
+            lens_result = gpr_parameters_apply_lens_warp( &params, &geo, strength );
+        }
+
+        if( lens_result == GPR_LENS_PROFILE_ALREADY_GEOMETRIC )
+        {
+            fprintf( stderr, "Input already carries a geometric lens correction; --lens_correction ignored\n" );
+        }
+    }
+
+    // --quality picks the VC-5 quantizer table used whenever the image is encoded to GPR.
+    // Omitted means the encoder default. It means nothing for other output types, so asking
+    // for it there is an error rather than a silent no-op.
+    if( quality != NULL && strcmp(quality, "") )
+    {
+        if( output_file_type != FILE_TYPE_GPR )
+        {
+            fprintf( stderr, "--quality is only supported for GPR output\n" );
+            return -1;
+        }
+
+        if( parse_quality( quality, &params.quality ) == 0 )
+        {
+            size_t i;
+
+            fprintf( stderr, "Invalid quality `%s'; valid choices:", quality );
+            for( i = 0; i < sizeof(quality_levels) / sizeof(quality_levels[0]); i++ )
+                fprintf( stderr, " %s", quality_levels[i].name );
+            fprintf( stderr, "\n" );
+
+            return -1;
+        }
+
+        // A GPR input is otherwise repackaged as-is, and a quantizer table can only apply to a
+        // fresh encode, so ask for one. The other conversions always encode and ignore this.
+        params.reencode = true;
+    }
+
     gpr_buffer output_buffer = { NULL, 0 };
 
-    if( input_skip_rows > 0 )
-    {
-        input_buffer.buffer = (unsigned char*)(input_buffer.buffer) + (input_skip_rows * input_pitch);
-    }
-    
-    gpr_buffer preview = { NULL, 0 };
+    // input_skip_rows/cols shift the start of the raw image to adjust its Bayer phase
+    // (e.g. BGGR -> GBRG). The shift is applied inside the SDK, right before encoding:
+    // for RAW input on the loaded pixel buffer, for DNG input on the decoded raw image
+    // (it cannot happen here for DNG, where input_buffer is the whole TIFF container).
+    params.input_skip_rows = input_skip_rows;
+    params.input_skip_cols = input_skip_cols;
 
-    if( strcmp(jpg_preview_file_path, "") != 0 )
+    gpr_buffer preview_jpg = { NULL, 0 };
+
+    // --preview consolidates every preview control: omitted means no embedded preview at all,
+    // a jpg file on disk is embedded as-is, and a downscale ratio requests an auto-generated
+    // preview at that resolution. Anything else fails the conversion. enable_preview gates
+    // both the caller-supplied JPEG and the auto-generated thumbnail inside the SDK.
+    if( preview == NULL || strcmp(preview, "") == 0 )
     {
-        if( read_from_file( &preview, jpg_preview_file_path, allocator.Alloc, allocator.Free) == 0 )
+        params.enable_preview = false;
+    }
+    else if( GetFileType( preview ) == FILE_TYPE_JPG )
+    {
+        if( read_from_file( &preview_jpg, preview, allocator.Alloc, allocator.Free ) != 0 )
         {
-            params.preview_image.jpg_preview    = preview;
-            params.preview_image.preview_width  = jpg_preview_file_width;
-            params.preview_image.preview_height = jpg_preview_file_height;
+            fprintf( stderr, "Could not read preview file %s\n", preview );
+            return -1;
         }
+
+        // The SDK reads the preview dimensions from the JPEG header itself when embedding it,
+        // so the app only needs to hand over the compressed JPEG bytes.
+        params.enable_preview = true;
+        params.preview_image.jpg_preview = preview_jpg;
+    }
+    else if( parse_ratio( preview, &params.preview_resolution ) )
+    {
+        params.enable_preview = true;
+    }
+    else
+    {
+        fprintf( stderr, "Invalid preview `%s'; expected a jpg file or one of: 2:1, 4:1, 8:1, 16:1\n", preview );
+        return -1;
     }
     
     if( input_file_type == FILE_TYPE_RAW && output_file_type == FILE_TYPE_DNG )
@@ -244,66 +519,36 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     }
 #endif
 #if GPR_READING
-    else if( input_file_type == FILE_TYPE_GPR && ( output_file_type == FILE_TYPE_PPM || output_file_type == FILE_TYPE_JPG ) )
+    else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_PPM )
     {
-        gpr_rgb_buffer rgb_buffer = { NULL, 0, 0, 0 };
+        GPR_RGB_RESOLUTION rgb_resolution = parse_resolution(rgb_file_resolution);
 
-        GPR_RGB_RESOLUTION rgb_resolution = GPR_RGB_RESOLUTION_DEFAULT;
-        
-        if( strcmp(rgb_file_resolution, "1:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_FULL;
-        else if( strcmp(rgb_file_resolution, "2:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_HALF;
-        else if( strcmp(rgb_file_resolution, "4:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_QUARTER;
-        else if( strcmp(rgb_file_resolution, "8:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_EIGHTH;
-        else if( strcmp(rgb_file_resolution, "16:1") == 0 )
-            rgb_resolution = GPR_RGB_RESOLUTION_SIXTEENTH;
+        // PPM has no metadata channel, so orientation cannot be recorded; the pixels are
+        // written in sensor orientation. Warn when that differs from the display orientation.
+        if( (int)params.tuning_info.orientation != ORIENTATION_NORMAL )
+            fprintf( stderr, "Note: PPM cannot store orientation; output pixels are in sensor "
+                             "orientation (not rotated). Use JPG output to preserve orientation.\n" );
 
-        if( output_file_type == FILE_TYPE_JPG && rgb_file_bits == 16 )
-        {
+        success = gpr_convert_gpr_to_ppm( &allocator, rgb_resolution, rgb_file_bits, &input_buffer, &output_buffer );
+    }
+    else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_JPG )
+    {
+        GPR_RGB_RESOLUTION rgb_resolution = parse_resolution(rgb_file_resolution);
+
+        if( rgb_file_bits == 16 )
             printf( "Asked to output 16-bits RGB, but that is only possible in PPM format.\n");
-            rgb_file_bits = 8;
-        }
-            
-        success = gpr_convert_gpr_to_rgb( &allocator, rgb_resolution, rgb_file_bits,  &input_buffer, &rgb_buffer );
-        
-        if( output_file_type == FILE_TYPE_PPM )
-        {
-#define PPM_HEADER_SIZE 100
-            char header_text[PPM_HEADER_SIZE];
 
-            if( rgb_file_bits == 8 )
-            {
-                // 8 bits
-                sprintf( header_text, "P6\n%ld %ld\n255\n", rgb_buffer.width, rgb_buffer.height );
-            }
-            else
-            {
-                // 16 bits
-                sprintf( header_text, "P6\n%ld %ld\n65535\n", rgb_buffer.width, rgb_buffer.height );
-            }
-            
-            output_buffer.size   = rgb_buffer.size + strlen( header_text );
-            output_buffer.buffer = allocator.Alloc( output_buffer.size );
-            char* buffer_c = (char*)output_buffer.buffer;
-            
-            memcpy( buffer_c, header_text, strlen( header_text ) );
-            memcpy( buffer_c + strlen( header_text ), rgb_buffer.buffer, rgb_buffer.size );
-#undef PPM_HEADER_SIZE
-        }
-        else if( output_file_type == FILE_TYPE_JPG )
+        // tinyjpeg only supports quality levels 1 (lowest), 2, or 3 (highest)
+        if( jpg_quality < 1 || jpg_quality > 3 )
         {
-            write_buffer_to_file = false;
-#if GPR_JPEG_AVAILABLE
-            tje_encode_to_file( output_file_path, rgb_buffer.width, rgb_buffer.height, 3, rgb_buffer.buffer );
-#else
-            printf("JPG writing capability is disabled. You could still write to a PPM file");
-#endif
+            fprintf( stderr, "JPG quality %d out of range, clamping to [1,3]\n", jpg_quality );
+            jpg_quality = jpg_quality < 1 ? 1 : 3;
         }
-        
-        allocator.Free( rgb_buffer.buffer );
+
+        success = gpr_convert_gpr_to_jpg( &allocator, rgb_resolution, jpg_quality, &input_buffer, &output_buffer );
+
+        if( success == 0 )
+            fprintf( stderr, "Failed to convert GPR to JPG (is JPEG support compiled in?)\n" );
     }
     else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_DNG )
     {
@@ -312,6 +557,19 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
     else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_RAW )
     {
         success = gpr_convert_gpr_to_raw( &allocator, &input_buffer, &output_buffer );
+    }
+#endif
+#if GPR_WRITING && GPR_READING
+    else if( input_file_type == FILE_TYPE_GPR && output_file_type == FILE_TYPE_GPR )
+    {
+        // Rewrites the container around the existing vc5 bitstream with updated metadata. When
+        // --quality asks for a re-encode (params.reencode), or --preview requests an auto-generated
+        // thumbnail (a downscale ratio) that only the encoder produces, the SDK decodes and
+        // re-encodes the image instead -- so this can also add or refresh the preview on a GPR
+        // file, e.g. one that was written without a preview. With both omitted (or --preview
+        // set to a jpg file, which is embedded as-is) the vc5 bitstream
+        // is repackaged without a re-encode.
+        success = gpr_convert_gpr_to_gpr( &allocator, &params, &input_buffer, &output_buffer );
     }
 #endif
     else
@@ -330,14 +588,9 @@ int dng_convert_main(const char*  input_file_path, unsigned int input_width, uns
         write_to_file( &output_buffer, output_file_path );
     }
     
-    if( input_skip_rows > 0 )
+    if( preview_jpg.buffer )
     {
-		input_buffer.buffer = (unsigned char*)(input_buffer.buffer) - (input_skip_rows * input_pitch);
-    }
-    
-    if( preview.buffer )
-    {
-        allocator.Free( preview.buffer );
+        allocator.Free( preview_jpg.buffer );
     }
     
     gpr_parameters_destroy(&params, allocator.Free);

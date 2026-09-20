@@ -23,6 +23,7 @@
 #include "types.h"
 #include "gpr_buffer.h"
 #include "gpr_rgb_buffer.h"
+#include "rgb.h"
 #include "vc5_common.h"
 
 #ifdef __cplusplus
@@ -43,13 +44,15 @@
         VC5_ENCODER_PIXEL_FORMAT_GBRG_12 = 3,           // GBRG 12bit pixels packed into 16bits
         
         VC5_ENCODER_PIXEL_FORMAT_GBRG_12P = 4,          // GBRG 12bit pixels packed into 12bits
-        
+
+        VC5_ENCODER_PIXEL_FORMAT_BGGR_12 = 5,           // BGGR 12bit pixels packed into 16bits
+
+        VC5_ENCODER_PIXEL_FORMAT_BGGR_14 = 6,           // BGGR 14bit pixels packed into 16bits
+
         VC5_ENCODER_PIXEL_FORMAT_DEFAULT = VC5_ENCODER_PIXEL_FORMAT_RGGB_14,
         
     } VC5_ENCODER_PIXEL_FORMAT;
 
-    #define VC5_ENCODER_RGB_RESOLUTION_DEFAULT GPR_RGB_RESOLUTION_SIXTEENTH
-        
     /*!
      @brief Quality setting of the VC5 encoder
      */
@@ -61,8 +64,9 @@
         VC5_ENCODER_QUALITY_SETTING_FS1         = 3,		// Film Scan 1
         VC5_ENCODER_QUALITY_SETTING_FSX         = 4,		// Film Scan X
         VC5_ENCODER_QUALITY_SETTING_FS2         = 5,		// Film Scan 2 (Highest Quality)
+        VC5_ENCODER_QUALITY_SETTING_ULTRA       = 6,        // Ultra (finer than Film Scan 2: largest files, highest fidelity)
         
-        VC5_ENCODER_QUALITY_SETTING_COUNT       = 6,
+        VC5_ENCODER_QUALITY_SETTING_COUNT       = 7,
         
         VC5_ENCODER_QUALITY_SETTING_DEFAULT     = VC5_ENCODER_QUALITY_SETTING_FSX,
         
@@ -81,12 +85,17 @@
         
         VC5_ENCODER_PIXEL_FORMAT    pixel_format;         // Bayer Ordering Pattern (Default: VC5_ENCODER_BAYER_ORDERING_RGGB)
         
-        VC5_ENCODER_QUALITY_SETTING quality_setting;        // Quality setting of the encoder (Default: VC5_ENCODER_QUALITY_SETTING_FS2)
+        VC5_ENCODER_QUALITY_SETTING quality_setting;        // Quality setting of the encoder (Default: VC5_ENCODER_QUALITY_SETTING_DEFAULT)
         
         gpr_malloc                  mem_alloc;              // Callback function to allocate memory
         
         gpr_free                    mem_free;               // Callback function to free memory
-        
+
+        RGB_PARAMETERS              rgb_params;             // Resolution (Default: none) and rendering parameters (white balance,
+                                                            // black level, color matrix, baseline exposure, output bits) of the
+                                                            // RGB preview/thumbnail generated during encoding. The preview
+                                                            // embedding pipeline expects the default 8 rgb_bits.
+
     } vc5_encoder_parameters;
 
     void vc5_encoder_parameters_set_default(vc5_encoder_parameters* encoding_parameters);

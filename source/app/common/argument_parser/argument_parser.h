@@ -23,7 +23,7 @@
 class argument_parser
 {
 private:    
-    char*   application_path;
+    const char*   application_path;
     int     argument_count;
     char*   arguments[MAX_ARGC];
     

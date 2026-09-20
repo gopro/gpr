@@ -5110,8 +5110,6 @@ void dng_image_writer::WriteDNG (dng_host &host,
 								 uint32 maxBackwardVersion,
 							     bool uncompressed)
 	{
-TIMESTAMP("[BEG]", 2)
-        
 	WriteDNG (host,
 			  stream,
 			  negative,
@@ -5119,8 +5117,6 @@ TIMESTAMP("[BEG]", 2)
 			  previewList,
 			  maxBackwardVersion,
 			  uncompressed);
-
-TIMESTAMP("[END]", 2)
 	}
 
 /*****************************************************************************/

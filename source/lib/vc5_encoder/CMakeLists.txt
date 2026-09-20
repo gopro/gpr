@@ -15,6 +15,9 @@ include_directories( "../common/public" )
 # library
 add_library( ${LIB_NAME} STATIC ${SRC_FILES} ${INC_FILES} )
 
+# GPR_NEON=1 (for the #if ENABLED(GPR_NEON) SIMD kernels) is inherited from the top-level
+# CMakeLists.txt when building for an arm64 target.
+
 target_link_libraries( ${LIB_NAME} )
 
 # set the folder where to place the projects

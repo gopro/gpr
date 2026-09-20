@@ -30,16 +30,17 @@
         
         typedef enum
         {
+            GPR_RGB_RESOLUTION_NONE      = 0,
+
             GPR_RGB_RESOLUTION_SIXTEENTH = 1,
             GPR_RGB_RESOLUTION_EIGHTH    = 2,
             GPR_RGB_RESOLUTION_QUARTER   = 3,
             GPR_RGB_RESOLUTION_HALF      = 4,
             GPR_RGB_RESOLUTION_FULL      = 5,
-            
-            GPR_RGB_RESOLUTION_NONE      = 6,
 
-            GPR_RGB_RESOLUTION_DEFAULT   = GPR_RGB_RESOLUTION_QUARTER,
-            
+            // No RGB output / no embedded preview unless a caller asks for one
+            GPR_RGB_RESOLUTION_DEFAULT   = GPR_RGB_RESOLUTION_NONE,
+
         } GPR_RGB_RESOLUTION;
 
 

@@ -33,7 +33,7 @@
 
 #include "headers.h"
 
-#if ENABLED(NEON)
+#if ENABLED(GPR_NEON)
 #include <arm_neon.h>
 #endif
 
@@ -367,14 +367,44 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 		return error;
 	}
     
-    if( rgb_image != NULL && parameters->rgb_resolution == GPR_RGB_RESOLUTION_SIXTEENTH )
-    { // Thumbnail
+    if( rgb_image != NULL )
+    { // Preview / thumbnail. The wavelet level selected determines the preview resolution:
+      // each successive wavelet level halves the image in both dimensions.
         SetupDecoderLogCurve();
 
-        WaveletToRGB(parameters->allocator,
-                     encoder.transform[0].wavelet[2]->data[LL_BAND], encoder.transform[1].wavelet[2]->data[LL_BAND], encoder.transform[2].wavelet[2]->data[LL_BAND],
-                     encoder.transform[0].wavelet[2]->width, encoder.transform[0].wavelet[2]->height, encoder.transform[0].wavelet[2]->width,
-                     rgb_image, 14, 8, &parameters->rgb_gain );
+        switch( parameters->rgb_params.resolution )
+        {
+            case GPR_RGB_RESOLUTION_HALF: // 2:1 -- the unpacked component arrays are already at half resolution
+                WaveletToRGB(parameters->allocator,
+                             (PIXEL*)unpacked_image.component_array_list[0].data, (PIXEL*)unpacked_image.component_array_list[1].data, (PIXEL*)unpacked_image.component_array_list[2].data,
+                             unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / 2,
+                             rgb_image, 12, &parameters->rgb_params );
+                break;
+
+            case GPR_RGB_RESOLUTION_QUARTER: // 4:1 -- first wavelet level
+                WaveletToRGB(parameters->allocator,
+                             encoder.transform[0].wavelet[0]->data[LL_BAND], encoder.transform[1].wavelet[0]->data[LL_BAND], encoder.transform[2].wavelet[0]->data[LL_BAND],
+                             encoder.transform[0].wavelet[0]->width, encoder.transform[0].wavelet[0]->height, encoder.transform[0].wavelet[0]->width,
+                             rgb_image, 14, &parameters->rgb_params );
+                break;
+
+            case GPR_RGB_RESOLUTION_EIGHTH: // 8:1 -- second wavelet level
+                WaveletToRGB(parameters->allocator,
+                             encoder.transform[0].wavelet[1]->data[LL_BAND], encoder.transform[1].wavelet[1]->data[LL_BAND], encoder.transform[2].wavelet[1]->data[LL_BAND],
+                             encoder.transform[0].wavelet[1]->width, encoder.transform[0].wavelet[1]->height, encoder.transform[0].wavelet[1]->width,
+                             rgb_image, 14, &parameters->rgb_params );
+                break;
+
+            case GPR_RGB_RESOLUTION_SIXTEENTH: // 16:1 -- third wavelet level
+                WaveletToRGB(parameters->allocator,
+                             encoder.transform[0].wavelet[2]->data[LL_BAND], encoder.transform[1].wavelet[2]->data[LL_BAND], encoder.transform[2].wavelet[2]->data[LL_BAND],
+                             encoder.transform[0].wavelet[2]->width, encoder.transform[0].wavelet[2]->height, encoder.transform[0].wavelet[2]->width,
+                             rgb_image, 14, &parameters->rgb_params );
+                break;
+
+            default: // No preview for unsupported resolutions (e.g. 1:1 / NONE)
+                break;
+        }
     }
     
     error = ReleaseComponentArrays( &parameters->allocator, &unpacked_image, unpacked_image.component_count );
@@ -419,18 +449,6 @@ CODEC_ERROR EncodingProcess(ENCODER *encoder,
 #if VC5_ENABLED_PART(VC5_PART_IMAGE_FORMATS)
 	if (encoder->image_format == IMAGE_FORMAT_UNKNOWN) {
 		return CODEC_ERROR_BAD_IMAGE_FORMAT;
-	}
-	if ( parameters->verbose_flag )
-	{
-		LogPrint("Pattern width: %d\n", encoder->pattern_width);
-		LogPrint("Pattern height: %d\n", encoder->pattern_height);
-        
-        if (!IsPartEnabled(encoder->enabled_parts, VC5_PART_COLOR_SAMPLING)) {
-            LogPrint("Components per sample: %d\n", encoder->components_per_sample);
-        }
-        LogPrint("Internal precision: %d\n", encoder->internal_precision);
-        
-		LogPrint("\n");
 	}
 #endif
     
@@ -745,6 +763,8 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
     case PIXEL_FORMAT_RAW_RGGB_14:
     case PIXEL_FORMAT_RAW_GBRG_12:
     case PIXEL_FORMAT_RAW_GBRG_12P:
+    case PIXEL_FORMAT_RAW_BGGR_12:
+    case PIXEL_FORMAT_RAW_BGGR_14:
     case PIXEL_FORMAT_RAW_RGGB_16:
         channel_count = 4;
         max_channel_width = input->width / 2;
@@ -767,25 +787,33 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
     switch (input->format)
     {
         case PIXEL_FORMAT_RAW_RGGB_14:
-            UnpackImage_14(input, output, enabled_parts, true );
+            UnpackImage_14(input, output, enabled_parts, BAYER_ORDERING_RGGB );
+            break;
+
+        case PIXEL_FORMAT_RAW_BGGR_14:
+            UnpackImage_14(input, output, enabled_parts, BAYER_ORDERING_BGGR );
             break;
 
         case PIXEL_FORMAT_RAW_RGGB_12:
-            UnpackImage_12(input, output, enabled_parts, true );
+            UnpackImage_12(input, output, enabled_parts, BAYER_ORDERING_RGGB );
             break;
 
         case PIXEL_FORMAT_RAW_GBRG_12:
-            UnpackImage_12(input, output, enabled_parts, false );
+            UnpackImage_12(input, output, enabled_parts, BAYER_ORDERING_GBRG );
+            break;
+
+        case PIXEL_FORMAT_RAW_BGGR_12:
+            UnpackImage_12(input, output, enabled_parts, BAYER_ORDERING_BGGR );
             break;
 
         case PIXEL_FORMAT_RAW_RGGB_12P:
-            UnpackImage_12P(input, output, enabled_parts, true );
+            UnpackImage_12P(input, output, enabled_parts, BAYER_ORDERING_RGGB );
             break;
 
         case PIXEL_FORMAT_RAW_GBRG_12P:
-            UnpackImage_12P(input, output, enabled_parts, false );
+            UnpackImage_12P(input, output, enabled_parts, BAYER_ORDERING_GBRG );
             break;
-            
+
         default:
             assert(0);
             return CODEC_ERROR_PIXEL_FORMAT;
@@ -2393,7 +2421,7 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
                 PIXEL* start = rowptr + index;
                 PIXEL* end   = rowptr + width;
                 
-                for (; *(start) == 0 && start != end; start++)
+                for (; start != end && *(start) == 0; start++)
                 {
                     
                 }

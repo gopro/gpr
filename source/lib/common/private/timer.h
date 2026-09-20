@@ -2,6 +2,11 @@
  *
  *  @brief Declaration of a high-resolution performance timer.
  *
+ *  Measures elapsed wall-clock time from a monotonic source. This is not CPU
+ *  time: clock()-style accounting sums processor time across every thread of
+ *  the process, so multithreaded runs report larger numbers the more threads
+ *  they use, even as the user waits less.
+ *
  *  @version 1.0.0
  *
  *  (C) Copyright 2018 GoPro Inc (http://gopro.com/).
@@ -21,13 +26,13 @@
 #ifndef GPR_TIMER_H
 #define GPR_TIMER_H
 
-#include <time.h>
+#include <stdint.h>
 
 typedef struct timer
 {
-    clock_t begin;
-    clock_t elapsed;
-    
+    int64_t begin;      //!< Timestamp at StartTimer, in nanoseconds
+    int64_t elapsed;    //!< Accumulated elapsed wall-clock time, in nanoseconds
+
 } TIMER;
 
 #ifdef __cplusplus

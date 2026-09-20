@@ -13,30 +13,32 @@ include_directories( "../common/TinyJPEG" )
 include_directories( "../../lib/common/public" )
 include_directories( "../../lib/vc5_common" )
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+# GPR_*_AVAILABLE variables come from the top-level CMakeLists.txt (feature
+# option combined with the presence of the corresponding source directory)
+if(GPR_READING_AVAILABLE)
   include_directories( "../../lib/vc5_decoder" )
   add_definitions("-DGPR_READING=1")
-else(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+else()
   add_definitions("-DGPR_READING=0")
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+if(GPR_WRITING_AVAILABLE)
   include_directories( "../../lib/vc5_encoder" )
   add_definitions("-DGPR_WRITING=1")
-else(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+else()
   add_definitions("-DGPR_WRITING=0")
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+endif()
 
 include_directories( "../../lib/md5_lib" )
 include_directories( "../../lib/dng_sdk" )
 include_directories( "../../lib/gpr_sdk/public" )
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/tiny_jpeg")
+if(GPR_JPEG_WRITER_AVAILABLE)
   include_directories( "../../lib/tiny_jpeg" )
-  add_definitions("-DGPR_JPEG_AVAILABLE=1")  
-else(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/tiny_jpeg")
+  add_definitions("-DGPR_JPEG_AVAILABLE=1")
+else()
   add_definitions("-DGPR_JPEG_AVAILABLE=0")
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/tiny_jpeg")
+endif()
 
 # add executable
 add_executable( ${EXE_NAME} ${GPRTOOLS_SRC_FILES} ${GPRTOOLS_INC_FILES} )
@@ -44,19 +46,19 @@ add_executable( ${EXE_NAME} ${GPRTOOLS_SRC_FILES} ${GPRTOOLS_INC_FILES} )
 # Linked libraries
 target_link_libraries( ${EXE_NAME} gpr_sdk )
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/tiny_jpeg")
+if(GPR_JPEG_WRITER_AVAILABLE)
   target_link_libraries( ${EXE_NAME} tiny_jpeg )
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/tiny_jpeg")
+endif()
 
 target_link_libraries( ${EXE_NAME} dng_sdk xmp_core )
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+if(GPR_READING_AVAILABLE)
   target_link_libraries( ${EXE_NAME} vc5_decoder )
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+if(GPR_WRITING_AVAILABLE)
   target_link_libraries( ${EXE_NAME} vc5_encoder )
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+endif()
 
 target_link_libraries( ${EXE_NAME} vc5_common common md5_lib expat_lib cJSON argument_parser )
 

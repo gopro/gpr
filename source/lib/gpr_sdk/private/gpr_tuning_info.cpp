@@ -36,6 +36,59 @@ static void _wb_gains_set_defaults(gpr_white_balance_gains* x)
     x->b_gain   = (float_t)8371.0 / 4096.0;
 }
 
+static void _crop_info_set_defaults(gpr_crop_info* x)
+{
+    x->active_area_top      = 0;
+    x->active_area_left     = 0;
+    x->active_area_bottom   = 0;
+    x->active_area_right    = 0;
+
+    x->default_crop_origin_h = 0;
+    x->default_crop_origin_v = 0;
+
+    x->default_crop_size_h   = 0;
+    x->default_crop_size_v   = 0;
+}
+
+static void _warp_set_defaults( gpr_warp_rectilinear* x )
+{
+    x->planes   = 0;
+    x->flags    = 0;
+    x->center_x = 0;
+    x->center_y = 0;
+
+    for( int p = 0; p < GPR_WARP_MAX_PLANES; p++ )
+    {
+        for( int i = 0; i < 4; i++ )
+            x->radial[p][i] = 0;
+
+        x->tangential[p][0] = 0;
+        x->tangential[p][1] = 0;
+    }
+}
+
+int gpr_warp_rectilinear_is_valid( const gpr_warp_rectilinear* x )
+{
+    return x->planes > 0 && x->planes <= GPR_WARP_MAX_PLANES;
+}
+
+int gpr_warp_rectilinear_is_ca_only( const gpr_warp_rectilinear* x )
+{
+    if( !gpr_warp_rectilinear_is_valid( x ) )
+        return 0;
+
+    for( uint32_t p = 0; p < x->planes; p++ )
+    {
+        if( x->radial[p][1] != 0 || x->radial[p][2] != 0 || x->radial[p][3] != 0 )
+            return 0;
+
+        if( x->tangential[p][0] != 0 || x->tangential[p][1] != 0 )
+            return 0;
+    }
+
+    return 1;
+}
+
 static void _gain_map_set_defaults( gpr_tuning_info* tuning_info )
 {
     tuning_info->gain_map.size = 0;
@@ -66,6 +119,7 @@ int32_t gpr_tuning_info_get_dgain_saturation_level(const gpr_tuning_info* x, GPR
 
 void gpr_tuning_info_set_defaults( gpr_tuning_info* x )
 {
+    x->has_opcode_gain_maps = false;
     x->orientation = ORIENTATION_DEFAULT;
     
     _static_black_level_set_defaults(&x->static_black_level);
@@ -77,8 +131,21 @@ void gpr_tuning_info_set_defaults( gpr_tuning_info* x )
     _ae_info_set_defaults(&x->ae_info);
     
     _gain_map_set_defaults( x );
-    
+
+    _warp_set_defaults( &x->warp );
+
+    x->noise_scale  = 0.0;
+    x->noise_offset = 0.0;
+
     x->pixel_format = PIXEL_FORMAT_RGGB_14;
+
+    x->baseline_exposure = 0.0;
+
+    x->baseline_sharpness = 1.0;
+
+    x->baseline_noise = 1.0;
+
+    _crop_info_set_defaults(&x->crop_info);
 }
 
 

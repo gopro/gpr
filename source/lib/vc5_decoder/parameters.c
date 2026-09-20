@@ -33,15 +33,12 @@ CODEC_ERROR InitDecoderParameters(DECODER_PARAMETERS *parameters)
 {
 	memset(parameters, 0, sizeof(DECODER_PARAMETERS));
 	parameters->version = 1;
-	parameters->verbose_flag = false;
  
     parameters->enabled_parts = VC5_ENABLED_PARTS;
     
     parameters->output.format = PIXEL_FORMAT_RAW_DEFAULT;
     
-    parameters->rgb_resolution = GPR_RGB_RESOLUTION_NONE;
-    
-    gpr_rgb_gain_set_defaults(&parameters->rgb_gain);
-    
+    rgb_parameters_set_default(&parameters->rgb_params);
+
 	return CODEC_ERROR_OKAY;
 }

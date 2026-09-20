@@ -33,11 +33,11 @@ private:
     gpr_buffer_auto* _vc5_buffer;
 
     bool fReadVC5;
-    
+
     bool fDecodeVC5;
-    
+
 public:
-    
+
     gpr_read_image( gpr_buffer_auto* vc5_buffer = NULL );
 
     void SetReadVC5(bool read_vc5) { fReadVC5 = read_vc5; }

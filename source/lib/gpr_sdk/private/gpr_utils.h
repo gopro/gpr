@@ -29,7 +29,11 @@
 extern "C" {
 #endif
 
-    void CopyRawImageToBuffer( const dng_image& raw_image, gpr_buffer_auto& buffer );
+    // If crop_area is non-NULL, only that sub-rect of raw_image is copied (buffer is sized and
+    // strided to crop_area's width/height) instead of the full image bounds. Used to extract the
+    // visible/cropped region for sensors whose raw buffer includes extra border pixels outside
+    // the active image area (e.g. iPhone).
+    void CopyRawImageToBuffer( const dng_image& raw_image, gpr_buffer_auto& buffer, const dng_rect* crop_area = NULL );
 
     void CopyBufferToRawImage( const gpr_buffer_auto& buffer, size_t buffer_stride, dng_image& raw_image );
 

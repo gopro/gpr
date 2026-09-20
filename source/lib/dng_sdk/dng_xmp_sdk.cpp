@@ -29,6 +29,7 @@
 
 /*****************************************************************************/
 
+#include <mutex>
 #include <new>
 #include <string>
 
@@ -201,12 +202,21 @@ dng_xmp_sdk::~dng_xmp_sdk ()
 
 static bool gInitializedXMP = false;
 
+// Guards gInitializedXMP and the one-time SXMPMeta::Initialize sequence.
+// MakeMeta (and thus Parse) may run on several threads at once, and the XMP
+// toolkit's own init counter is not atomic, so the whole check-and-initialize
+// must be serialized here.
+
+static std::mutex gXMPInitMutex;
+
 /*****************************************************************************/
 
 void dng_xmp_sdk::InitializeSDK (dng_xmp_namespace * extraNamespaces,
 								 const char *software)
 	{
-	
+
+	std::lock_guard<std::mutex> initLock (gXMPInitMutex);
+
 	if (!gInitializedXMP)
 		{
 		
@@ -328,7 +338,9 @@ void dng_xmp_sdk::InitializeSDK (dng_xmp_namespace * extraNamespaces,
 
 void dng_xmp_sdk::TerminateSDK ()
 	{
-	
+
+	std::lock_guard<std::mutex> initLock (gXMPInitMutex);
+
 	if (gInitializedXMP)
 		{
 		

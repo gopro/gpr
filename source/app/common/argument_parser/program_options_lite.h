@@ -82,6 +82,8 @@ namespace program_options_lite
         virtual void parse(const std::string& arg) = 0;
         /* set the argument to the default value */
         virtual void setDefault() = 0;
+        /* true if the option is a boolean flag that needs no explicit value */
+        virtual bool isBoolean() const { return false; }
         
         std::string opt_string;
         std::string opt_desc;
@@ -96,12 +98,14 @@ namespace program_options_lite
         {}
         
         void parse(const std::string& arg);
-        
+
         void setDefault()
         {
             opt_storage = opt_default_val;
         }
-        
+
+        bool isBoolean() const { return false; }
+
         T& opt_storage;
         T opt_default_val;
     };
@@ -131,6 +135,14 @@ namespace program_options_lite
     {
         opt_storage = arg;
     }
+
+    /* bool options are flags: they may appear without an explicit value */
+    template<>
+    inline bool
+    Option<bool>::isBoolean() const
+    {
+        return true;
+    }
     
     /** Option class for argument handling using a user provided function */
     struct OptionFunc : public OptionBase
@@ -159,9 +171,16 @@ namespace program_options_lite
     class OptionSpecific;
     struct Options
     {
+        Options() : scan_failed(false) {}
         ~Options();
-        
+
         OptionSpecific addOptions();
+
+        /* set by scanArgv (via storePair/parseSHORT) when an unknown option is
+         * encountered or an option is missing its value; callers treat it as a
+         * fatal command-line error. Positional (non-option) arguments are not
+         * affected: scanArgv keeps returning those for the caller to judge. */
+        bool scan_failed;
         
         struct Names
         {

@@ -22,13 +22,21 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-    
-    void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
 
-    void UnpackImage_12(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
-    
-    void UnpackImage_12P(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
-    
+    // Bayer quad ordering for the 2x2 CFA cell.
+    typedef enum
+    {
+        BAYER_ORDERING_RGGB = 0,
+        BAYER_ORDERING_GBRG = 1,
+        BAYER_ORDERING_BGGR = 2,
+    } BAYER_ORDERING;
+
+    void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, BAYER_ORDERING bayer_ordering );
+
+    void UnpackImage_12(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, BAYER_ORDERING bayer_ordering );
+
+    void UnpackImage_12P(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, BAYER_ORDERING bayer_ordering );
+
 #ifdef __cplusplus
 }
 #endif

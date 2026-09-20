@@ -130,9 +130,9 @@ int tje_encode_to_file(const char* dest_path,
 //
 //  PARAMETERS
 //      dest_path:          filename to which we will write. e.g. "out.jpg"
-//      quality:            3: Highest. Compression varies wildly (between 1/3 and 1/20).
-//                          2: Very good quality. About 1/2 the size of 3.
-//                          1: Noticeable. About 1/6 the size of 3, or 1/3 the size of 2.
+//      quality:            3: Highest. Full 4:4:4 chroma. Compression varies wildly (between 1/3 and 1/20).
+//                          2: Very good quality. About 1/2 the size of 3. 4:2:0 chroma subsampling.
+//                          1: Noticeable. About 1/6 the size of 3, or 1/3 the size of 2. 4:2:0 chroma subsampling.
 //      width, height:      image size in pixels
 //      num_components:     3 is RGB. 4 is RGBA. Those are the only supported values
 //      src_data:           pointer to the pixel data.
@@ -247,6 +247,12 @@ typedef struct
 
     // fwrite by default. User-defined when using tje_encode_with_func.
     TJEWriteContext write_context;
+
+    // 4:2:0 chroma subsampling: each chroma sample covers a 2x2 pixel quad, so an
+    // MCU is 16x16 pixels (four luma blocks + one Cb + one Cr) instead of six
+    // blocks per 8x8 -- half the DCT/entropy work. Set for quality 1 and 2;
+    // quality 3 keeps full 4:4:4 chroma.
+    int             compress_chroma_420;
 
     // Buffered output. Big performance win when using the usual stdlib implementations.
     size_t          output_buffer_count;
@@ -613,36 +619,55 @@ TJEI_FORCE_INLINE void tjei_calculate_variable_length_int(int value, uint16_t ou
     out[0] = (uint16_t)(value & ((1 << out[1]) - 1));
 }
 
-// Write bits to file.
+// Write bits to the output stream.
 TJEI_FORCE_INLINE void tjei_write_bits(TJEState* state,
-                                       uint32_t* bitbuffer, uint32_t* location,
+                                       uint64_t* bitbuffer, uint32_t* location,
                                        uint16_t num_bits, uint16_t bits)
 {
     //   v-- location
     //  [                     ]   <-- bit buffer
-    // 32                     0
+    // 64                     0
     //
     // This call pushes to the bitbuffer and saves the location. Data is pushed
     // from most significant to less significant.
-    // When we can write a full byte, we write a byte and shift.
+    //
+    // Bits accumulate in the 64-bit buffer and whole bytes are drained straight
+    // into state->output_buffer with inline stores (a 0xFF byte gets its 0x00
+    // stuffing on the way out). Routing every byte through tjei_write() -- with
+    // its per-byte bookkeeping, flush check and possible recursion -- previously
+    // dominated the encode profile.
 
     // Push the stack.
     uint32_t nloc = *location + num_bits;
-    *bitbuffer |= (uint32_t)(bits << (32 - nloc));
+    *bitbuffer |= (uint64_t)bits << (64 - nloc);
     *location = nloc;
-    while ( *location >= 8 ) {
-        // Grab the most significant byte.
-        uint8_t c = (uint8_t)((*bitbuffer) >> 24);
-        // Write it to file.
-        tjei_write(state, &c, 1, 1);
-        if ( c == 0xff )  {
-            // Special case: tell JPEG this is not a marker.
-            char z = 0;
-            tjei_write(state, &z, 1, 1);
+
+    // Drain whole bytes once enough accumulate. Codes are at most 16 bits, so
+    // the accumulator cannot overflow between drains (31 + 16 < 64).
+    if ( nloc >= 32 ) {
+        // Worst case appended per drain: 5 bytes (47 pending bits), 10 with
+        // byte stuffing.
+        if ( state->output_buffer_count >= TJEI_BUFFER_SIZE - 1 - 10 ) {
+            state->write_context.func(state->write_context.context,
+                                      state->output_buffer,
+                                      (int)state->output_buffer_count);
+            state->output_buffer_count = 0;
         }
-        // Pop the stack.
-        *bitbuffer <<= 8;
-        *location -= 8;
+
+        uint8_t* out = state->output_buffer + state->output_buffer_count;
+
+        while ( *location >= 8 ) {
+            uint8_t c = (uint8_t)((*bitbuffer) >> 56);
+            *out++ = c;
+            if ( c == 0xff ) {
+                // Special case: tell JPEG this is not a marker.
+                *out++ = 0;
+            }
+            *bitbuffer <<= 8;
+            *location -= 8;
+        }
+
+        state->output_buffer_count = (size_t)(out - state->output_buffer);
     }
 }
 
@@ -798,7 +823,7 @@ static void tjei_encode_and_write_MCU(TJEState* state,
                                       uint8_t* huff_dc_len, uint16_t* huff_dc_code, // Huffman tables
                                       uint8_t* huff_ac_len, uint16_t* huff_ac_code,
                                       int* pred,  // Previous DC coefficient
-                                      uint32_t* bitbuffer,  // Bitstack.
+                                      uint64_t* bitbuffer,  // Bitstack.
                                       uint32_t* location)
 {
     int du[64];  // Data unit in zig-zag order
@@ -1053,7 +1078,8 @@ static int tjei_encode_main(TJEState* state,
         for (i = 0; i < 3; ++i) {
             TJEComponentSpec spec;
             spec.component_id = (uint8_t)(i + 1);  // No particular reason. Just 1, 2, 3.
-            spec.sampling_factors = (uint8_t)0x11;
+            // 4:2:0: luma samples 2x2 per chroma sample (A.1.1), otherwise 1x1 everywhere.
+            spec.sampling_factors = (uint8_t)((i == 0 && state->compress_chroma_420) ? 0x22 : 0x11);
             spec.qt = tables[i];
 
             header.component_spec[i] = spec;
@@ -1108,10 +1134,93 @@ static int tjei_encode_main(TJEState* state,
     int pred_r = 0;
 
     // Bit stack
-    uint32_t bitbuffer = 0;
+    uint64_t bitbuffer = 0;
     uint32_t location = 0;
 
     int off_x, off_y;
+
+    if ( state->compress_chroma_420 ) {
+        // 4:2:0: an MCU covers 16x16 pixels as four luma blocks plus one Cb and
+        // one Cr block whose samples each average a 2x2 pixel quad -- six 8x8
+        // blocks per 256 pixels instead of twelve, halving the DCT and entropy
+        // work relative to 4:4:4.
+        float du_y4[4][64];
+        int mcu_block;
+
+        for ( y = 0; y < height; y += 16 ) {
+            for ( x = 0; x < width; x += 16 ) {
+                // du_b/du_r accumulate the 2x2 chroma averages.
+                memset(du_b, 0, sizeof(du_b));
+                memset(du_r, 0, sizeof(du_r));
+
+                for ( off_y = 0; off_y < 16; ++off_y ) {
+                    for ( off_x = 0; off_x < 16; ++off_x ) {
+                        int src_index = (((y + off_y) * width) + (x + off_x)) * src_num_components;
+
+                        int col = x + off_x;
+                        int row = y + off_y;
+
+                        // Replicate the last row/column beyond the image edges,
+                        // exactly like the 4:4:4 path below.
+                        if (row >= height) {
+                            src_index -= (width * (row - height + 1)) * src_num_components;
+                        }
+                        if (col >= width) {
+                            src_index -= (col - width + 1) * src_num_components;
+                        }
+                        assert(src_index < width * height * src_num_components);
+
+                        {
+                            uint8_t r = src_data[src_index + 0];
+                            uint8_t g = src_data[src_index + 1];
+                            uint8_t b = src_data[src_index + 2];
+
+                            float luma = 0.299f   * r + 0.587f    * g + 0.114f    * b - 128;
+                            float cb   = -0.1687f * r - 0.3313f   * g + 0.5f      * b;
+                            float cr   = 0.5f     * r - 0.4187f   * g - 0.0813f   * b;
+
+                            // Luma blocks in MCU order: left-to-right, top-to-bottom (A.2.3).
+                            du_y4[(off_y >> 3) * 2 + (off_x >> 3)][(off_y & 7) * 8 + (off_x & 7)] = luma;
+
+                            du_b[(off_y >> 1) * 8 + (off_x >> 1)] += 0.25f * cb;
+                            du_r[(off_y >> 1) * 8 + (off_x >> 1)] += 0.25f * cr;
+                        }
+                    }
+                }
+
+                for ( mcu_block = 0; mcu_block < 4; ++mcu_block ) {
+                    tjei_encode_and_write_MCU(state, du_y4[mcu_block],
+#if TJE_USE_FAST_DCT
+                                             pqt.luma,
+#else
+                                             state->qt_luma,
+#endif
+                                             state->ehuffsize[TJEI_LUMA_DC], state->ehuffcode[TJEI_LUMA_DC],
+                                             state->ehuffsize[TJEI_LUMA_AC], state->ehuffcode[TJEI_LUMA_AC],
+                                             &pred_y, &bitbuffer, &location);
+                }
+                tjei_encode_and_write_MCU(state, du_b,
+#if TJE_USE_FAST_DCT
+                                         pqt.chroma,
+#else
+                                         state->qt_chroma,
+#endif
+                                         state->ehuffsize[TJEI_CHROMA_DC], state->ehuffcode[TJEI_CHROMA_DC],
+                                         state->ehuffsize[TJEI_CHROMA_AC], state->ehuffcode[TJEI_CHROMA_AC],
+                                         &pred_b, &bitbuffer, &location);
+                tjei_encode_and_write_MCU(state, du_r,
+#if TJE_USE_FAST_DCT
+                                         pqt.chroma,
+#else
+                                         state->qt_chroma,
+#endif
+                                         state->ehuffsize[TJEI_CHROMA_DC], state->ehuffcode[TJEI_CHROMA_DC],
+                                         state->ehuffsize[TJEI_CHROMA_AC], state->ehuffcode[TJEI_CHROMA_AC],
+                                         &pred_r, &bitbuffer, &location);
+            }
+        }
+    }
+    else {
 
     for ( y = 0; y < height; y += 8 ) {
         for ( x = 0; x < width; x += 8 ) {
@@ -1179,10 +1288,24 @@ static int tjei_encode_main(TJEState* state,
         }
     }
 
+    } // !compress_chroma_420
+
     // Finish the image.
-    { // Flush
-        if (location > 0 && location < 8) {
-            tjei_write_bits(state, &bitbuffer, &location, (uint16_t)(8 - location), 0);
+    { // Flush: the accumulator can hold up to 31 pending bits. Pad the final
+      // partial byte with zeros (the unwritten low bits already are zero) and
+      // drain every remaining byte, stuffing 0xFF as usual.
+        if ( (location & 7) != 0 ) {
+            location += 8 - (location & 7);
+        }
+        while ( location >= 8 ) {
+            uint8_t c = (uint8_t)(bitbuffer >> 56);
+            tjei_write(state, &c, 1, 1);
+            if ( c == 0xff ) {
+                char z = 0;
+                tjei_write(state, &z, 1, 1);
+            }
+            bitbuffer <<= 8;
+            location -= 8;
         }
     }
     uint16_t EOI = tjei_be_word(0xffd9);
@@ -1278,6 +1401,11 @@ int tje_encode_with_func(tje_write_func* func,
         assert(!"invalid code path");
         break;
     }
+
+    // Quality 3 ("highest") keeps full 4:4:4 chroma; quality 1 and 2 use 4:2:0
+    // subsampling, which halves the DCT/entropy work and shrinks the file for
+    // no visible cost at those quantization levels.
+    state.compress_chroma_420 = (quality <= 2);
 
     TJEWriteContext wc = { 0 };
 

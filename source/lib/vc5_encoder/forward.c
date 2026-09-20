@@ -18,7 +18,7 @@
 
 #include "headers.h"
 
-#if ENABLED(NEON)
+#if ENABLED(GPR_NEON)
 #include <arm_neon.h>
 #endif
 
@@ -76,7 +76,7 @@ static void FilterVerticalTopBottom_Core_8x_C_(PIXEL *coefficients[], int column
     }
 }
 
-#if ENABLED(NEON)
+#if ENABLED(GPR_NEON)
 
 static const uint16x8_t mask = {0x0000, 0xFFFF,0x0000,0xFFFF,0x0000,0xFFFF,0x0000, 0xFFFF};
 

@@ -34,3 +34,7 @@ scripts/*.pyc
 *.exe
 *.out
 *.app
+
+# scripts/test_conversions.sh output
+scripts/out/
+out/

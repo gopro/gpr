@@ -166,18 +166,16 @@ uint8_t GetByte(STREAM *stream)
 	This routine is used by the bitstream to write a word to a byte stream.
 	A word is the number of bytes that can be stored in the internal buffer
 	used by the bitstream.
-
-	@todo Need to modify the routine to return an indication of an error
-	writing to the byte stream.
 */
 CODEC_ERROR PutWord(STREAM *stream, BITWORD word)
 {
+	CODEC_ERROR error = CODEC_ERROR_OKAY;
 	size_t written;
 
     word = Swap32(word);
-    
+
 	assert(stream != NULL);
-    
+
 	switch (stream->type)
 	{
 	case STREAM_TYPE_FILE:
@@ -187,10 +185,18 @@ CODEC_ERROR PutWord(STREAM *stream, BITWORD word)
 		break;
 
 	case STREAM_TYPE_MEMORY:
+        // Refuse to write past the end of the buffer, but keep counting the
+        // bytes that would have been written so that the caller can detect
+        // the overflow after the fact
+        if (stream->byte_count + sizeof(word) <= stream->location.memory.size)
         {
             uint8_t* buffer = (uint8_t *)stream->location.memory.buffer + stream->byte_count;
-            
-            memcpy(buffer, &word, sizeof(word));            
+
+            memcpy(buffer, &word, sizeof(word));
+        }
+        else
+        {
+            error = CODEC_ERROR_FILE_WRITE;
         }
 		break;
 
@@ -200,8 +206,8 @@ CODEC_ERROR PutWord(STREAM *stream, BITWORD word)
 	}
 
 	stream->byte_count += sizeof(word);
-    
-	return CODEC_ERROR_OKAY;
+
+	return error;
 }
 
 /*!
@@ -209,6 +215,8 @@ CODEC_ERROR PutWord(STREAM *stream, BITWORD word)
 */
 CODEC_ERROR PutByte(STREAM *stream, uint8_t byte)
 {
+	CODEC_ERROR error = CODEC_ERROR_OKAY;
+
 	assert(stream != NULL);
 
 	//assert(byte >= 0 && (byte & ~0xFF) == 0);
@@ -221,7 +229,17 @@ CODEC_ERROR PutByte(STREAM *stream, uint8_t byte)
 		break;
 
 	case STREAM_TYPE_MEMORY:
-		((uint8_t *)stream->location.memory.buffer)[stream->byte_count] = byte;
+        // Refuse to write past the end of the buffer, but keep counting the
+        // bytes that would have been written so that the caller can detect
+        // the overflow after the fact
+        if (stream->byte_count + sizeof(byte) <= stream->location.memory.size)
+        {
+            ((uint8_t *)stream->location.memory.buffer)[stream->byte_count] = byte;
+        }
+        else
+        {
+            error = CODEC_ERROR_FILE_WRITE;
+        }
 		break;
 
 	default:
@@ -231,7 +249,7 @@ CODEC_ERROR PutByte(STREAM *stream, uint8_t byte)
 
 	stream->byte_count++;
 
-	return CODEC_ERROR_OKAY;
+	return error;
 }
 
 /*!
@@ -517,6 +535,14 @@ CODEC_ERROR PutBlockFile(STREAM *stream, void *buffer, size_t size, size_t offse
 CODEC_ERROR PutBlockMemory(STREAM *stream, void *buffer, size_t size, size_t offset)
 {
 	uint8_t *block = (uint8_t *)stream->location.memory.buffer + offset;
+
+	// Refuse to write past the end of the buffer (PutBlock patches data that
+	// was already written, so unlike PutWord/PutByte no byte count advances)
+	if (offset + size > stream->location.memory.size)
+	{
+		return CODEC_ERROR_FILE_WRITE;
+	}
+
 	memcpy(block, buffer, size);
 	return CODEC_ERROR_OKAY;
 }

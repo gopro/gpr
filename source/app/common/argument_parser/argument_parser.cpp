@@ -17,10 +17,17 @@
  */
 
 #include "argument_parser.h"
+#include "gpr_platform.h"
 
 #include <stdio.h>
 
 using namespace std;
+
+#if (GPR_NEON == 1)
+#define OPTIMIZATIONS "[NEON]"
+#else
+#define OPTIMIZATIONS "[UNOPTIMIZED]"
+#endif
 
 #ifdef __GNUC__
 #define COMPILER  "[GCC %d.%d.%d]", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__
@@ -48,19 +55,31 @@ using namespace std;
 
 argument_parser::argument_parser(bool verbose)
 {
+    application_path = NULL;
 }
 
 void argument_parser::set_options()
 {
 }
 
+static void PrintConfig()
+{
+    fprintf( stderr, OPERATING_SYSTEM );
+    fprintf( stderr, COMPILER );
+    fprintf( stderr, NUMBER_OF_BITS );
+    fprintf( stderr, OPTIMIZATIONS );
+    fprintf( stderr, "\n" );
+}
+
 int argument_parser::parse(int argc, char *argv [], const char* application_text, const char* prefix_text)
 {
     argument_count = argc;
-    
+
     for (int i = 0; i < argument_count; i++)
         arguments[i] = argv[i];
-    
+
+    application_path = ( argc > 0 ) ? argv[0] : "";
+
     set_options();
     
     program_options_lite::setDefaults(command_options);
@@ -79,10 +98,7 @@ int argument_parser::parse(int argc, char *argv [], const char* application_text
         if( application_text )
         {
             fprintf( stderr, "%s", application_text );
-            fprintf( stderr, OPERATING_SYSTEM );
-            fprintf( stderr, COMPILER );
-            fprintf( stderr, NUMBER_OF_BITS );
-            fprintf( stderr, "\n" );
+            PrintConfig();
         }
         
         printf("Executable: %s \n", get_application_path() );
@@ -101,7 +117,17 @@ int argument_parser::parse(int argc, char *argv [], const char* application_text
         print_help();
         return -1;
     }
-    
+
+    // Unknown options are fatal (the specific message was already printed by the
+    // scanner). Checked after the help path so --help always wins, and distinct
+    // from the ignored-with-warning unhandled positional arguments above, which
+    // documented usage relies on ("-d 1" leaves "1" unhandled).
+    if ( command_options.scan_failed )
+    {
+        fprintf( stderr, "Exiting due to invalid command line option(s), see message(s) above. Run with --help for the option list\n" );
+        return -1;
+    }
+
     if( application_text )
     {
         if( prefix_text )
@@ -109,10 +135,7 @@ int argument_parser::parse(int argc, char *argv [], const char* application_text
         else
             fprintf( stderr, "%s", application_text );
 
-        fprintf( stderr, OPERATING_SYSTEM );
-        fprintf( stderr, COMPILER );
-        fprintf( stderr, NUMBER_OF_BITS );
-        fprintf( stderr, "\n" );
+        PrintConfig();
     }
     
     return 0;

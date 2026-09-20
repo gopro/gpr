@@ -198,7 +198,7 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
         return error;
     }
 
-    switch (parameters->rgb_resolution) {
+    switch (parameters->rgb_params.resolution) {
 
         case GPR_RGB_RESOLUTION_NONE:
             // The dimensions and format for the output of the image packing process
@@ -214,21 +214,21 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
         case GPR_RGB_RESOLUTION_HALF:
             WaveletToRGB(parameters->allocator, (PIXEL*)unpacked_image.component_array_list[0].data, (PIXEL*)unpacked_image.component_array_list[1].data, (PIXEL*)unpacked_image.component_array_list[2].data,
                          unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / 2,
-                         rgb_image, 12, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, 12, &parameters->rgb_params );
             break;
             
         case GPR_RGB_RESOLUTION_QUARTER:
             
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[0]->data[0], decoder.transform[1].wavelet[0]->data[0], decoder.transform[2].wavelet[0]->data[0],
                          decoder.transform[2].wavelet[0]->width, decoder.transform[2].wavelet[0]->height, decoder.transform[2].wavelet[0]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, 14, &parameters->rgb_params );
             break;
             
         case GPR_RGB_RESOLUTION_EIGHTH:
             
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[1]->data[0], decoder.transform[1].wavelet[1]->data[0], decoder.transform[2].wavelet[1]->data[0],
                          decoder.transform[2].wavelet[1]->width, decoder.transform[2].wavelet[1]->height, decoder.transform[2].wavelet[1]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, 14, &parameters->rgb_params );
             
             break;
             
@@ -236,7 +236,7 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
 
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[2]->data[0], decoder.transform[1].wavelet[2]->data[0], decoder.transform[2].wavelet[2]->data[0],
                          decoder.transform[2].wavelet[2]->width, decoder.transform[2].wavelet[2]->height, decoder.transform[2].wavelet[2]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, 14, &parameters->rgb_params );
             break;
             
         default:
@@ -332,15 +332,15 @@ CODEC_ERROR DecodingProcess(DECODER *decoder, BITSTREAM *stream, UNPACKED_IMAGE 
     }
 
     // Set up number of subbands to decode
-    if( parameters->rgb_resolution == GPR_RGB_RESOLUTION_SIXTEENTH )
+    if( parameters->rgb_params.resolution == GPR_RGB_RESOLUTION_SIXTEENTH )
     {
         decoder->subbands_to_decode = 1;
     }
-    else if( parameters->rgb_resolution == GPR_RGB_RESOLUTION_EIGHTH )
+    else if( parameters->rgb_params.resolution == GPR_RGB_RESOLUTION_EIGHTH )
     {
         decoder->subbands_to_decode = 4;
     }
-    else if( parameters->rgb_resolution == GPR_RGB_RESOLUTION_QUARTER )
+    else if( parameters->rgb_params.resolution == GPR_RGB_RESOLUTION_QUARTER )
     {
         decoder->subbands_to_decode = 7;
     }
@@ -492,9 +492,9 @@ CODEC_ERROR DecodeSingleImage(DECODER *decoder, BITSTREAM *input, UNPACKED_IMAGE
     
     TIMESTAMP("[END]", 2)
     
-    if( parameters->rgb_resolution == GPR_RGB_RESOLUTION_NONE ||
-        parameters->rgb_resolution == GPR_RGB_RESOLUTION_HALF ||
-        parameters->rgb_resolution == GPR_RGB_RESOLUTION_FULL )
+    if( parameters->rgb_params.resolution == GPR_RGB_RESOLUTION_NONE ||
+        parameters->rgb_params.resolution == GPR_RGB_RESOLUTION_HALF ||
+        parameters->rgb_params.resolution == GPR_RGB_RESOLUTION_FULL )
     {
         // Reconstruct the output image using the last decoded wavelet in each channel
         error = ReconstructUnpackedImage(decoder, image);
@@ -864,11 +864,13 @@ CODEC_ERROR ImageRepackingProcess(const UNPACKED_IMAGE *unpacked_image,
     {
         case PIXEL_FORMAT_RAW_RGGB_12:
         case PIXEL_FORMAT_RAW_GBRG_12:
+        case PIXEL_FORMAT_RAW_BGGR_12:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 12, output_format );
             
         case PIXEL_FORMAT_RAW_RGGB_14:
         case PIXEL_FORMAT_RAW_GBRG_14:
+        case PIXEL_FORMAT_RAW_BGGR_14:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 14, output_format );
             break;

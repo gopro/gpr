@@ -39,6 +39,7 @@
 #include "error.h"
 #include "pixel.h"
 #include "image.h"
+#include "rgb.h"
 #include "logcurve.h"
 #include "wavelet.h"
 #include "bitstream.h"

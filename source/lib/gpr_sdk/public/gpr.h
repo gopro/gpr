@@ -36,14 +36,31 @@
 
         typedef struct
         {
-          gpr_buffer            jpg_preview;                     /* Address to the memory location that this buffer points to */
-          
-          unsigned int          preview_width;                   /* Width of input source in pixels (only applies to raw input) */
-          
-          unsigned int          preview_height;                  /* Height of input source in pixels (only applies to raw input) */
+          gpr_buffer            jpg_preview;                     /* Compressed JPEG bytes to embed as the preview; its pixel
+                                                                    dimensions are read from the JPEG header when written */
 
         } gpr_preview_image;
       
+        /* Quality of a GPR encode: which quantizer table is applied to the wavelet highpass
+           bands, from the smallest files (LOW) to the highest fidelity (ULTRA). The levels are
+           those of the VC-5 encoder (VC5_ENCODER_QUALITY_SETTING in vc5_encoder.h) under the
+           SDK's own names, with identical values: gpr.cpp checks that at compile time. */
+        typedef enum
+        {
+            GPR_QUALITY_SETTING_LOW,                           // Low (smallest files)
+            GPR_QUALITY_SETTING_MEDIUM,                        // Medium
+            GPR_QUALITY_SETTING_HIGH,                          // High
+            GPR_QUALITY_SETTING_FS1,                           // Film Scan 1
+            GPR_QUALITY_SETTING_FSX,                           // Film Scan X
+            GPR_QUALITY_SETTING_FS2,                           // Film Scan 2
+            GPR_QUALITY_SETTING_ULTRA,                         // Ultra (largest files, highest fidelity)
+
+            GPR_QUALITY_SETTING_COUNT,
+
+            GPR_QUALITY_SETTING_DEFAULT = GPR_QUALITY_SETTING_FSX,
+
+        } GPR_QUALITY_SETTING;
+
         typedef struct
         {
             unsigned int        input_width;                   /* Width of input source in pixels (only applies to raw input) */
@@ -52,8 +69,12 @@
             
             unsigned int        input_pitch;                   /* Pitch of input source in pixels (only applies to raw input) */
 
-            bool                fast_encoding;
-            
+            unsigned int        input_skip_rows;               /* Rows to skip at the top of the raw image before encoding,
+                                                                  to shift the vertical Bayer phase (e.g. BGGR -> GBRG) */
+
+            unsigned int        input_skip_cols;               /* Columns to skip at the left of the raw image before encoding,
+                                                                  to shift the horizontal Bayer phase (e.g. BGGR -> GBRG) */
+
             bool                compute_md5sum;
             
             gpr_buffer          gpmf_payload;   /* GPMF payload of image file */
@@ -61,7 +82,21 @@
             gpr_preview_image   preview_image;  /* Preview JPG image */
             
             bool                enable_preview;
-          
+
+            GPR_RGB_RESOLUTION  preview_resolution; /* Resolution of the generated RGB preview (2:1, 4:1, 8:1, 16:1) */
+
+            GPR_QUALITY_SETTING quality;        /* Quality used whenever the image is encoded to GPR:
+                                                   GPR_QUALITY_SETTING_DEFAULT (Film Scan X) from
+                                                   gpr_parameters_set_defaults. A value outside the enum fails
+                                                   the conversion. Changes nothing about how a file is read. */
+
+            bool                reencode;       /* gpr_convert_gpr_to_gpr only: decode the input and encode it
+                                                   again (at quality, with the preview settings) instead of
+                                                   repackaging its vc5 bitstream. false from
+                                                   gpr_parameters_set_defaults: a GPR input is repackaged, and
+                                                   re-encoded only when a generated preview needs the encoder.
+                                                   The other conversions always encode and ignore it. */
+
             gpr_exif_info       exif_info;      /* Exif info object */
             
             gpr_profile_info    profile_info;   /* Camera color profile info object */
@@ -71,21 +106,37 @@
         } gpr_parameters;
         
         void gpr_parameters_set_defaults(gpr_parameters* x);
-        
-        void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x);
-        
+
+        void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x, gpr_malloc mem_alloc);
+
         void gpr_parameters_destroy(gpr_parameters* x, gpr_free mem_free);
-        
-        //!< Parse Metadata of DNG File and return in gpr_parameters struct
+
+        //!< Fill gpr_parameters from the metadata (EXIF, profile, tuning) of a DNG/GPR file.
+        //!< Initialize parameters with gpr_parameters_set_defaults first: what the file does not
+        //!< carry (quality, reencode, the preview settings) keeps whatever the caller left there.
+        bool gpr_parameters_parse_dng(const gpr_allocator*      allocator,
+                                            gpr_buffer*         inp_dng_buffer,
+                                            gpr_parameters*     parameters);
+
+        //!< Same as gpr_parameters_parse_dng, but streams the metadata directly from the
+        //!< file at inp_file_path instead of a memory buffer, so for a VC5-compressed GPR
+        //!< only the metadata bytes are read from disk, never the image payload
+        bool gpr_parameters_parse_dng_file(const gpr_allocator* allocator,
+                                           const char*          inp_file_path,
+                                                 gpr_parameters* parameters);
+
+        //!< Deprecated alias of gpr_parameters_parse_dng, kept for source compatibility
         bool gpr_parse_metadata(const gpr_allocator*            allocator,
                                       gpr_buffer*               inp_dng_buffer,
                                       gpr_parameters*   parameters);
         
         //!< CHECK IF DNG IS VC5 COMPRESSED
-        bool gpr_check_vc5( gpr_buffer* inp_dng_buffer, gpr_malloc mem_alloc, gpr_free mem_free );
+        bool gpr_check_vc5(const gpr_allocator*     allocator,
+                           gpr_buffer*              inp_dng_buffer);
         
         //!< CONVERSION FUNCTIONS
-        
+
+
         //!< raw to dng conversion
         bool gpr_convert_raw_to_dng(const gpr_allocator*    allocator,
                                     const gpr_parameters*   parameters,
@@ -102,7 +153,7 @@
                                     const gpr_parameters*   parameters,
                                           gpr_buffer*       inp_dng_buffer,
                                           gpr_buffer*       out_dng_buffer);
-        
+
         //!< vc5 to gpr conversion
         bool gpr_convert_vc5_to_gpr(const gpr_allocator*    allocator,
                                     const gpr_parameters*   parameters,
@@ -113,7 +164,7 @@
         bool gpr_convert_gpr_to_vc5(const gpr_allocator*    allocator,
                                           gpr_buffer*       inp_gpr_buffer,
                                           gpr_buffer*       out_vc5_buffer);
-        
+
 #if GPR_WRITING
 
         //!< raw to gpr conversion
@@ -128,22 +179,50 @@
                                           gpr_buffer*       inp_dng_buffer,
                                           gpr_buffer*       out_gpr_buffer);
 
-        //!< dng to vc5 conversion
+        //!< dng to vc5 conversion (encodes at the default quality; it takes no gpr_parameters)
         bool gpr_convert_dng_to_vc5(const gpr_allocator*    allocator,
                                           gpr_buffer*       inp_dng_buffer,
                                           gpr_buffer*       out_vc5_buffer);
 #endif // GPR_WRITING
-        
+
+#if GPR_WRITING && GPR_READING
+        //!< gpr to gpr conversion: repackages the input's vc5 bitstream with the caller's
+        //!< metadata, without decoding or re-encoding the image. Decodes and re-encodes instead
+        //!< when the caller asks for it (reencode) or when an auto-generated preview/thumbnail
+        //!< is requested (enable_preview set without supplying preview_image JPEG bytes), since
+        //!< that thumbnail is produced as a by-product of vc5 encoding.
+        bool gpr_convert_gpr_to_gpr(const gpr_allocator*    allocator,
+                                    const gpr_parameters*   parameters,
+                                          gpr_buffer*       inp_gpr_buffer,
+                                          gpr_buffer*       out_gpr_buffer);
+#endif // GPR_WRITING && GPR_READING
 
 #if GPR_READING
 
         //!< gpr to rgb conversion
         bool gpr_convert_gpr_to_rgb(const gpr_allocator*        allocator,
                                           GPR_RGB_RESOLUTION    rgb_resolution,
-                                          int                   rgb_bits,                                    
+                                          int                   rgb_bits,
                                           gpr_buffer*           inp_gpr_buffer,
                                           gpr_rgb_buffer*       out_rgb_buffer);
-        
+
+        //!< gpr to ppm conversion. Decodes to RGB (via gpr_convert_gpr_to_rgb) and prepends a
+        //!< PPM (P6) header. rgb_bits selects 8- or 16-bit samples. PPM cannot carry orientation.
+        bool gpr_convert_gpr_to_ppm(const gpr_allocator*        allocator,
+                                          GPR_RGB_RESOLUTION    rgb_resolution,
+                                          int                   rgb_bits,
+                                          gpr_buffer*           inp_gpr_buffer,
+                                          gpr_buffer*           out_ppm_buffer);
+
+        //!< gpr to jpg conversion. Decodes to 8-bit RGB (via gpr_convert_gpr_to_rgb) and encodes a
+        //!< JPEG, embedding the image orientation as an EXIF tag. jpg_quality is 1 (lowest) to 3
+        //!< (highest). Returns false if JPEG support is not compiled in (GPR_JPEG_AVAILABLE).
+        bool gpr_convert_gpr_to_jpg(const gpr_allocator*        allocator,
+                                          GPR_RGB_RESOLUTION    rgb_resolution,
+                                          int                   jpg_quality,
+                                          gpr_buffer*           inp_gpr_buffer,
+                                          gpr_buffer*           out_jpg_buffer);
+
         //!< gpr to dng conversion
         bool gpr_convert_gpr_to_dng(const gpr_allocator*    allocator,
                                     const gpr_parameters*   parameters,
@@ -155,7 +234,7 @@
                                     const gpr_parameters*   parameters,
                                           gpr_buffer*       inp_vc5_buffer,
                                           gpr_buffer*       out_dng_buffer);
-        
+
         //!< gpr to raw conversion
         bool gpr_convert_gpr_to_raw(const gpr_allocator*    allocator,
                                           gpr_buffer*       inp_gpr_buffer,

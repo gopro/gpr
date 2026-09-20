@@ -1240,14 +1240,43 @@ dng_shared::~dng_shared ()
 bool dng_shared::ParseTag (dng_stream &stream,
 						   dng_exif &exif,
 						   uint32 parentCode,
-						   bool /* isMainIFD */,
+						   bool isMainIFD,
 						   uint32 tagCode,
 						   uint32 tagType,
 						   uint32 tagCount,
 						   uint64 tagOffset,
 						   int64 /* offsetDelta */)
 	{
-	
+
+	// The DNG spec permits NoiseProfile in the main image IFD, not just IFD 0.
+	// Some cameras (e.g. Apple) store it in the raw SubIFD; parse it here so the
+	// noise model is not lost (dng_shared otherwise only reads it from IFD 0).
+	if (isMainIFD && tagCode == tcNoiseProfile && parentCode != 0)
+		{
+
+		if (!CheckTagType (parentCode, tagCode, tagType, ttDouble))
+			return false;
+
+		if (!tagCount || (tagCount & 1))
+			return false;
+
+		const uint32 numPlanes = Pin_uint32 (0, tagCount >> 1, kMaxColorPlanes);
+
+		std::vector<dng_noise_function> noiseFunctions;
+
+		for (uint32 i = 0; i < numPlanes; i++)
+			{
+			const real64 scale  = stream.TagValue_real64 (tagType);
+			const real64 offset = stream.TagValue_real64 (tagType);
+			noiseFunctions.push_back (dng_noise_function (scale, offset));
+			}
+
+		fNoiseProfile = dng_noise_profile (noiseFunctions);
+
+		return true;
+
+		}
+
 	if (parentCode == 0)
 		{
 		
