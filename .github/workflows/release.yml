@@ -1,0 +1,188 @@
+name: Release
+
+# Build, package and attach release tarballs whenever a `v*` tag is pushed.
+#
+# The user pushes a tag like `v2.0.0`; this workflow does NOT auto-tag.
+#
+# Outputs (per platform):
+#   gpr-<version>-<platform>.tar.gz containing:
+#     lib/*.a         (static libraries: vc5_encoder, vc5_common, vc5_decoder,
+#                      gpr_sdk, dng_sdk, md5_lib, ...)
+#     include/        (public headers, mirrored from source/lib)
+#     bin/gpr_tools   (CLI)
+#     README.md
+#     AUTHORS.md
+#     LICENSE.txt, LICENSE-MIT, LICENSE-APACHE (when present at the tag)
+#     CONTRIBUTING.md
+#
+# Platforms:
+#   ubuntu-latest             -> linux-x86_64
+#   macos-latest              -> macos-arm64 (NEON on)
+#   ubuntu-22.04-arm (if avail) -> linux-arm64 (NEON on)
+#
+# The Linux-arm64 runner is reported as "ubuntu-22.04-arm" in GitHub's public
+# runner image lineup. We mark it continue-on-error so a temporary
+# unavailability of the runner does not block the rest of the release.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v2.0.0). Only used for manual runs.'
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            experimental: false
+          - os: macos-latest
+            platform: macos-arm64
+            experimental: false
+          - os: ubuntu-22.04-arm
+            platform: linux-arm64
+            experimental: true
+
+    steps:
+      - name: Resolve version
+        id: version
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            VERSION="$REQUESTED_TAG"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          if [[ ! "$VERSION" =~ ^v[0-9][A-Za-z0-9._+-]*$ ]]; then
+            echo "Expected a version tag such as v2.0.0 or v2.0.0-rc1" >&2
+            exit 1
+          fi
+          VERSION_NOV="${VERSION#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version_nov=${VERSION_NOV}" >> "$GITHUB_OUTPUT"
+          echo "ref=refs/tags/${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version: $VERSION (file suffix: $VERSION_NOV)"
+
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.version.outputs.ref }}
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: Configure & build
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            make -j"$(nproc)"
+          else
+            make -j"$(sysctl -n hw.ncpu)"
+          fi
+
+      - name: Stage release tree
+        id: stage
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version_nov }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          STAGE="${RUNNER_TEMP}/gpr-${RELEASE_VERSION}-${RELEASE_PLATFORM}"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/lib" "$STAGE/include" "$STAGE/bin"
+
+          # All SDK link dependencies are required in a release bundle.
+          for lib in vc5_encoder vc5_common vc5_decoder gpr_sdk dng_sdk md5_lib common expat_lib xmp_core tiny_jpeg; do
+            archive="build/source/lib/${lib}/lib${lib}.a"
+            test -f "$archive"
+            cp "$archive" "$STAGE/lib/"
+            echo "Staged $archive"
+          done
+
+          # Preserve paths relative to source/lib on both Linux and macOS.
+          while IFS= read -r -d '' header; do
+            relative="${header#source/lib/}"
+            dest="$STAGE/include/$relative"
+            mkdir -p "$(dirname "$dest")"
+            cp "$header" "$dest"
+          done < <(find source/lib -type f -name "*.h" -print0)
+
+          # CLI binary.
+          if [ -x build/source/app/gpr_tools/gpr_tools ]; then
+            cp build/source/app/gpr_tools/gpr_tools "$STAGE/bin/"
+          fi
+
+          # Include documentation and license files present at the release tag.
+          for f in README.md AUTHORS.md CONTRIBUTING.md LICENSE LICENSE.md LICENSE.txt LICENSE-MIT LICENSE-APACHE; do
+            [ -f "$f" ] && cp "$f" "$STAGE/" || true
+          done
+
+          # Compile and run a consumer using only the staged SDK, before packing.
+          bash tools/test/test_installed_sdk.sh "$STAGE"
+
+          # Pack.
+          TARBALL="${RUNNER_TEMP}/gpr-${RELEASE_VERSION}-${RELEASE_PLATFORM}.tar.gz"
+          tar -C "$(dirname "$STAGE")" -czf "$TARBALL" "$(basename "$STAGE")"
+          ls -lh "$TARBALL"
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpr-${{ steps.version.outputs.version_nov }}-${{ matrix.platform }}
+          path: ${{ steps.stage.outputs.tarball }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only publish when triggered by a real tag push, not workflow_dispatch.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/release-artifacts
+
+      - name: Flatten artifact directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-flat"
+          # Each upload-artifact action created a subdirectory; the tarball
+          # lives inside it. Move tarballs to a single dir for release upload.
+          find "$RUNNER_TEMP/release-artifacts" -type f -name "*.tar.gz" -exec mv {} "$RUNNER_TEMP/release-flat/" \;
+          ls -lh "$RUNNER_TEMP/release-flat/"
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ runner.temp }}/release-flat/*.tar.gz
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

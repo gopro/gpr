@@ -1,0 +1,317 @@
+{
+  "schema": "gpr.release_evidence.v1",
+  "source_revision": "3d675ef95d2e1470af0a60abb81994eb09bb5aa6",
+  "archive": "https://github.com/dcliftreaves/gpr/tree/archive/research-and-integration-2026-09-09",
+  "scope": "source_revision identifies retained historical evidence, not the current verification below. Artifact paths are relative to GPR_EXTERNAL_ROOT. Recorded verdicts are unchanged; consult current_scope for approval boundaries.",
+  "preserved_parent_archive": "https://github.com/dcliftreaves/gpr/tree/f13dbe95d3e97c400e8d493ba178dbb037ff3c96",
+  "current_scope": {
+    "as_of": "2026-10-14",
+    "approved_offline_8k_model": "mission1_native12_8k_sr_q4t2_coord_detail_alpha0p5_v1",
+    "approved_offline_8k_registry_scope": "offline_production",
+    "visually_approved_4k_model": "mission1_native12_4k_cleanup_rgb_cfa_w40_v1",
+    "visually_approved_4k_registry_scope": "offline_review_only",
+    "model_promotion_performed": false,
+    "legacy_offline_preview_scope": "Research-only evaluator; historical production_paths verdict is retained, not current runtime support.",
+    "psf_policy": "Optional research, not a baseline requirement. Historical candidate flags are not current release policy.",
+    "camera_production_verified": false,
+    "durable_sd_20fps_verified": false
+  },
+  "current_verification": {
+    "date": "2026-10-14",
+    "production_revision": "89a6479981d1baa32e69e1a952ef4b3650ae14e2",
+    "validation_revision": "83f30c9c9d8e15a1c5bf679a0239a1a81081d5c2",
+    "target": "Pi 5 file-backed replay; camera-only build, diagnostics explicitly enabled",
+    "input": "GP017601.raw",
+    "input_sha256": "379a68e7a2f8cfd99d71937cf1816c749389e831ba60358485f7a4a69186c15a",
+    "source_width": 4096,
+    "source_height": 3072,
+    "fresh_encodes": 120,
+    "unique_input_frames": 1,
+    "outputs_identical_to_previous_build": true,
+    "gvid_sha256": "02f52c46a5a03155c61309b4dd5c4c3e3203a439ea1fbae4d6acb7b68a31774c",
+    "encoder_binary_sha256": "5f498e51f474335641c082903734d00e9f110edf78c43593d3a3e0070bfa3b38",
+    "encode_write_seconds": 5.011677982285619,
+    "final_fsync_seconds": 1.7659502197057009,
+    "ssd_fsync_fps": 17.705308763431884,
+    "baseline_encode_write_seconds": 5.049391435459256,
+    "baseline_ssd_fsync_fps": 17.602560699208315,
+    "peak_rss_kib": 55296,
+    "native_ctest_passed": 10,
+    "build_profiles_passed": ["default", "camera", "stills", "utilities", "codec_test", "preview_test"],
+    "invalid_build_profiles_rejected": true,
+    "stills_only_tests": {
+      "metadata_phases": ["rggb", "gbrg", "grbg", "bggr"],
+      "metadata_bit_depths": [14, 16],
+      "metadata_roundtrips_passed": 8,
+      "synthetic_raw_gpr_roundtrip_psnr14_db": 80.66
+    },
+    "preview": {
+      "width": 1024,
+      "height": 768,
+      "pixel_equivalence_frames": 3,
+      "identical_pixels": true,
+      "timing_frames": 120,
+      "write_frames": false,
+      "wall_seconds": 2.97,
+      "median_decode_plus_isp_ms": 22.421,
+      "peak_rss_kib": 22752,
+      "binary_sha256": "3d49aee6fb80adc240a587437f0fb343888ccf73a1bc246351a25d1ce0c9e093"
+    },
+    "receipts": [
+      {"path": "artifacts/pr-isolation-20261014/capture.json", "sha256": "fd54d9c04a20a40c4ed9ae1060ad009164bdadcaf3dad4b9baa890c0b8e416a2"},
+      {"path": "artifacts/pr-isolation-20261014/preview-equivalence.json", "sha256": "f3993d1ff0b33e81695665385f470d1b87271f5013c13b335086ddbbd9f7a977"},
+      {"path": "artifacts/pr-isolation-20261014/preview-idle/receipt.json", "sha256": "96f15f08f3862b9f2fb3e4e4920fae8aadcce19cd56c2818833c5aaeacbc3e73"}
+    ],
+    "limitations": [
+      "Receipts retained on Pi SSD under GPR_EXTERNAL_ROOT; temporary GVID and RGB frames removed after verification.",
+      "Single-input replay, not sensor/DMA, camera display, sustained SD capture, or fresh CNN quality evidence.",
+      "SSD final-fsync throughput remains below 20 fps; buffered throughput does not establish durability.",
+      "Preview timing uses a cached clip with RGB frame writes disabled."
+    ]
+  },
+  "previous_verification": {
+    "date": "2026-10-13",
+    "production_revision": "fdb9171",
+    "target": "Pi 5 file-backed replay",
+    "input": "GP017601",
+    "source_width": 4096,
+    "source_height": 3072,
+    "fresh_encodes": 120,
+    "outputs_identical_to_previous_build": true,
+    "buffered_fps": 23.8818,
+    "ssd_fsync_fps": 17.6722,
+    "baseline_buffered_fps": 23.8236,
+    "baseline_ssd_fsync_fps": 17.6332,
+    "peak_rss_kib": 55440,
+    "provenance": "User-supplied verification summary; no new run or artifact hash supplied. Not rerun during documentation cleanup.",
+    "limitations": [
+      "Buffered throughput is not durable SD 20 fps proof; SSD fsync is below 20 fps.",
+      "Not sensor/DMA, camera display, or new preview evidence.",
+      "Previous-build revision and artifact hashes are not supplied."
+    ]
+  },
+  "production_paths": [
+    {
+      "id": "still_smallest",
+      "family": "stills",
+      "status": "production-pass",
+      "pipeline": "codec=gpr_tools_q0+cnn=bibo1x_ane_gpr_tools_q3+demosaic=sips_via_gpr_tools",
+      "ship_class": "STILL",
+      "committed_run_hash": "54f001717c547574",
+      "metrics": {
+        "image_count": 4,
+        "mean_mb": 9.798,
+        "min_mb": 3.218,
+        "max_mb": 16.606,
+        "worst_lpips": 0.0314,
+        "min_ms_ssim": 0.9915,
+        "min_y_psnr": 40.59,
+        "max_dE2000": 0.92
+      }
+    },
+    {
+      "id": "still_primary",
+      "family": "stills",
+      "status": "production-pass",
+      "pipeline": "codec=gpr_tools_q3+cnn=bibo1x_ane_gpr_tools_q3+demosaic=sips_via_gpr_tools",
+      "ship_class": "STILL",
+      "committed_run_hash": "b44fa841c05c9bff",
+      "metrics": {
+        "image_count": 4,
+        "mean_mb": 15.055,
+        "min_mb": 7.806,
+        "max_mb": 21.431,
+        "worst_lpips": 0.0155,
+        "min_ms_ssim": 0.9961,
+        "min_y_psnr": 44.45,
+        "max_dE2000": 0.72
+      }
+    },
+    {
+      "id": "still_archival",
+      "family": "stills",
+      "status": "production-pass",
+      "pipeline": "codec=gpr_tools_q8+cnn=none+demosaic=sips_via_gpr_tools",
+      "ship_class": "STILL",
+      "committed_run_hash": "9837b797660627aa",
+      "metrics": {
+        "image_count": 4,
+        "mean_mb": 27.174,
+        "min_mb": 16.185,
+        "max_mb": 41.042,
+        "worst_lpips": 0.0035,
+        "min_ms_ssim": 0.9989,
+        "min_y_psnr": 51.89,
+        "max_dE2000": 0.51
+      }
+    },
+    {
+      "id": "video_freeze_primary",
+      "family": "video_raw",
+      "status": "production-pass",
+      "pipeline": "codec=ml2_q3_l1x2+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools",
+      "ship_class": "VIDEO_FREEZE",
+      "committed_run_hash": "5c3cce4c472d4197"
+    },
+    {
+      "id": "video_freeze_smallest",
+      "family": "video_raw",
+      "status": "production-pass",
+      "pipeline": "codec=ml2_q3_l2x2_l1x2_hh1x2+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools",
+      "ship_class": "VIDEO_FREEZE",
+      "committed_run_hash": "f2f3e652f2d26dbf"
+    },
+    {
+      "id": "video_freeze_smallest_conservative",
+      "family": "video_raw",
+      "status": "production-pass",
+      "pipeline": "codec=ml2_q3_l2x2_l1x2+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools",
+      "ship_class": "VIDEO_FREEZE",
+      "committed_run_hash": "8941d5ac9b33f826"
+    },
+    {
+      "id": "video_freeze_alternate_tighter_lpips",
+      "family": "video_raw",
+      "status": "production-pass",
+      "pipeline": "codec=ml2_q3+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools",
+      "ship_class": "VIDEO_FREEZE",
+      "committed_run_hash": "40c393acc2ad89bc"
+    },
+    {
+      "id": "upresable_editable_raw",
+      "family": "upresable",
+      "status": "production-pass",
+      "pipeline": "codec=ml2_q3_dec2+cnn=bibo2x_ane_ml2_q3_dec2_diverse+demosaic=sips_via_gpr_tools",
+      "ship_class": "UPRESABLE",
+      "committed_run_hash": "8864c12ec0b6ce14"
+    },
+    {
+      "id": "preview_offline_review_q8_threeway",
+      "family": "preview",
+      "status": "production-pass-external-receipt",
+      "pipeline": "codec=ml2_q3_dec2+cnn=preview_q8_threeway_runtime_fullframe_v1+demosaic=sips_via_gpr_tools",
+      "ship_class": "PREVIEW",
+      "external_receipt": "artifacts/preview_runtime_policy_20260613/q8_threeway_runtime_full_holdout_v1/preview_q8_threeway_runtime_fullframe.json",
+      "metrics": {
+        "holdout_rows": 84,
+        "passing_rows": 84,
+        "worst_lpips": 0.1178,
+        "worst_ms_ssim": 0.9548,
+        "worst_y_psnr": 30.87,
+        "worst_dE2000": 2.64,
+        "seconds_per_image": 13.65,
+        "fps": 0.073,
+        "peak_rss_gb": 5.37
+      }
+    },
+    {
+      "id": "preview_live_mission1_1024",
+      "family": "preview",
+      "status": "production-pass-external-receipt",
+      "ship_class": "PREVIEW",
+      "external_receipt": "artifacts/mission1_current_goal_sync_20260625/run_1440f_direct_gvid/preview_decode_1024x768/receipt.json",
+      "metrics": {
+        "source_width": 4096,
+        "source_height": 3072,
+        "preview_width": 1024,
+        "preview_height": 768,
+        "frames": 1440,
+        "whole_run_fps": 24.2,
+        "decode_plus_target_fps_median": 43.86,
+        "target_fps": 20
+      },
+      "constraints": [
+        "No REF content at render time.",
+        "Production claim is bounded to the 1024 x 768 full-frame Mission 1 preview target.",
+        "Actual Mission 1 UI/display handoff still requires a camera-role receipt."
+      ]
+    },
+    {
+      "id": "gvid_container",
+      "family": "container",
+      "status": "production-supported",
+      "external_receipts": [
+        "artifacts/upresable_missing_hard_20260606/upresable_timelapse.gvid",
+        "artifacts/upresable_missing_hard_20260606/summary.json",
+        "artifacts/gvid_runtime_dispatch_20260604/full_gate_synthetic.gvid.dispatch.json"
+      ]
+    },
+    {
+      "id": "mov_wrapper",
+      "family": "container",
+      "status": "production-supported",
+      "external_receipts": [
+        "artifacts/upresable_missing_hard_20260606/upresable_timelapse.gpr1.mov",
+        "artifacts/upresable_missing_hard_20260606/summary.json"
+      ]
+    },
+    {
+      "id": "prores_review_outputs",
+      "family": "review",
+      "status": "production-supported",
+      "external_receipts": [
+        "artifacts/preview_review_20260604/barnsky_codec_only_120f_4k_prores_hq.mov",
+        "artifacts/preview_review_20260604/barnsky_sota_v2_120f_4k_prores_hq.mov",
+        "artifacts/preview_review_20260604/barnsky_codec_vs_sota_v2_120f_3840x1080_prores_hq.mov",
+        "artifacts/preview_review_20260604/upresable_720f_4k_prores_hq.mov",
+        "artifacts/upresable_missing_hard_20260606/upresable_timelapse.mov"
+      ]
+    },
+    {
+      "id": "editable_dng_gpr_outputs",
+      "family": "editable_raw",
+      "status": "production-supported",
+      "external_receipts": [
+        "artifacts/upresable_missing_hard_20260606/summary.json",
+        "artifacts/upresable_missing_hard_20260606/editable_dng",
+        "artifacts/upresable_missing_hard_20260606/editable_gpr"
+      ]
+    }
+  ],
+  "platform_performance": [
+    {
+      "id": "pi5_mission1_bench_fused_dma_like_stream_source",
+      "status": "measured-stage",
+      "target": "4K Bayer .gvid encode from DMA-like mmap-ring source at the accepted 20 fps floor",
+      "metrics": {
+        "source_width": 4096,
+        "source_height": 3072,
+        "frame_count": 1440,
+        "target_fps": 20,
+        "stage_fps": 19.99048,
+        "effective_fps": 19.99048,
+        "encode_write_median_ms": 45.6665,
+        "encode_write_p95_ms": 56.3,
+        "payload_bytes": 7882678080,
+        "production_evidence": false
+      },
+      "receipts": [
+        "artifacts/bench_fused_stream_source_20260628_pi_compact/receipt_4096x3072_1440f_20fps_mmap_ready_fll2_GP017602_replay.json"
+      ],
+      "stage_scope": "production encoder with deterministic DMA-like source handoff; profiling only, not camera evidence"
+    }
+  ],
+  "historical_visual_signoff": [
+    {
+      "id": "mission1_8k_sr_step0075_visual_signoff_20260701",
+      "scope": "Historical review-only candidate signoff. The recorded PSF flag preserves then-current policy, not a requirement for today's approved alpha0p5 baseline. No recorded metric or verdict is rewritten.",
+      "receipts": [
+        "artifacts/mission1_8k_sr_coord_detail_psf_focus_step0075_visual_signoff_20260701/visual_signoff.json"
+      ],
+      "hashes": {
+        "visual_signoff_json_sha256": "38ea3d1135909460f22651b747c376d59bad5ac94977a4282ed622e2491de27b"
+      },
+      "metrics": {
+        "manual_visual_review_complete": 1,
+        "objective_checks_pass": 1,
+        "controlled_native_psf_evidence_required_for_future_replacement": 1
+      }
+    }
+  ],
+  "limitations": [
+    "Pi timings are stand-in evidence, not measured Mission 1 firmware performance.",
+    "Missing external model files or camera fixtures are not passing tests.",
+    "Premium still SR has not been promoted.",
+    "Mission 1 and iPhone nonzero noise addback require validated camera/ISO calibration."
+  ]
+}

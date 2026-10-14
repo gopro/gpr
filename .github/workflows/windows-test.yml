@@ -1,0 +1,35 @@
+name: Windows Build Test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build
+        shell: cmd
+        run: |
+          cmake -S . -B build -DNEON=OFF -DBUILD_TESTING=ON -DGPR_TEST_RESEARCH=ON -DGPR_ENABLE_VIDEO=OFF -DGPR_BUILD_PREVIEW_TOOLS=OFF
+          cmake --build build --config Release --parallel
+      - name: ANS and codec smoke
+        shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          ans=$(find build -name ans_test.exe -print -quit)
+          gpr=$(find build -name gpr_tools.exe -print -quit)
+          test -n "$ans" && test -n "$gpr"
+          "$ans"
+          scratch=$(mktemp -d "$TMPDIR/gpr-windows.XXXXXX")
+          "$gpr" -i data/samples/Hero6/GOPR0024.GPR -o "$scratch/test.DNG"
+          "$gpr" -i "$scratch/test.DNG" -o "$scratch/test_vlc.GPR"
+          "$gpr" -i "$scratch/test.DNG" -o "$scratch/test_ans.GPR" -A 1
+          "$gpr" -i "$scratch/test.DNG" -o "$scratch/test_ansdn.GPR" -A 1 -D 1
+          "$gpr" -i "$scratch/test_ansdn.GPR" -o "$scratch/test.RAW"
+          test -s "$scratch/test_vlc.GPR"
+          test -s "$scratch/test_ans.GPR"
+          test -s "$scratch/test.RAW"
