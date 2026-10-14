@@ -1,31 +1,39 @@
-# How to Contribute
+# Contributing
 
-Want to contribute to GPR? Please take a moment to review this document in order to make your contribution and the process around it easier and more effective for everyone.
+This guide applies to the [dcliftreaves/gpr fork](https://github.com/dcliftreaves/gpr).
+Use the [fork issue tracker](https://github.com/dcliftreaves/gpr/issues)
+for bugs and feature proposals. For vulnerabilities, follow
+[SECURITY.md](SECURITY.md).
 
-## Issue tracker
+## Issues and pull requests
 
-The [issue tracker](https://www.github.com/gopro/gpr/issues) is the best place to report a bug. Please make sure to check the following guide on how to use the issue tracker :
+Search existing issues first. Include the source commit, platform, build
+configuration, reproduction command, and a small shareable input when possible.
+Describe expected and observed behavior. Discuss substantial API or format
+changes before implementation.
 
-### Reporting a bug
- 
-- If you really think it is a bug, consult the list of issues and make sure nobody has reported it yet. This will avoid duplication of effort.
-- If it hasn't been reported yet, submit a new issue.
+Create a focused branch from the fork's current base and open a pull request
+against the fork. Explain the behavior change and relevant validation.
+Use [Getting Started](docs/GETTING_STARTED.md) for building and
+[Testing Methodology](https://github.com/dcliftreaves/gpr/blob/review/product-validation/docs/TESTING_METHODOLOGY.md) for checks appropriate to
+the change. Keep documentation and examples portable.
 
-### Suggesting a feature
+Preserve format compatibility and existing quality thresholds. A new quality
+claim needs its matching gate receipt; do not hand-edit
+[quality signoffs](https://github.com/dcliftreaves/gpr/blob/review/product-validation/docs/claims_log.md). Hardware, stand-in, and offline
+results must retain their scope labels.
 
-- Consult the roadmap within [projects](https://github.com/gopro/gpr/projects) to know if it is planned.
-- Consult the list of things that **won't** be implemented.
-- Read up on what type of feature requests are accepted.
-- See if anybody has not requested the feature yet.
-- If it hasn't beed requested yet, submit a new request as an issue.
+## Licensing and upstream contributions
 
-### Submitting a pull-request
+Preserve applicable copyright notices, license terms, and third-party
+attributions. Submit only material you have the right to contribute.
+The repository's existing license files and source notices remain authoritative;
+this guide adds no license grant or CLA requirement.
 
-- All contributors must sign a [contributor license agreement (CLA)](https://cla.gopro.com). Your code will not be reviewed and accepted by the Admins until this has been received.
-- To be sure your changes could be interesting and accepted, ask about your patch on Discourse.
-- Fork the repository and work on the `master` branch, while respecting the imposed guidelines.
-- Add tests if needed, and make sure that all of them pass.
-- Document the code according to the guidelines, and make sure the build is OK. If you encounter some problem with the Closure Compiler part, don't hesitate to ask.
-- Submit a pull request for your changes.
-- The Admins will review your work and may optionally request conformance, functional or other changes. Work with them to resolve any issues.
-- Upon acceptance, your code will be added to the main branch and available for all.
+Contributing directly to [GoPro's upstream repository](https://github.com/gopro/gpr)
+is a separate process governed by its contribution instructions. The original
+upstream guide required a GoPro CLA; that requirement is not presented here
+as a new requirement for this fork.
+
+See the [documentation index](docs/README.md) for the current product and
+integration guides.

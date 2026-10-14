@@ -1247,25 +1247,45 @@ bool dng_shared::ParseTag (dng_stream &stream,
 						   uint64 tagOffset,
 						   int64 /* offsetDelta */)
 	{
-	
+
 	if (parentCode == 0)
 		{
-		
+
 		if (Parse_ifd0 (stream,
 						exif,
 						parentCode,
 						tagCode,
 						tagType,
-						tagCount,
-						tagOffset))
+			tagCount,
+			tagOffset))
 			{
-			
+
 			return true;
-			
+
 			}
 
 		}
-		
+
+	if (parentCode >= tcFirstSubIFD &&
+		parentCode <= tcLastSubIFD &&
+		tagCode == tcNoiseProfile)
+		{
+
+		if (Parse_ifd0 (stream,
+						exif,
+							parentCode,
+							tagCode,
+							tagType,
+							tagCount,
+							tagOffset))
+			{
+
+			return true;
+
+			}
+
+		}
+
 	if (parentCode == 0 ||
 		parentCode == tcExifIFD)
 		{

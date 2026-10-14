@@ -1,0 +1,7 @@
+# CNN inference and runtime receipt dependencies.
+torch>=2.0
+numpy>=1.20
+rawpy>=0.18
+pillow>=9.0
+opencv-python>=4.8
+tifffile>=2024.0

@@ -1,0 +1,55 @@
+{
+  "$schema": "test_set.schema.json (not yet written)",
+  "$doc": "Frozen test set for the ship-gate. Owned by david@happy.ai. Adding/removing images requires an isolated PR. The gate runner refuses to start if any source DNG is missing.",
+  "$rules": [
+    "Never add an image you picked for a specific run.",
+    "Never remove an image because a pipeline fails on it. Failing the gate IS the answer.",
+    "Crop positions are pixel-fixed. Don't 'recenter' a crop to make it look better.",
+    "Characteristics field is descriptive, not a workaround — every image counts for every gate."
+  ],
+  "metric_eval_dims": {
+    "$doc": "Single downsample target for all metric computation. Prevents picking 'easy' resolutions.",
+    "width": 3840,
+    "interp": "LANCZOS"
+  },
+  "crops": {
+    "$doc": "100% crop positions in source-DNG pixel coords. Same coords across all images even if content differs.",
+    "A_detail":    {"x": 3000, "y": 2000, "w": 512, "h": 512},
+    "B_center":    {"x": 4000, "y": 2800, "w": 512, "h": 512},
+    "C_lowerleft": {"x": 1200, "y": 4200, "w": 512, "h": 512}
+  },
+  "images": [
+    {
+      "id": "Z8Z_0001",
+      "path": "artifacts/visual_compare_20260525/source_dngs/Z8Z_0001.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "hard-detail-shadow",
+      "notes": "Dark rocks with fine texture; high spatial frequency content. Detail-A crop is the canonical hard case for blockiness/cross-hatch artifacts."
+    },
+    {
+      "id": "Z8Z_0067",
+      "path": "barnsky_full_dngs/Z8Z_0067.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "smooth-gradient",
+      "notes": "Sky/horizon with mostly low frequencies. Easy case; if a pipeline fails this, it's seriously broken."
+    },
+    {
+      "id": "Z8Z_5323",
+      "path": "artifacts/visual_compare_20260525/source_dngs/Z8Z_5323.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "high-detail-studio",
+      "notes": "Studio shot with sharp edges and texture. Stresses high-frequency preservation."
+    },
+    {
+      "id": "Z8Z_6693",
+      "path": "artifacts/visual_compare_20260525/source_dngs/Z8Z_6693.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "mixed-contrast",
+      "notes": "Mixed-content scene; representative average difficulty."
+    }
+  ]
+}

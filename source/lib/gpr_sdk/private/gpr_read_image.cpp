@@ -31,6 +31,62 @@
 
 #include "vc5_decoder.h"
 
+static int gpr_read_image_cfa_phase_from_ifd(const dng_ifd &ifd)
+{
+    if (ifd.fPhotometricInterpretation != piCFA ||
+        ifd.fSamplesPerPixel != 1 ||
+        ifd.fCFARepeatPatternRows != 2 ||
+        ifd.fCFARepeatPatternCols != 2)
+    {
+        return -1;
+    }
+
+    const uint8 tl = ifd.fCFAPattern[0][0];
+    const uint8 tr = ifd.fCFAPattern[0][1];
+    const uint8 bl = ifd.fCFAPattern[1][0];
+    const uint8 br = ifd.fCFAPattern[1][1];
+
+    if (tl == 1 && tr == 0 && bl == 2 && br == 1) return 0; // GRBG
+    if (tl == 0 && tr == 1 && bl == 1 && br == 2) return 1; // RGGB
+    if (tl == 2 && tr == 1 && bl == 1 && br == 0) return 2; // BGGR
+    if (tl == 1 && tr == 2 && bl == 0 && br == 1) return 3; // GBRG
+    return -1;
+}
+
+static VC5_DECODER_PIXEL_FORMAT gpr_read_image_pixel_format_from_phase_and_depth(int phase, uint32 bit_depth)
+{
+    if (bit_depth >= 16)
+    {
+        switch (phase)
+        {
+            case 0: return VC5_DECODER_PIXEL_FORMAT_GRBG_16;
+            case 2: return VC5_DECODER_PIXEL_FORMAT_BGGR_16;
+            case 3: return VC5_DECODER_PIXEL_FORMAT_GBRG_16;
+            case 1:
+            default: return VC5_DECODER_PIXEL_FORMAT_RGGB_16;
+        }
+    }
+    if (bit_depth > 12)
+    {
+        switch (phase)
+        {
+            case 0: return VC5_DECODER_PIXEL_FORMAT_GRBG_14;
+            case 2: return VC5_DECODER_PIXEL_FORMAT_BGGR_14;
+            case 3: return VC5_DECODER_PIXEL_FORMAT_GBRG_14;
+            case 1:
+            default: return VC5_DECODER_PIXEL_FORMAT_RGGB_14;
+        }
+    }
+    switch (phase)
+    {
+        case 0: return VC5_DECODER_PIXEL_FORMAT_GRBG_12;
+        case 2: return VC5_DECODER_PIXEL_FORMAT_BGGR_12;
+        case 3: return VC5_DECODER_PIXEL_FORMAT_GBRG_12;
+        case 1:
+        default: return VC5_DECODER_PIXEL_FORMAT_RGGB_12;
+    }
+}
+
 static bool DecodeVC5(dng_image &image, gpr_buffer_auto& vc5_buffer, VC5_DECODER_PIXEL_FORMAT pixel_format )
 {
     gpr_buffer_auto raw_buffer( malloc, free );
@@ -53,9 +109,9 @@ static bool DecodeVC5(dng_image &image, gpr_buffer_auto& vc5_buffer, VC5_DECODER
     }
     
     raw_buffer.set( raw_image.buffer, raw_image.size, true );
-    
+
     dng_point size = image.Bounds().Size();
-    
+
     CopyBufferToRawImage( raw_buffer, size.h, image );
 
     return true;
@@ -90,18 +146,22 @@ void gpr_read_image::ReadTile (dng_host &host,
             
             if( GetDecodeVC5() == true )
             {
-                bool rggb_raw = (ifd.fCFAPattern[0][0] == 0) && (ifd.fCFAPattern[0][1] == 1) && (ifd.fCFAPattern[1][0] == 1) && (ifd.fCFAPattern[1][1] == 2);
+                int cfa_phase = gpr_read_image_cfa_phase_from_ifd(ifd);
+                if (cfa_phase < 0)
+                    cfa_phase = 1;
                 
-                VC5_DECODER_PIXEL_FORMAT pixel_format;
-                
-                if( rggb_raw )
-                {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_14;
-                }
+                // Use WhiteLevel to infer actual bit depth, NOT BitsPerSample
+                // (BitsPerSample is always 16 for uint16 DNG storage)
+                uint32 white_level = (uint32)ifd.fWhiteLevel[0];
+                uint32 bit_depth;
+                if (white_level <= 4095)
+                    bit_depth = 12;
+                else if (white_level <= 16383)
+                    bit_depth = 14;
                 else
-                {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_12;
-                }
+                    bit_depth = 16;
+                VC5_DECODER_PIXEL_FORMAT pixel_format =
+                    gpr_read_image_pixel_format_from_phase_and_depth(cfa_phase, bit_depth);
                 
                 if( DecodeVC5( image, *_vc5_buffer, pixel_format ) )
                 {

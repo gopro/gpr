@@ -25,9 +25,17 @@ extern "C" {
     
     void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
 
+    void UnpackImage_14_Phase(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, int bayer_phase );
+
     void UnpackImage_12(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
+
+    void UnpackImage_12_Phase(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, int bayer_phase );
     
     void UnpackImage_12P(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
+
+    void UnpackImage_16(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
+
+    void UnpackImage_16_Phase(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, int bayer_phase );
     
 #ifdef __cplusplus
 }

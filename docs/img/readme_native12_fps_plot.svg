@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="420" viewBox="0 0 1180 420" role="img" aria-labelledby="title desc">
+  <title id="title">Mission 1 native 12MP encode speed evidence</title>
+  <desc id="desc">A bar chart showing native 12MP Pi stand-in throughput against 20 fps proxy and 24 fps strict targets.</desc>
+  <rect width="1180" height="420" fill="#f7f8fa"/>
+  <text x="48" y="58" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#111827">Native 12MP raw video on Pi 5 stand-in</text>
+  <text x="48" y="92" font-family="Inter, Arial, sans-serif" font-size="16" fill="#4b5563">Fresh Bayer encoding exceeds 20 fps with buffered writes. These probes exclude the final storage flush.</text>
+  <line x1="120" y1="320" x2="1080" y2="320" stroke="#d1d5db" stroke-width="2"/>
+  <line x1="120" y1="128" x2="1080" y2="128" stroke="#ff5a1f" stroke-width="3" stroke-dasharray="8 8"/>
+  <text x="990" y="119" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" fill="#c2410c">24 fps strict</text>
+  <line x1="120" y1="160" x2="1080" y2="160" stroke="#00875a" stroke-width="3" stroke-dasharray="8 8"/>
+  <text x="982" y="153" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" fill="#047857">20 fps proxy</text>
+  <g font-family="Inter, Arial, sans-serif" font-size="14" fill="#374151">
+    <text x="70" y="324">0</text>
+    <text x="62" y="260">8</text>
+    <text x="54" y="196">16</text>
+    <text x="54" y="132">24</text>
+  </g>
+  <g>
+    <rect x="170" y="135" width="160" height="185" rx="6" fill="#2563eb"/>
+    <text x="250" y="118" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">23.13</text>
+    <text x="250" y="348" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">GP017601</text>
+    <text x="250" y="370" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13" fill="#4b5563">1440f sustained</text>
+  </g>
+  <g>
+    <rect x="390" y="138" width="160" height="182" rx="6" fill="#2563eb"/>
+    <text x="470" y="121" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">22.70</text>
+    <text x="470" y="348" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">GP017602</text>
+    <text x="470" y="370" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13" fill="#4b5563">hard frame</text>
+  </g>
+  <g>
+    <rect x="610" y="125" width="160" height="195" rx="6" fill="#2563eb"/>
+    <text x="690" y="108" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">24.35</text>
+    <text x="690" y="348" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">GP017603</text>
+    <text x="690" y="370" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13" fill="#4b5563">1440f sustained</text>
+  </g>
+  <g>
+    <rect x="830" y="137" width="160" height="183" rx="6" fill="#0f766e"/>
+    <text x="910" y="120" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">22.92</text>
+    <text x="910" y="348" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">best repeat</text>
+    <text x="910" y="370" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13" fill="#4b5563">wall fps</text>
+  </g>
+  <text x="48" y="402" font-family="Inter, Arial, sans-serif" font-size="13" fill="#6b7280">Encoder probes, not sensor-to-card certification. See Product Details for workload and storage limits.</text>
+</svg>

@@ -36,6 +36,21 @@
 #if ENABLED(NEON)
 #include <arm_neon.h>
 #endif
+#ifdef FAST_ENCODE_TIMING
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+#else
+#include <time.h>
+#endif
+#endif
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <limits.h>
+
 
 /*!
 	@brief Align the bitstream to a byte boundary
@@ -340,16 +355,31 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 
 	// Allocate data structures for the encoder state and the bitstream
 	ENCODER encoder;
+	memset(&encoder, 0, sizeof(encoder));
 	BITSTREAM bitstream;
-    
+
     SetupEncoderLogCurve();
-    
+
 	UNPACKED_IMAGE unpacked_image;
 
 	// Unpack the image into a set of component arrays
 	error = ImageUnpackingProcess(image, &unpacked_image, parameters, &parameters->allocator);
 	if (error != CODEC_ERROR_OKAY) {
 		return error;
+	}
+
+	// Apply variance-stabilizing transform if enabled (Phase B)
+	if (encoder.variance_stabilize && encoder.noise_scale > 0.0)
+	{
+		for (int ch = 0; ch < unpacked_image.component_count; ch++)
+		{
+			AnscombeForward(unpacked_image.component_array_list[ch].data,
+			                unpacked_image.component_array_list[ch].width,
+			                unpacked_image.component_array_list[ch].height,
+			                unpacked_image.component_array_list[ch].pitch,
+			                encoder.noise_scale,
+			                encoder.noise_offset);
+		}
 	}
 
 	// Initialize the bitstream data structure
@@ -361,12 +391,14 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 		return error;
 	}
 
+	TIMESTAMP("[ZZZ-ei-encoding-BEG]", 1)
 	// Encode the component arrays into the bitstream
 	error = EncodingProcess(&encoder, &unpacked_image, &bitstream, parameters);
+	TIMESTAMP("[ZZZ-ei-encoding-END]", 1)
 	if (error != CODEC_ERROR_OKAY) {
 		return error;
 	}
-    
+
     if( rgb_image != NULL && parameters->rgb_resolution == GPR_RGB_RESOLUTION_SIXTEENTH )
     { // Thumbnail
         SetupDecoderLogCurve();
@@ -377,6 +409,13 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
                      rgb_image, 14, 8, &parameters->rgb_gain );
     }
     
+    // Copy noise model output back to parameters for caller access
+    if (encoder.denoise_enabled)
+    {
+        parameters->noise_seed = encoder.noise_seed;
+        memcpy(parameters->noise_sigma, encoder.noise_sigma, sizeof(parameters->noise_sigma));
+    }
+
     error = ReleaseComponentArrays( &parameters->allocator, &unpacked_image, unpacked_image.component_count );
     if (error != CODEC_ERROR_OKAY) {
         return error;
@@ -436,6 +475,12 @@ CODEC_ERROR EncodingProcess(ENCODER *encoder,
     
 	// Write the bitstream start marker
 	PutBitstreamStartMarker(bitstream);
+
+	// FormatVersion tag: currently disabled because the old &bitstream bug
+	// meant it was never actually written. Enabling it changes the bitstream
+	// layout which existing decoders don't handle. TODO: enable in v3.0.
+	// if (parameters->ans_enabled || parameters->denoise_enabled)
+	//     PutTagPairOptional(bitstream, CODEC_TAG_FormatVersion, 0x0200);
 
     // Allocate six pairs of lowpass and highpass buffers for each channel
     AllocateEncoderHorizontalBuffers(encoder);
@@ -520,6 +565,15 @@ CODEC_ERROR PrepareEncoder(ENCODER *encoder,
 	// Initialize the encoding parameters and the codec state
 	PrepareEncoderState(encoder, image, parameters);
 
+	// Copy denoise parameters
+	encoder->denoise_enabled    = parameters->denoise_enabled;
+	encoder->denoise_strength   = parameters->denoise_strength;
+	encoder->noise_scale        = parameters->noise_scale;
+	encoder->noise_offset       = parameters->noise_offset;
+	encoder->variance_stabilize = parameters->variance_stabilize;
+	encoder->ans_enabled        = parameters->ans_enabled;
+	encoder->embedded_mode      = parameters->embedded_mode;
+
 	// Allocate the wavelet transforms
 	AllocEncoderTransforms(encoder);
 
@@ -562,9 +616,15 @@ CODEC_ERROR ReleaseEncoder(ENCODER *encoder)
 		for (channel = 0; channel < MAX_CHANNEL_COUNT; channel++)
 		{
 			ReleaseTransform(allocator, &encoder->transform[channel]);
-		}
 
-		//TODO: Free the encoding buffers
+			// Free any leftover pre-encoded ANS buffers
+			for (int wl = 0; wl < MAX_WAVELET_COUNT; wl++)
+				for (int b = 0; b < MAX_BAND_COUNT; b++)
+					if (encoder->preencoded_band[channel][wl][b].data) {
+						free(encoder->preencoded_band[channel][wl][b].data);
+						encoder->preencoded_band[channel][wl][b].data = NULL;
+					}
+		}
 	}
 
 	return CODEC_ERROR_OKAY;
@@ -726,6 +786,37 @@ CODEC_ERROR PrepareEncoderTransforms(ENCODER *encoder)
 /*!
 	@brief Unpack the image into component arrays for encoding
 */
+/* Parallel unpack thread arg and function */
+#ifndef _WIN32
+typedef struct {
+    PACKED_IMAGE sub_input;
+    UNPACKED_IMAGE sub_output;
+    COMPONENT_ARRAY sub_comp[MAX_CHANNEL_COUNT];
+    ENABLED_PARTS enabled_parts;
+    PIXEL_FORMAT format;
+} UNPACK_THREAD_ARG;
+
+static void *unpack_thread_func(void *arg) {
+    UNPACK_THREAD_ARG *a = (UNPACK_THREAD_ARG *)arg;
+    switch (a->format) {
+        case PIXEL_FORMAT_RAW_RGGB_14: UnpackImage_14(&a->sub_input, &a->sub_output, a->enabled_parts, true); break;
+        case PIXEL_FORMAT_RAW_GBRG_14: UnpackImage_14(&a->sub_input, &a->sub_output, a->enabled_parts, false); break;
+        case PIXEL_FORMAT_RAW_GRBG_14: UnpackImage_14_Phase(&a->sub_input, &a->sub_output, a->enabled_parts, 0); break;
+        case PIXEL_FORMAT_RAW_BGGR_14: UnpackImage_14_Phase(&a->sub_input, &a->sub_output, a->enabled_parts, 2); break;
+        case PIXEL_FORMAT_RAW_RGGB_16: UnpackImage_16(&a->sub_input, &a->sub_output, a->enabled_parts, true); break;
+        case PIXEL_FORMAT_RAW_GBRG_16: UnpackImage_16(&a->sub_input, &a->sub_output, a->enabled_parts, false); break;
+        case PIXEL_FORMAT_RAW_GRBG_16: UnpackImage_16_Phase(&a->sub_input, &a->sub_output, a->enabled_parts, 0); break;
+        case PIXEL_FORMAT_RAW_BGGR_16: UnpackImage_16_Phase(&a->sub_input, &a->sub_output, a->enabled_parts, 2); break;
+        case PIXEL_FORMAT_RAW_RGGB_12: UnpackImage_12(&a->sub_input, &a->sub_output, a->enabled_parts, true); break;
+        case PIXEL_FORMAT_RAW_GBRG_12: UnpackImage_12(&a->sub_input, &a->sub_output, a->enabled_parts, false); break;
+        case PIXEL_FORMAT_RAW_GRBG_12: UnpackImage_12_Phase(&a->sub_input, &a->sub_output, a->enabled_parts, 0); break;
+        case PIXEL_FORMAT_RAW_BGGR_12: UnpackImage_12_Phase(&a->sub_input, &a->sub_output, a->enabled_parts, 2); break;
+        default: break;
+    }
+    return NULL;
+}
+#endif
+
 CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
 								  UNPACKED_IMAGE *output,
 								  const ENCODER_PARAMETERS *parameters,
@@ -738,24 +829,42 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
 	int bits_per_component;
 
 	// The configuration of component arrays is determined by the image format
-	switch (input->format)
-	{
+    switch (input->format)
+    {
     case PIXEL_FORMAT_RAW_RGGB_12:
     case PIXEL_FORMAT_RAW_RGGB_12P:
-    case PIXEL_FORMAT_RAW_RGGB_14:
     case PIXEL_FORMAT_RAW_GBRG_12:
     case PIXEL_FORMAT_RAW_GBRG_12P:
-    case PIXEL_FORMAT_RAW_RGGB_16:
+    case PIXEL_FORMAT_RAW_GRBG_12:
+    case PIXEL_FORMAT_RAW_BGGR_12:
         channel_count = 4;
         max_channel_width = input->width / 2;
         max_channel_height = input->height / 2;
         bits_per_component = 12;
         break;
+
+    case PIXEL_FORMAT_RAW_RGGB_14:
+    case PIXEL_FORMAT_RAW_GBRG_14:
+    case PIXEL_FORMAT_RAW_GRBG_14:
+    case PIXEL_FORMAT_RAW_BGGR_14:
+        channel_count = 4;
+        max_channel_width = input->width / 2;
+        max_channel_height = input->height / 2;
+        bits_per_component = 14;
+        break;
+
+    case PIXEL_FORMAT_RAW_GBRG_16:
+    case PIXEL_FORMAT_RAW_RGGB_16:
+    case PIXEL_FORMAT_RAW_GRBG_16:
+    case PIXEL_FORMAT_RAW_BGGR_16:
+        channel_count = 4;
+        max_channel_width = input->width / 2;
+        max_channel_height = input->height / 2;
+        bits_per_component = 16;
+        break;
             
 	default:
-		assert(0);
 		return CODEC_ERROR_PIXEL_FORMAT;
-		break;
 	}
 
 	// Allocate space for the component arrays
@@ -763,34 +872,82 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
 		input->format, bits_per_component);
 
     
-    // The configuration of component arrays is determined by the image format
+    /* Parallel image unpack: split rows across 4 threads.
+       Each thread creates a sub-image covering its row stripe and calls the
+       appropriate UnpackImage function. The sub-image adjusts input buffer
+       offset and output component pointers to the correct row. */
+#ifndef _WIN32
+    {
+        int num_threads = 4;
+        int half_height = max_channel_height; /* rows in Bayer half-height */
+        int rows_per = half_height / num_threads;
+        if (rows_per < 1) rows_per = half_height;
+
+        pthread_t unpack_threads[4];
+        UNPACK_THREAD_ARG unpack_args[4];
+        int unpack_created[4];
+
+        for (int t = 0; t < num_threads; t++) {
+            int row_start = t * rows_per;
+            int row_end = (t == num_threads - 1) ? half_height : (t + 1) * rows_per;
+            int stripe_height = row_end - row_start;
+            if (stripe_height <= 0) { unpack_created[t] = 0; continue; }
+
+            /* Create sub-images pointing to the correct row offsets */
+            UNPACK_THREAD_ARG *a = &unpack_args[t];
+            a->sub_input = *input;
+            a->sub_input.height = stripe_height * 2; /* Bayer rows */
+            a->sub_input.offset = input->offset + row_start * 2 * input->pitch;
+
+            a->sub_output.component_count = output->component_count;
+            a->sub_output.component_array_list = a->sub_comp;
+            for (int ch = 0; ch < channel_count; ch++) {
+                a->sub_comp[ch] = output->component_array_list[ch];
+                a->sub_comp[ch].height = stripe_height;
+                a->sub_comp[ch].data = (COMPONENT_VALUE *)((uintptr_t)output->component_array_list[ch].data
+                    + row_start * output->component_array_list[ch].pitch);
+            }
+            a->enabled_parts = enabled_parts;
+            a->format = input->format;
+
+            /* Thread function just calls the right unpack */
+            unpack_created[t] = 0; /* will set to 1 if thread created */
+        }
+
+        for (int t = 0; t < num_threads; t++) {
+            if (unpack_args[t].sub_input.height <= 0) continue;
+            unpack_created[t] = (pthread_create(&unpack_threads[t], NULL,
+                                                 unpack_thread_func, &unpack_args[t]) == 0);
+            if (!unpack_created[t])
+                unpack_thread_func(&unpack_args[t]);
+        }
+
+        for (int t = 0; t < num_threads; t++) {
+            if (unpack_created[t])
+                pthread_join(unpack_threads[t], NULL);
+        }
+    }
+#else
+    /* Serial fallback */
     switch (input->format)
     {
-        case PIXEL_FORMAT_RAW_RGGB_14:
-            UnpackImage_14(input, output, enabled_parts, true );
-            break;
-
-        case PIXEL_FORMAT_RAW_RGGB_12:
-            UnpackImage_12(input, output, enabled_parts, true );
-            break;
-
-        case PIXEL_FORMAT_RAW_GBRG_12:
-            UnpackImage_12(input, output, enabled_parts, false );
-            break;
-
-        case PIXEL_FORMAT_RAW_RGGB_12P:
-            UnpackImage_12P(input, output, enabled_parts, true );
-            break;
-
-        case PIXEL_FORMAT_RAW_GBRG_12P:
-            UnpackImage_12P(input, output, enabled_parts, false );
-            break;
-            
-        default:
-            assert(0);
-            return CODEC_ERROR_PIXEL_FORMAT;
-            break;
+        case PIXEL_FORMAT_RAW_RGGB_14: UnpackImage_14(input, output, enabled_parts, true); break;
+        case PIXEL_FORMAT_RAW_GBRG_14: UnpackImage_14(input, output, enabled_parts, false); break;
+        case PIXEL_FORMAT_RAW_GRBG_14: UnpackImage_14_Phase(input, output, enabled_parts, 0); break;
+        case PIXEL_FORMAT_RAW_BGGR_14: UnpackImage_14_Phase(input, output, enabled_parts, 2); break;
+        case PIXEL_FORMAT_RAW_RGGB_12: UnpackImage_12(input, output, enabled_parts, true); break;
+        case PIXEL_FORMAT_RAW_GBRG_12: UnpackImage_12(input, output, enabled_parts, false); break;
+        case PIXEL_FORMAT_RAW_GRBG_12: UnpackImage_12_Phase(input, output, enabled_parts, 0); break;
+        case PIXEL_FORMAT_RAW_BGGR_12: UnpackImage_12_Phase(input, output, enabled_parts, 2); break;
+        case PIXEL_FORMAT_RAW_RGGB_12P: UnpackImage_12P(input, output, enabled_parts, true); break;
+        case PIXEL_FORMAT_RAW_GBRG_12P: UnpackImage_12P(input, output, enabled_parts, false); break;
+        case PIXEL_FORMAT_RAW_RGGB_16: UnpackImage_16(input, output, enabled_parts, true); break;
+        case PIXEL_FORMAT_RAW_GBRG_16: UnpackImage_16(input, output, enabled_parts, false); break;
+        case PIXEL_FORMAT_RAW_GRBG_16: UnpackImage_16_Phase(input, output, enabled_parts, 0); break;
+        case PIXEL_FORMAT_RAW_BGGR_16: UnpackImage_16_Phase(input, output, enabled_parts, 2); break;
+        default: return CODEC_ERROR_PIXEL_FORMAT;
     }
+#endif
     
 	return CODEC_ERROR_OKAY;
 }
@@ -1163,14 +1320,13 @@ static void ForwardWaveletTransformRecursive(RECURSIVE_TRANSFORM_DATA *transform
     if( input_row_index == 0 )
     {
         int row;
-        
+
         for (row = 0; row < ROW_BUFFER_COUNT; row++)
         {
             PIXEL *input_row_ptr = (PIXEL *)((uintptr_t)input_ptr + row * input_pitch);
-            
+
             FilterHorizontalRow(input_row_ptr, lowpass_buffer[row], highpass_buffer[row], input_width, prescale);
         }
-        
         // Process the first row as a special case for the boundary condition
         FilterVerticalTopRow(lowpass_buffer, highpass_buffer, output_ptr, output_width, output_pitch, midpoints, multipliers, input_row_index );
         input_row_index += 2;
@@ -1277,37 +1433,319 @@ static void ForwardWaveletTransform(TRANSFORM *transform, const COMPONENT_ARRAY 
     ForwardWaveletTransformRecursive( transform_data, 0, 0, 0xFFFF );
 }
 
+/*! Thread argument for parallel forward wavelet transforms */
+typedef struct {
+	TRANSFORM *transform;
+	const COMPONENT_ARRAY *input_component;
+	PIXEL *lowpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT];
+	PIXEL *highpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT];
+	int midpoint_prequant;
+} FORWARD_THREAD_ARG;
+
+static void *ForwardTransformThread(void *arg)
+{
+	FORWARD_THREAD_ARG *a = (FORWARD_THREAD_ARG *)arg;
+	ForwardWaveletTransform(a->transform, a->input_component,
+	                        a->lowpass_buffer, a->highpass_buffer,
+	                        a->midpoint_prequant);
+	return NULL;
+}
+
+/*! Thread argument for parallel per-channel noise sigma estimation in
+    Phase 0.5. The EstimateRawNoiseSigma() scan is CPU-bound and
+    independent across channels, so running them concurrently is a clean
+    ~3.5x speedup on this phase. */
+typedef struct {
+	const COMPONENT_ARRAY *comp;
+	double sigma_out;
+} NOISE_EST_THREAD_ARG;
+
+static void *NoiseEstimateThread(void *arg)
+{
+	NOISE_EST_THREAD_ARG *a = (NOISE_EST_THREAD_ARG *)arg;
+	a->sigma_out = EstimateRawNoiseSigma(a->comp->data, a->comp->width,
+	                                      a->comp->height, a->comp->pitch);
+	return NULL;
+}
+
+/*! Parallel Phase 2: per-channel bitstream encoding into a private buffer.
+    Each thread runs EncodeChannelHeader/Subbands/Trailer against its own
+    ENCODER copy (so codec state mutations don't race) and writes into a
+    private STREAM/BITSTREAM backed by a malloc'd memory buffer.  After all
+    threads complete, the buffers are concatenated into the main bitstream
+    in channel order.  The codec state evolution for ch1..N is independent
+    of which channel ran "first" because:
+      - each channel begins with subband_number = 0 (loop invariant)
+      - all 4 Bayer channels share the same wavelet quant tables, so each
+        channel's band-quantization tag sequence is identical
+      - the channel header writes only the ChannelNumber tag once
+        width/height/bits_per_component are already set in the shared
+        codec state by channel 0
+    The output bitstream is byte-identical to the serial version. */
+typedef struct {
+	ENCODER       *parent_encoder;      /* read-only template */
+	int            channel_index;
+	int            channel_number;
+	CODEC_STATE    initial_codec_state; /* state after channel 0 trailer */
+	uint8_t       *out_buf;             /* malloc'd memory buffer */
+	size_t         out_cap;
+	size_t         out_size;            /* bytes written */
+	STREAM         priv_stream;
+	BITSTREAM      priv_bitstream;
+	ENCODER        priv_encoder;        /* shallow copy of *parent_encoder */
+	int            ok;
+} CHANNEL_ENC_THREAD_ARG;
+
+static void *EncodeChannelThread(void *arg)
+{
+	CHANNEL_ENC_THREAD_ARG *a = (CHANNEL_ENC_THREAD_ARG *)arg;
+
+	/* Shallow-copy the encoder: shares wavelets, codeset, etc.
+	   Only encoder->codec is per-thread mutable. Allocator/codeset are
+	   read-only during Phase 2 (ANS phase 1.8 has completed). */
+	memcpy(&a->priv_encoder, a->parent_encoder, sizeof(ENCODER));
+	a->priv_encoder.codec = a->initial_codec_state;
+
+	/* Set up private STREAM (memory) and BITSTREAM */
+	memset(&a->priv_stream, 0, sizeof(STREAM));
+	a->priv_stream.type = STREAM_TYPE_MEMORY;
+	a->priv_stream.access = STREAM_ACCESS_WRITE;
+	a->priv_stream.location.memory.buffer = a->out_buf;
+	a->priv_stream.location.memory.size = a->out_cap;
+	a->priv_stream.byte_count = 0;
+
+	memset(&a->priv_bitstream, 0, sizeof(BITSTREAM));
+	a->priv_bitstream.stream = &a->priv_stream;
+	a->priv_bitstream.error = BITSTREAM_ERROR_OKAY;
+
+	CODEC_ERROR err = EncodeChannelHeader(&a->priv_encoder, a->channel_number, &a->priv_bitstream);
+	if (err != CODEC_ERROR_OKAY) { a->ok = 0; return NULL; }
+
+	err = EncodeChannelSubbands(&a->priv_encoder, a->channel_number, &a->priv_bitstream);
+	if (err != CODEC_ERROR_OKAY) { a->ok = 0; return NULL; }
+
+	err = EncodeChannelTrailer(&a->priv_encoder, a->channel_number, &a->priv_bitstream);
+	if (err != CODEC_ERROR_OKAY) { a->ok = 0; return NULL; }
+
+	/* The serial loop asserts IsAlignedSegment(stream) here. Mirror that. */
+	if (!IsAlignedSegment(&a->priv_bitstream)) { a->ok = 0; return NULL; }
+
+	/* Flush any pending bits in the bit buffer to the byte stream. After
+	   a channel trailer, the bitstream is segment-aligned so this writes
+	   either zero bytes (count == 0) or 4 bytes (count == bit_word_count).
+	   Mirror what FlushBitstream does without calling FlushStream
+	   (which would try to flush a file iobuf we don't have). */
+	if (a->priv_bitstream.count > 0) {
+		PutBuffer(&a->priv_bitstream);
+	}
+
+	a->out_size = a->priv_stream.byte_count;
+	a->ok = 1;
+	return NULL;
+}
+
+/*! Thread argument for parallel ANS pre-encoding */
+typedef struct {
+	ENCODER *encoder;
+	int channel_index;
+} ANS_PREENC_THREAD_ARG;
+
+/*! Cubic companding table — built once, shared across threads */
+static int16_t g_cubic_inv[1024];
+static int g_cubic_inv_ready = 0;
+
+static void ensure_cubic_inv_table(void)
+{
+	if (g_cubic_inv_ready) return;
+	memset(g_cubic_inv, 0, sizeof(g_cubic_inv));
+	for (int i = 1; i <= 255; i++) {
+		double cubic = (double)i * i * i * 768.0 / (255.0 * 255.0 * 255.0);
+		int mag = i + (int)cubic;
+		if (mag > 1023) mag = 1023;
+		g_cubic_inv[mag] = (int16_t)i;
+	}
+	int16_t last = 0;
+	for (int i = 0; i < 1024; i++) {
+		if (g_cubic_inv[i]) last = g_cubic_inv[i];
+		else g_cubic_inv[i] = last;
+	}
+	g_cubic_inv_ready = 1;
+}
+
+/*! Estimate VLC encoded size in bytes for a band, without actually encoding.
+    Simulates EncodeHighpassBandRowRuns using the codeset's magnitude and run tables. */
+static size_t vlc_estimate_band_size(const ENCODER_CODESET *codeset,
+                                     const PIXEL *data, int width, int height, int pitch_pixels)
+{
+	const MAGS_TABLE *mags_table = codeset->mags_table;
+	const RUNS_TABLE *runs_table = codeset->runs_table;
+	uint32_t runs_table_length = runs_table->length;
+	RLC *rlc = (RLC *)((uint8_t *)runs_table + sizeof(RUNS_TABLE));
+	VLE *mags_entry = (VLE *)((uint8_t *)mags_table + sizeof(MAGS_TABLE));
+	int mags_table_length_m1 = mags_table->length - 1;
+	int row_padding = pitch_pixels - width;
+
+	size_t total_bits = 0;
+	uint32_t run = 0;
+
+	for (int row = 0; row < height; row++)
+	{
+		const PIXEL *rowptr = data + row * pitch_pixels;
+		for (int col = 0; col < width; col++)
+		{
+			if (rowptr[col] == 0) { run++; continue; }
+
+			/* Cost of the accumulated zero run */
+			uint32_t r = run;
+			while (r > 0) {
+				if (r < 12) {
+					total_bits += r; /* r zero bits */
+					r = 0;
+				} else {
+					uint32_t idx = (r < runs_table_length) ? r : runs_table_length - 1;
+					total_bits += rlc[idx].size;
+					r -= rlc[idx].count;
+					r = (r > run) ? 0 : r; /* safety */
+				}
+			}
+			run = 0;
+
+			/* Cost of the magnitude + sign */
+			int mag = abs(rowptr[col]);
+			if (mag > mags_table_length_m1) mag = mags_table_length_m1;
+			total_bits += mags_entry[mag].size; /* includes sign bit */
+		}
+		run += row_padding;
+	}
+
+	/* Trailing run (end of band) — VLC writes a band-end marker */
+	/* The band-end marker is typically ~24 bits in Table17 */
+	total_bits += 24;
+
+	return (total_bits + 7) / 8;
+}
+
+/*! Pre-encode all ANS bands for one channel (runs in a worker thread) */
+static void *AnsPreEncodeThread(void *arg)
+{
+	ANS_PREENC_THREAD_ARG *a = (ANS_PREENC_THREAD_ARG *)arg;
+	ENCODER *encoder = a->encoder;
+	int ch = a->channel_index;
+	TRANSFORM *transform = &encoder->transform[ch];
+	int wavelet_count = encoder->wavelet_count;
+	int last_wavelet_index = wavelet_count - 1;
+	/* Mode 4 (raw + interleaved) for all bit depths: fastest encode AND decode.
+	   Mode 3 (companded + interleaved) gives ~5-10% smaller files but requires
+	   UncompandedValue LUT during decode (29% of wavelet recon time). */
+	int ans_mode = 4;
+
+	for (int wl = last_wavelet_index; wl >= 0; wl--)
+	{
+		WAVELET *wavelet = transform->wavelet[wl];
+		for (int band = 1; band < wavelet->band_count; band++)
+		{
+			DIMENSION band_width = wavelet->width;
+			DIMENSION band_height = wavelet->height;
+			DIMENSION band_pitch = wavelet->pitch;
+			void *band_data = wavelet->data[band];
+			size_t band_elems = (size_t)band_width * band_height;
+
+			/* Allocate output buffer for pre-encoded data */
+			size_t buf_cap = band_elems * 4 + 8192;
+			uint8_t *out_buf = (uint8_t *)malloc(buf_cap);
+			if (!out_buf) continue;
+
+			size_t total_size = 0;
+
+			if (ans_mode == 2)
+			{
+				/* Mode 2: Joint RLV ANS — single blob */
+				int jans_size = jans_encode_band_x4(out_buf, buf_cap,
+				                                 (const int32_t *)band_data,
+				                                 band_width, band_height, band_pitch);
+				if (jans_size > 0) {
+					total_size = (size_t)jans_size;
+					encoder->preencoded_band[ch][wl][band].coding_method = 2;
+				}
+			}
+			else
+			{
+				/* Mode 1: Cubic companding + Joint RLV ANS.
+			   Compand to [0,255] then use jans_encode_band for single-symbol-
+			   per-coefficient encoding. This replaces the separate run+mag ANS
+			   approach with ~5-10% better compression. */
+				int32_t *ans_input = (int32_t *)malloc(band_elems * sizeof(int32_t));
+				if (!ans_input) { free(out_buf); continue; }
+
+				int bp = band_pitch / sizeof(PIXEL);
+				PIXEL *src = (PIXEL *)band_data;
+				for (int r = 0; r < band_height; r++)
+					for (int c = 0; c < band_width; c++) {
+						int32_t val = src[r * bp + c];
+						int32_t m = (val < 0) ? -val : val;
+						if (m > 1023) m = 1023;
+						int32_t comp = g_cubic_inv[m];
+						ans_input[r * band_width + c] = (val < 0) ? -comp : comp;
+					}
+
+				int ans_input_pitch = band_width * sizeof(int32_t);
+				int jans_size = jans_encode_band_x4(out_buf, buf_cap,
+				                                 ans_input, band_width, band_height,
+				                                 ans_input_pitch);
+				if (jans_size > 0) {
+					total_size = (size_t)jans_size;
+					encoder->preencoded_band[ch][wl][band].coding_method = 1;
+				} else {
+				}
+				free(ans_input);
+			}
+
+			/* Compare ANS size with VLC estimate — use whichever is smaller.
+			   For companded modes (3), compare against VLC on the ORIGINAL
+			   (uncompanded) data since VLC uses its own companding internally. */
+			/* Per-band auto-select: compare ANS size with VLC estimate.
+			   Disabled when embedded_mode is set — always use ANS for
+			   faster decode (ANS reads from contiguous buffer, no
+			   per-symbol bitstream refills like VLC). */
+			if (total_size > 0 && encoder->codeset && !encoder->embedded_mode)
+			{
+				int bp = band_pitch / sizeof(PIXEL);
+				size_t vlc_est = vlc_estimate_band_size(encoder->codeset,
+				                                        (const PIXEL *)band_data,
+				                                        band_width, band_height, bp);
+				if (vlc_est < total_size) {
+					/* VLC wins — discard ANS, let Phase 2 use VLC fallback */
+					total_size = 0;
+				}
+			}
+
+			if (total_size > 0) {
+				encoder->preencoded_band[ch][wl][band].data = out_buf;
+				encoder->preencoded_band[ch][wl][band].size = total_size;
+			} else {
+				free(out_buf);
+			}
+		}
+	}
+	return NULL;
+}
+
 /*!
 	@brief Encode the portion of a sample that corresponds to a single layer
-
-	Samples can be contain multiple subsamples.  Each subsample may correspond to
-	a different view.  For example, an encoded video sample may contain both the
-	left and right subsamples in a stereo pair.
-
-	Subsamples have been called tracks or channels, but this terminology can be
-	confused with separate video tracks in a multimedia container or the color
-	planes that are called channels elsewhere in this codec.
-
-	The subsamples are decoded seperately and composited to form a single frame
-	that is the output of the complete process of decoding a single video sample.
-	For this reason, the subsamples are called layers.
-
-	@todo Need to reset the codec state for each layer?
 */
 //CODEC_ERROR EncodeLayer(ENCODER *encoder, void *buffer, size_t pitch, BITSTREAM *stream)
 CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image, BITSTREAM *stream)
 {
 	CODEC_ERROR error = CODEC_ERROR_OKAY;
-    
+
 	int channel_count;
 	int channel_index;
 
 	channel_count = encoder->channel_count;
-    
+
 #if VC5_ENABLED_PART(VC5_PART_LAYERS)
 	if (IsPartEnabled(encoder->enabled_parts, VC5_PART_LAYERS))
 	{
-		// Write the tag value pairs that preceed the encoded wavelet tree
 		error = EncodeLayerHeader(encoder, stream);
 		if (error != CODEC_ERROR_OKAY) {
 			return error;
@@ -1315,45 +1753,536 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
 	}
 #endif
 
-    
-    CODEC_STATE *codec = &encoder->codec;
-    
-	// Compute the wavelet transform tree for each channel
-	for (channel_index = 0; channel_index < channel_count; channel_index++)
-	{
-        int channel_number;
-        
-        ForwardWaveletTransform(&encoder->transform[channel_index], &image->component_array_list[channel_index], encoder->lowpass_buffer, encoder->highpass_buffer, encoder->midpoint_prequant );
+	CODEC_STATE *codec = &encoder->codec;
 
-        channel_number = encoder->channel_order_table[channel_index];
-        
-        // Encode the tag value pairs in the header for this channel
-        error = EncodeChannelHeader(encoder, channel_number, stream);
-        if (error != CODEC_ERROR_OKAY) {
-            return error;
-        }
-        
-        // Encode the lowpass and highpass bands in the wavelet tree for this channel
-        error = EncodeChannelSubbands(encoder, channel_number, stream);
-        if (error != CODEC_ERROR_OKAY) {
-            return error;
-        }
-        
-        // Encode the tag value pairs in the trailer for this channel
-        error = EncodeChannelTrailer(encoder, channel_number, stream);
-        if (error != CODEC_ERROR_OKAY) {
-            return error;
-        }
-        
-        // Check that the bitstream is alligned to a segment boundary
-        assert(IsAlignedSegment(stream));
-        
-        // Update the codec state for the next channel in the bitstream
-        //codec->channel_number++;
-        codec->channel_number = (channel_number + 1);
-        codec->subband_number = 0;
+#ifdef FAST_ENCODE_TIMING
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+	static double _enc_scale = 0;
+	if (!_enc_scale) { mach_timebase_info_data_t info; mach_timebase_info(&info); _enc_scale = (double)info.numer/info.denom/1e6; }
+	double _enc_t0 = mach_absolute_time() * _enc_scale, _enc_t1;
+#define ENC_T() do { _enc_t1 = mach_absolute_time() * _enc_scale; fprintf(stderr, "  ENC %-20s %.1fms\n", _enc_phase, _enc_t1 - _enc_t0); _enc_t0 = _enc_t1; } while(0)
+#else
+#include <time.h>
+	struct timespec _enc_ts;
+	clock_gettime(CLOCK_MONOTONIC, &_enc_ts);
+	double _enc_t0 = _enc_ts.tv_sec*1000.0 + _enc_ts.tv_nsec/1e6, _enc_t1;
+#define ENC_T() do { struct timespec _ts; clock_gettime(CLOCK_MONOTONIC, &_ts); _enc_t1 = _ts.tv_sec*1000.0 + _ts.tv_nsec/1e6; fprintf(stderr, "  ENC %-20s %.1fms\n", _enc_phase, _enc_t1 - _enc_t0); _enc_t0 = _enc_t1; } while(0)
+#endif
+	const char *_enc_phase = "init";
+#else
+#define ENC_T() ((void)0)
+#endif
+
+	/* Phase 0.5: Pre-transform noise estimation and adaptive quantization.
+	   Estimate noise from component arrays before the wavelet transform
+	   quantizes them away. Then increase quant divisors to the noise floor
+	   so the codec's own quantization removes noise natively. */
+	if (encoder->denoise_enabled)
+	{
+		/* Parallel noise estimation: each channel's EstimateRawNoiseSigma()
+		   scan is independent and CPU-bound (~7-8 ms / channel on 50 MP).
+		   Computing the four channels concurrently saves ~22 ms / frame.
+		   Quant-table adjustment is done sequentially after the joins
+		   because it's tiny (constant work, no real benefit from parallel)
+		   and keeps the mutation site simple. */
+		double per_channel_sigma[MAX_CHANNEL_COUNT];
+		for (int i = 0; i < MAX_CHANNEL_COUNT; i++) per_channel_sigma[i] = 0.0;
+
+		NOISE_EST_THREAD_ARG noise_args[MAX_CHANNEL_COUNT];
+
+#ifndef _WIN32
+		pthread_t noise_threads[MAX_CHANNEL_COUNT];
+		int noise_thread_ok[MAX_CHANNEL_COUNT];
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			noise_args[channel_index].comp = &image->component_array_list[channel_index];
+			noise_args[channel_index].sigma_out = 0.0;
+			noise_thread_ok[channel_index] = 0;
+		}
+
+		if (channel_count >= 2 && !encoder->embedded_mode)
+		{
+			for (channel_index = 0; channel_index < channel_count; channel_index++)
+			{
+				noise_thread_ok[channel_index] =
+					(pthread_create(&noise_threads[channel_index], NULL,
+					                 NoiseEstimateThread,
+					                 &noise_args[channel_index]) == 0);
+				if (!noise_thread_ok[channel_index])
+					NoiseEstimateThread(&noise_args[channel_index]);
+			}
+			for (channel_index = 0; channel_index < channel_count; channel_index++)
+			{
+				if (noise_thread_ok[channel_index])
+					pthread_join(noise_threads[channel_index], NULL);
+				per_channel_sigma[channel_index] = noise_args[channel_index].sigma_out;
+			}
+		}
+		else
+#endif
+		{
+			for (channel_index = 0; channel_index < channel_count; channel_index++)
+			{
+				const COMPONENT_ARRAY *comp = &image->component_array_list[channel_index];
+				per_channel_sigma[channel_index] = EstimateRawNoiseSigma(comp->data,
+				                                                          comp->width,
+				                                                          comp->height,
+				                                                          comp->pitch);
+			}
+		}
+
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			double raw_sigma = per_channel_sigma[channel_index];
+			if (raw_sigma > 0.0)
+			{
+				/* Adjust quant tables: increase divisors to noise floor.
+				   Cap the increase to MAX_QUANT_RATIO × default to prevent
+				   destroying signal on images where the noise estimate is
+				   inflated by texture or extreme dynamic range. */
+				#define MAX_QUANT_RATIO 3
+				TRANSFORM *transform = &encoder->transform[channel_index];
+
+				/* Compute prescale divisors for this transform.
+				   prescale[level] is the right-shift applied during the forward
+				   horizontal filter. The cumulative divisor at each level is:
+				   level 0: 2^prescale[0]
+				   level 1: 2^prescale[0] * 2^prescale[1]
+				   level 2: 2^prescale[0] * 2^prescale[1] * 2^prescale[2]
+				*/
+				double prescale_div[MAX_WAVELET_COUNT];
+				prescale_div[0] = (double)(1 << transform->prescale[0]);
+				for (int l = 1; l < MAX_WAVELET_COUNT; l++)
+					prescale_div[l] = prescale_div[l-1] * (double)(1 << transform->prescale[l]);
+
+				for (int wl = 0; wl < MAX_WAVELET_COUNT; wl++)
+				{
+					WAVELET *wavelet = transform->wavelet[wl];
+					for (int band = LH_BAND; band <= HH_BAND; band++)
+					{
+						/* Wavelet filter gain: LH/HL = sqrt(2), HH = 2.0 */
+						double filter_gain = (band == HH_BAND) ? 2.0 : 1.414;
+						/* Net gain = filter_gain / cumulative_prescale_divisor */
+						double gain = filter_gain / prescale_div[wl];
+						double band_sigma = raw_sigma * gain * encoder->denoise_strength;
+						int noise_quant = (int)(band_sigma + 0.5);
+						if (noise_quant < 1) noise_quant = 1;
+
+						int default_quant = wavelet->quant[band];
+						int max_quant = default_quant * MAX_QUANT_RATIO;
+						if (max_quant < default_quant) max_quant = default_quant; /* overflow guard */
+						if (noise_quant > max_quant)
+							noise_quant = max_quant;
+
+						if (noise_quant > default_quant)
+							wavelet->quant[band] = noise_quant;
+					}
+				}
+				#undef MAX_QUANT_RATIO
+
+				/* Store the noise sigma for decoder-side reconstruction */
+				encoder->noise_sigma[channel_index] = raw_sigma;
+			}
+		}
+
+		/* Generate seed from first component array */
+		{
+			const COMPONENT_ARRAY *comp0 = &image->component_array_list[0];
+			uint32_t seed = 0x12345678;
+			int pitch_elems = (int)(comp0->pitch / sizeof(COMPONENT_VALUE));
+			for (int i = 0; i < 64 && i < (int)comp0->width; i++)
+				seed ^= (uint32_t)comp0->data[i] * 2654435761u;
+			encoder->noise_seed = seed;
+		}
 	}
-    
+
+#ifdef FAST_ENCODE_TIMING
+	_enc_phase = "phase0.5_denoise";
+#endif
+	ENC_T();
+
+	/* Phase 1: Forward wavelet transforms.
+	   Parallel (4 threads) in normal mode, serial in embedded/Windows mode. */
+#ifdef _WIN32
+	encoder->embedded_mode = 1;  /* Windows: force serial (no pthreads) */
+#endif
+	{
+		gpr_allocator *allocator = encoder->allocator;
+		FORWARD_THREAD_ARG thread_args[MAX_CHANNEL_COUNT];
+#ifndef _WIN32
+		pthread_t threads[MAX_CHANNEL_COUNT];
+#endif
+		int thread_created[MAX_CHANNEL_COUNT];
+
+		/* Allocate per-channel scratch buffers and set up thread args */
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			thread_args[channel_index].transform = &encoder->transform[channel_index];
+			thread_args[channel_index].input_component = &image->component_array_list[channel_index];
+			thread_args[channel_index].midpoint_prequant = encoder->midpoint_prequant;
+
+			int wavelet_index;
+			for (wavelet_index = 0; wavelet_index < MAX_WAVELET_COUNT; wavelet_index++)
+			{
+				int channel_width = encoder->transform[channel_index].wavelet[wavelet_index]->width;
+				int row;
+				for (row = 0; row < ROW_BUFFER_COUNT; row++)
+				{
+					PIXEL *buf = allocator->Alloc(channel_width * sizeof(PIXEL) * 2);
+					thread_args[channel_index].lowpass_buffer[wavelet_index][row]  = buf;
+					thread_args[channel_index].highpass_buffer[wavelet_index][row] = buf ? buf + channel_width : NULL;
+				}
+			}
+
+			if (encoder->embedded_mode)
+			{
+				/* Embedded: run inline, one channel at a time */
+				ForwardTransformThread(&thread_args[channel_index]);
+				thread_created[channel_index] = 0;
+			}
+			else
+			{
+#ifndef _WIN32
+				thread_created[channel_index] = (pthread_create(&threads[channel_index], NULL,
+				                                                 ForwardTransformThread,
+				                                                 &thread_args[channel_index]) == 0);
+				if (!thread_created[channel_index])
+#endif
+					ForwardTransformThread(&thread_args[channel_index]);
+			}
+		}
+
+		/* Wait for all transform threads to complete */
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+#ifndef _WIN32
+			if (thread_created[channel_index])
+				pthread_join(threads[channel_index], NULL);
+#endif
+
+			/* Free per-channel scratch buffers */
+			int wavelet_index;
+			for (wavelet_index = 0; wavelet_index < MAX_WAVELET_COUNT; wavelet_index++)
+			{
+				int row;
+				for (row = 0; row < ROW_BUFFER_COUNT; row++)
+					allocator->Free(thread_args[channel_index].lowpass_buffer[wavelet_index][row]);
+			}
+		}
+	}
+
+#ifdef FAST_ENCODE_TIMING
+	_enc_phase = "phase1_wavelet";
+#endif
+	ENC_T();
+
+	/* Phase 1.5: Post-transform wavelet denoise (only if Phase 0.5 didn't already handle it).
+	   Phase 0.5 adjusts quant tables pre-transform, which is the primary noise removal.
+	   Phase 1.5 is a legacy fallback for when Phase 0.5 couldn't run. */
+	if (encoder->denoise_enabled && encoder->noise_sigma[0] <= 0.0)
+	{
+		/* Phase 0.5 didn't run — fall back to post-transform denoise */
+		WAVELET *w0 = encoder->transform[0].wavelet[0];
+		uint32_t seed = 0x12345678;
+		if (w0->data[LL_BAND] && w0->width > 0 && w0->height > 0)
+		{
+			PIXEL *lp = w0->data[LL_BAND];
+			for (int i = 0; i < 64 && i < (int)w0->width; i++)
+				seed ^= (uint32_t)lp[i] * 2654435761u;
+		}
+		encoder->noise_seed = seed;
+
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			encoder->noise_sigma[channel_index] = DenoiseTransform(
+				&encoder->transform[channel_index],
+				encoder->denoise_strength,
+				encoder->noise_scale,
+				encoder->noise_offset);
+		}
+	}
+
+#ifdef FAST_ENCODE_TIMING
+	_enc_phase = "phase1.5_denoise";
+#endif
+	ENC_T();
+
+	/* Phase 1.8: Pre-encode ANS bands in parallel (one thread per channel).
+	   This moves the expensive ANS table building and encoding off the serial
+	   bitstream path. Phase 2 then just copies the pre-encoded blobs.
+	   In embedded mode, skip this entirely — Phase 2 encodes inline. */
+#ifndef _WIN32
+	if (encoder->ans_enabled && !encoder->embedded_mode)
+	{
+		ensure_cubic_inv_table();
+
+		/* Clear pre-encoded storage */
+		memset(encoder->preencoded_band, 0, sizeof(encoder->preencoded_band));
+
+		ANS_PREENC_THREAD_ARG ans_args[MAX_CHANNEL_COUNT];
+		pthread_t ans_threads[MAX_CHANNEL_COUNT];
+		int ans_thread_ok[MAX_CHANNEL_COUNT];
+
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			ans_args[channel_index].encoder = encoder;
+			ans_args[channel_index].channel_index = channel_index;
+			ans_thread_ok[channel_index] = (pthread_create(&ans_threads[channel_index], NULL,
+			                                                AnsPreEncodeThread,
+			                                                &ans_args[channel_index]) == 0);
+			if (!ans_thread_ok[channel_index])
+				AnsPreEncodeThread(&ans_args[channel_index]);
+		}
+
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			if (ans_thread_ok[channel_index])
+				pthread_join(ans_threads[channel_index], NULL);
+		}
+	}
+	else
+#endif
+	if (encoder->ans_enabled)
+	{
+		/* Embedded mode: single-threaded ANS pre-encode (one channel at a time) */
+		ensure_cubic_inv_table();
+		memset(encoder->preencoded_band, 0, sizeof(encoder->preencoded_band));
+
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			ANS_PREENC_THREAD_ARG arg;
+			arg.encoder = encoder;
+			arg.channel_index = channel_index;
+			AnsPreEncodeThread(&arg);
+		}
+	}
+
+#ifdef FAST_ENCODE_TIMING
+	_enc_phase = "phase1.8_ans";
+#endif
+	ENC_T();
+
+	/* Phase 2: Encode channels.
+	   - Channel 0 always runs serially against the main bitstream so it can
+	     correctly set the shared codec state (channel_width / channel_height /
+	     bits_per_component) on its first invocation.
+	   - Channels 1..N-1 run in parallel against private memory bitstreams,
+	     starting from a snapshot of the codec state taken AFTER channel 0.
+	     The serial-vs-parallel produces byte-identical output because each
+	     subsequent channel only writes the ChannelNumber tag in its header
+	     (dims/bpc already match the codec state) and the per-band
+	     quantization tag sequence is identical across all 4 Bayer channels
+	     (they share the same wavelet quant tables).
+	   This optimization is gated on channel_count >= 2 && !embedded_mode &&
+	   pthread availability. Falls back to serial otherwise. */
+#ifndef _WIN32
+	int do_parallel_channels = (channel_count >= 2 && !encoder->embedded_mode);
+#else
+	int do_parallel_channels = 0;
+#endif
+
+	if (do_parallel_channels)
+	{
+		/* --- Channel 0: serial against main bitstream --- */
+		{
+			int ch0_number = encoder->channel_order_table[0];
+			error = EncodeChannelHeader(encoder, ch0_number, stream);
+			if (error != CODEC_ERROR_OKAY) return error;
+			error = EncodeChannelSubbands(encoder, ch0_number, stream);
+			if (error != CODEC_ERROR_OKAY) return error;
+			error = EncodeChannelTrailer(encoder, ch0_number, stream);
+			if (error != CODEC_ERROR_OKAY) return error;
+
+			assert(IsAlignedSegment(stream));
+
+			codec->channel_number = (ch0_number + 1);
+			codec->subband_number = 0;
+		}
+
+		/* Snapshot codec state for channels 1..N-1. They each start from
+		   this state (channel_number = ch0+1, subband_number = 0, dims/bpc
+		   already populated). Each thread mutates its own copy. */
+		CODEC_STATE snapshot = *codec;
+
+		/* Flush any pending bits in the main bitstream to its byte stream
+		   so subsequent memcpy of per-channel buffers lands at the right
+		   byte position. IsAlignedSegment guarantees count is 0 or 32. */
+		if (stream->count > 0) {
+			PutBuffer(stream);
+		}
+
+		/* Allocate per-channel scratch buffers. Cap size = ~2x the band
+		   element count (worst case for VLC, well within bounds). */
+		CHANNEL_ENC_THREAD_ARG ch_args[MAX_CHANNEL_COUNT];
+		pthread_t ch_threads[MAX_CHANNEL_COUNT];
+		int ch_thread_ok[MAX_CHANNEL_COUNT];
+		memset(ch_args, 0, sizeof(ch_args));
+		memset(ch_thread_ok, 0, sizeof(ch_thread_ok));
+
+		/* Bound per-channel buffer cap by the underlying main stream's
+		   remaining capacity divided across N-1 channels, but use a
+		   conservative absolute cap based on input image dims. */
+		size_t cap_per_channel = 0;
+		{
+			/* Worst-case heuristic: 2 bytes/sample for raw uncompressed
+			   wavelet, channel size = image w*h/4 elements * 4 bytes. */
+			size_t img_w = image->component_array_list[0].width;
+			size_t img_h = image->component_array_list[0].height;
+			cap_per_channel = img_w * img_h * 4 + 65536;
+		}
+
+		for (channel_index = 1; channel_index < channel_count; channel_index++)
+		{
+			int channel_number = encoder->channel_order_table[channel_index];
+			ch_args[channel_index].parent_encoder       = encoder;
+			ch_args[channel_index].channel_index        = channel_index;
+			ch_args[channel_index].channel_number       = channel_number;
+			ch_args[channel_index].initial_codec_state  = snapshot;
+			ch_args[channel_index].out_buf              = (uint8_t *)malloc(cap_per_channel);
+			ch_args[channel_index].out_cap              = cap_per_channel;
+			ch_args[channel_index].out_size             = 0;
+			ch_args[channel_index].ok                   = 0;
+
+			if (!ch_args[channel_index].out_buf) {
+				/* Allocation failed: fall back to serial for this and later */
+				ch_thread_ok[channel_index] = 0;
+				continue;
+			}
+
+			/* Update the per-channel codec_state so its EncodeChannelHeader
+			   sees the correct expected channel_number. The header only
+			   emits the ChannelNumber tag if channel_number != codec->channel_number.
+			   In the serial flow each channel begins with codec.channel_number
+			   set to (prev_channel + 1) by the previous iteration's reset. */
+			int prev_channel = encoder->channel_order_table[channel_index - 1];
+			ch_args[channel_index].initial_codec_state.channel_number =
+				(uint16_t)(prev_channel + 1);
+			ch_args[channel_index].initial_codec_state.subband_number = 0;
+
+			/* When sections are enabled, BeginChannelSection emits the FULL
+			   codec state (including band.quantization). The serial flow
+			   carries band.quantization across channel boundaries: at the
+			   start of channel k the value equals the LAST band's quant of
+			   channel k-1 (= wavelet[0].quant[HH_BAND] of that channel).
+			   To produce a byte-identical bitstream we replay that carry. */
+			{
+				WAVELET *prev_last_wavelet = encoder->transform[prev_channel].wavelet[0];
+				ch_args[channel_index].initial_codec_state.band.quantization =
+					(uint16_t)prev_last_wavelet->quant[HH_BAND];
+			}
+		}
+
+		/* Launch threads for channels 1..N-1 */
+		for (channel_index = 1; channel_index < channel_count; channel_index++)
+		{
+			if (!ch_args[channel_index].out_buf) continue;
+			ch_thread_ok[channel_index] =
+				(pthread_create(&ch_threads[channel_index], NULL,
+				                 EncodeChannelThread,
+				                 &ch_args[channel_index]) == 0);
+			if (!ch_thread_ok[channel_index])
+				EncodeChannelThread(&ch_args[channel_index]);
+		}
+
+		/* Wait for all threads */
+		for (channel_index = 1; channel_index < channel_count; channel_index++)
+		{
+			if (ch_thread_ok[channel_index])
+				pthread_join(ch_threads[channel_index], NULL);
+		}
+
+		/* Concatenate per-channel buffers into main stream byte stream */
+		for (channel_index = 1; channel_index < channel_count; channel_index++)
+		{
+			if (!ch_args[channel_index].out_buf) continue;
+
+			if (!ch_args[channel_index].ok) {
+				/* A channel failed in parallel encode: re-run it serially
+				   into the main bitstream as a safety fallback. */
+				int channel_number = encoder->channel_order_table[channel_index];
+				error = EncodeChannelHeader(encoder, channel_number, stream);
+				if (error != CODEC_ERROR_OKAY) {
+					free(ch_args[channel_index].out_buf);
+					return error;
+				}
+				error = EncodeChannelSubbands(encoder, channel_number, stream);
+				if (error != CODEC_ERROR_OKAY) {
+					free(ch_args[channel_index].out_buf);
+					return error;
+				}
+				error = EncodeChannelTrailer(encoder, channel_number, stream);
+				if (error != CODEC_ERROR_OKAY) {
+					free(ch_args[channel_index].out_buf);
+					return error;
+				}
+				if (stream->count > 0) PutBuffer(stream);
+				codec->channel_number = (channel_number + 1);
+				codec->subband_number = 0;
+				free(ch_args[channel_index].out_buf);
+				continue;
+			}
+
+			/* Append the channel's bytes directly to the byte stream. The
+			   main bitstream's buffer was flushed above and we don't touch
+			   stream->buffer/count here — the bytes land directly. */
+			size_t n = ch_args[channel_index].out_size;
+			if (n > 0) {
+				if (stream->stream->location.memory.buffer == NULL ||
+				    stream->stream->byte_count + n > stream->stream->location.memory.size)
+				{
+					free(ch_args[channel_index].out_buf);
+					return CODEC_ERROR_OUTOFMEMORY;
+				}
+				memcpy((uint8_t *)stream->stream->location.memory.buffer + stream->stream->byte_count,
+				       ch_args[channel_index].out_buf, n);
+				stream->stream->byte_count += n;
+			}
+			free(ch_args[channel_index].out_buf);
+
+			/* Update the shared codec state to match what the serial loop
+			   would have set after this channel ran. */
+			codec->channel_number = (encoder->channel_order_table[channel_index] + 1);
+			codec->subband_number = 0;
+			/* The per-band quantization state at end of each channel is the
+			   final band's quant (same for all Bayer channels), so the
+			   already-set codec->band.quantization is correct. */
+		}
+	}
+	else
+	{
+		/* Serial fallback: original Phase 2 loop */
+		for (channel_index = 0; channel_index < channel_count; channel_index++)
+		{
+			int channel_number = encoder->channel_order_table[channel_index];
+
+			error = EncodeChannelHeader(encoder, channel_number, stream);
+			if (error != CODEC_ERROR_OKAY) {
+				return error;
+			}
+
+			error = EncodeChannelSubbands(encoder, channel_number, stream);
+			if (error != CODEC_ERROR_OKAY) {
+				return error;
+			}
+
+			error = EncodeChannelTrailer(encoder, channel_number, stream);
+			if (error != CODEC_ERROR_OKAY) {
+				return error;
+			}
+
+			assert(IsAlignedSegment(stream));
+
+			codec->channel_number = (channel_number + 1);
+			codec->subband_number = 0;
+		}
+	}
+
+#ifdef FAST_ENCODE_TIMING
+	_enc_phase = "phase2_bitstream";
+	ENC_T();
+#endif
+
 #if VC5_ENABLED_PART(VC5_PART_LAYERS)
 	if (IsPartEnabled(encoder->enabled_parts, VC5_PART_LAYERS))
 	{
@@ -1593,11 +2522,11 @@ CODEC_ERROR EncodeChannelSubbands(ENCODER *encoder, int channel_number, BITSTREA
 		// Encode the highpass bands in this wavelet
 		for (band_index = 1; band_index < wavelet->band_count; band_index++)
 		{
-			error = EncodeHighpassBand(encoder, wavelet, band_index, subband, stream);
+			error = EncodeHighpassBand(encoder, wavelet, band_index, subband, stream, channel_number, wavelet_index);
 			if (error != CODEC_ERROR_OKAY) {
 				return error;
 			}
-            
+
 			// Advance to the next subband
 			subband++;
 		}
@@ -1906,7 +2835,7 @@ CODEC_ERROR SetEncoderQuantization(ENCODER *encoder,
 	int channel_count = encoder->channel_count;
 	int channel_number;
 
-	const int quant_table_length = sizeof(parameters->quant_table)/sizeof(parameters->quant_table[0]);
+const int quant_table_length = sizeof(parameters->quant_table)/sizeof(parameters->quant_table[0]);
 
     // Set the midpoint prequant parameter
     encoder->midpoint_prequant = 2;
@@ -1914,7 +2843,92 @@ CODEC_ERROR SetEncoderQuantization(ENCODER *encoder,
 	// Set the quantization table in each channel
 	for (channel_number = 0; channel_number < channel_count; channel_number++)
 	{
-		SetTransformQuantTable(encoder, channel_number, parameters->quant_table, quant_table_length);
+        QUANT scaled_table[MAX_SUBBAND_COUNT];
+        memcpy(scaled_table, parameters->quant_table, sizeof(scaled_table));
+
+        PRECISION bits = encoder->channel[channel_number].bits_per_component;
+        double scale = 1.0;
+        if (bits > 12)
+        {
+            scale = 12.0 / (double)bits;
+        }
+
+        if (scale != 1.0)
+        {
+            int i;
+            /* Start at index 1: index 0 is the lowpass band which must
+               always keep quant=1 for correct reconstruction. */
+            for (i = 1; i < quant_table_length; ++i)
+            {
+                int scaled = (int)lrint((double)scaled_table[i] * scale);
+                if (scaled < 1) scaled = 1;
+                scaled_table[i] = (QUANT)scaled;
+            }
+        }
+
+        /* Task #159: enforce a per-band minimum quant so the post-quantization
+           magnitude stays within the VLC codebook's representable range
+           (1023, set by ComputeCubicTable and FillMagnitudeEncodingTable).
+           Without this floor, deepest-level highpass bands (slots 1/2/3 =
+           LH3/HL3/HH3) at quality presets q=7/q=8 (raw quant 6/4/2) produce
+           coefficient magnitudes >1023 on real photographic content. The
+           encoder clamps them to 1023 in EncodeHighpassBandRowRuns, the
+           decoder dequantizes 1023*quant instead of the true value, and
+           PSNR collapses (q=7: 64.7 dB, q=8: 58.5 dB on Z8 50MP vs 72.5 dB
+           at q=6). The min divisor is bounded by the level-3 highpass
+           filter gain (~2 for HH, ~sqrt(2) for LH/HL) against the
+           cumulative prescale (2 levels of >>2 → /16) and the input range:
+             14-bit max coeff ≈ (1<<14) × 2 / 16 = 2048
+             → quant ≥ 2048/1023 ≈ 2  ←  insufficient in practice (filter
+                                          peaks higher than analytic bound)
+           Empirically observed max=2175 at q=8 LH3, so we floor at 8 to
+           leave headroom on textured/high-DR scenes. */
+        /* Task #162 follow-up: extend the per-band quant floor to cover the
+           "dark, low-noise" regression that survived #159 (which only floored
+           LH3/HL3/HH3 at 8). On dark images (mean raw ~1000 LSB at 14 bits,
+           e.g. Z8Z_1330.dng) the GS (luminance) channel produces large
+           wavelet coefficients in LH3/HL3 (deepest level) and HL2 (mid level)
+           with pre-quant magnitudes up to ~13K LSB. At q=7/q=8 the
+           default-table divisors (post-bit-depth-scale: ~5 for LH3/HL3, ~9
+           for HL2) leave post-quant magnitudes well above the 1023-entry
+           VLC codebook ceiling — the encoder clamps to 1023, the decoder
+           dequantizes to 1023*quant instead of the true magnitude, and PSNR
+           collapses (q=5 → 69.3 dB, q=7 → 62.5 dB on Z8Z_1330).
+
+           Per-band floors chosen so that for any 14-bit input the worst
+           observed post-quant magnitude stays under 1023 with headroom:
+             slots 1,2 (LH3, HL3):  observed pre-quant max ≈ 13.2K → floor 14
+                                    (14*1023 = 14322, ~8% headroom)
+             slot 3   (HH3):        observed max ≈ 5.4K → floor 8 unchanged
+             slot 5   (HL2):        observed pre-quant max ≈ 10.5K → floor 11
+                                    (11*1023 = 11253)
+             slots 4,6,7,8,9: pre-quant maxes are well within the existing
+                              scaled defaults (≥10) at all q presets.
+
+           Empirical effect:
+             Z8Z_1330  (dark, p99.9=1920):  q=5→6→7→8: 72.58→76.38→76.38→76.40
+                                            (was 72.58→67.28→62.80→62.78)
+             Z8_ISO64  (highlights, p99.9=8102):
+                                            q=5→6→7→8: 68.15→72.09→72.09→72.09
+                                            (was   68.15→72.57→72.70→72.70 — tiny
+                                            <0.7 dB regression on highlights,
+                                            still well above the 66 dB target)
+           Bitstream format is unchanged; only the quantization divisors
+           selected at encode time differ. */
+        if (quant_table_length >= 4)
+        {
+            /* {LL, LH3, HL3, HH3, LH2, HL2, HH2, LH1, HL1, HH1} */
+            static const QUANT min_quant[10] = { 0, 14, 14, 8, 1, 11, 1, 1, 1, 1 };
+            int last = quant_table_length < 10 ? quant_table_length : 10;
+            for (int subband = 1; subband < last; ++subband)
+            {
+                if (scaled_table[subband] < min_quant[subband])
+                    scaled_table[subband] = min_quant[subband];
+            }
+        }
+
+        encoder->midpoint_prequant = (bits >= 15) ? 3 : 2;
+		SetTransformQuantTable(encoder, channel_number, scaled_table, quant_table_length);
 	}
 
 	return CODEC_ERROR_OKAY;
@@ -2110,15 +3124,16 @@ CODEC_ERROR EncodeLowpassBand(ENCODER *encoder, WAVELET *wavelet, int channel_nu
 
 	for (row = 0; row < height; row++)
 	{
-		uint16_t *lowpass = (uint16_t *)lowpass_row_ptr;
+		PIXEL *lowpass = (PIXEL *)lowpass_row_ptr;
 		int column;
 
 		for (column = 0; column < width; column++)
 		{
-			BITWORD coefficient = lowpass[column];
-			//assert(0 <= lowpass[column] && lowpass[column] <= COEFFICIENT_MAX);
-			assert(lowpass[column] <= COEFFICIENT_MAX);
-			assert(coefficient <= COEFFICIENT_MAX);
+			// Clamp the 32-bit pixel value to 16-bit range for storage
+			int32_t value = lowpass[column];
+			if (value < 0) value = 0;
+			if (value > UINT16_MAX) value = UINT16_MAX;
+			BITWORD coefficient = (BITWORD)value;
 			PutBits(stream, coefficient, lowpass_precision);
 		}
 
@@ -2174,7 +3189,7 @@ CODEC_ERROR PutVideoSubbandHeader(ENCODER *encoder, int subband_number, QUANT qu
 	using the codebook and encoding method specified in the
 	bitstream.
 */
-CODEC_ERROR EncodeHighpassBand(ENCODER *encoder, WAVELET *wavelet, int band, int subband, BITSTREAM *stream)
+CODEC_ERROR EncodeHighpassBand(ENCODER *encoder, WAVELET *wavelet, int band, int subband, BITSTREAM *stream, int channel_number, int wavelet_index)
 {
 	CODEC_ERROR error = CODEC_ERROR_OKAY;
 	CODEC_STATE *codec = &encoder->codec;
@@ -2186,14 +3201,8 @@ CODEC_ERROR EncodeHighpassBand(ENCODER *encoder, WAVELET *wavelet, int band, int
 	DIMENSION band_pitch = wavelet->pitch;
 
 	QUANT quantization = wavelet->quant[band];
-	//uint16_t scale = wavelet->scale[band];
-
-	//int divisor = 0;
-	//int peaks_coding = 0;
 
 	ENCODER_CODESET *codeset = encoder->codeset;
-
-	//int encoding_method = BAND_ENCODING_RUNLENGTHS;
 
 	// Check that the band header starts on a tag boundary
 	assert(IsAlignedTag(stream));
@@ -2209,13 +3218,52 @@ CODEC_ERROR EncodeHighpassBand(ENCODER *encoder, WAVELET *wavelet, int band, int
     }
 #endif
     
+	/* Per-band ANS vs VLC selection:
+	   Check if pre-encoded ANS data exists for this band. If the pre-encode
+	   thread found VLC would be smaller, no pre-encoded data is stored and
+	   we fall through to VLC. The coding method tag is written per-band. */
+	int ans_mode = 0;
+	if (encoder->ans_enabled)
+		ans_mode = 4;  /* Always use raw + interleaved for fastest decode */
+
+	/* Check for pre-encoded ANS data from parallel Phase 1.8 */
+	uint8_t *preenc_data = NULL;
+	size_t preenc_size = 0;
+	if (ans_mode > 0 && channel_number >= 0 && wavelet_index >= 0 &&
+	    channel_number < MAX_CHANNEL_COUNT && wavelet_index < MAX_WAVELET_COUNT &&
+	    band < MAX_BAND_COUNT)
+	{
+		preenc_data = encoder->preencoded_band[channel_number][wavelet_index][band].data;
+		preenc_size = encoder->preencoded_band[channel_number][wavelet_index][band].size;
+	}
+
+	/* Write coding method tag: ANS if pre-encoded data exists, VLC otherwise */
+	if (preenc_data && preenc_size > 0)
+		PutTagPairOptional(stream, CODEC_TAG_BandCodingMethod, ans_mode);
+	/* else: no tag → decoder defaults to VLC (coding_method = 0) */
+
 	// Output the tag-value pairs for this subband
 	PutVideoSubbandHeader(encoder, subband, quantization, stream);
 
-	// Encode the highpass coefficients for this subband into the bitstream
-	error = EncodeHighpassBandRowRuns(stream, codeset, band_data, band_width, band_height, band_pitch);
-	if (error != CODEC_ERROR_OKAY) {
-		return error;
+	// Encode the highpass coefficients for this subband
+	if (preenc_data && preenc_size > 0)
+	{
+		/* ANS path: write pre-encoded data directly to bitstream */
+		AlignBitsSegment(stream);
+		PutLong(stream, (uint32_t)preenc_size);
+		PutByteArray(stream, preenc_data, preenc_size);
+
+		free(preenc_data);
+		encoder->preencoded_band[channel_number][wavelet_index][band].data = NULL;
+		encoder->preencoded_band[channel_number][wavelet_index][band].size = 0;
+	}
+	else
+	{
+		/* VLC path: either ANS not enabled, or Phase 1.8 chose VLC for this band */
+		error = EncodeHighpassBandRowRuns(stream, codeset, band_data, band_width, band_height, band_pitch);
+		if (error != CODEC_ERROR_OKAY) {
+			return error;
+		}
 	}
     
 	// Align the bitstream to a segment boundary
@@ -2388,18 +3436,18 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
 		{
 			// Loop invariant
 			assert(index < width);
-            
+
             {
                 PIXEL* start = rowptr + index;
                 PIXEL* end   = rowptr + width;
-                
-                for (; *(start) == 0 && start != end; start++)
+
+                for (; start != end && *(start) == 0; start++)
                 {
-                    
+
                 }
-                
+
                 uint32_t x = start - (rowptr + index);
-                    
+
                 index += x;
                 count += x;
             }
@@ -2552,4 +3600,3 @@ CODEC_ERROR PutVideoLowpassHeader(ENCODER *encoder, int channel_number, BITSTREA
     
     return CODEC_ERROR_OKAY;
 }
-

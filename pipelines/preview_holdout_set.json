@@ -1,0 +1,275 @@
+{
+  "$schema": "preview_holdout_set.schema.json (not yet written)",
+  "$doc": "Informational PREVIEW holdout set. This is NOT the frozen ship gate and must not be used to claim a ship PASS. It exists to rank candidates across a broader corpus with worst/p95/median/per-class reporting.",
+  "$rules": [
+    "Never average away a frozen-gate failure. test_set.json remains the ship gate.",
+    "Do not add an image because a specific candidate looks good on it.",
+    "Do not remove an image because a candidate fails on it.",
+    "This manifest may grow, but changes should be documented because it affects holdout run hashes."
+  ],
+  "metric_eval_dims": {
+    "$doc": "Same metric downsample target as the frozen gate so metrics are comparable.",
+    "width": 3840,
+    "interp": "LANCZOS"
+  },
+  "crops": {
+    "$doc": "Same fixed crop positions as the frozen gate. They are intentionally not recentered per image.",
+    "A_detail":    {"x": 3000, "y": 2000, "w": 512, "h": 512},
+    "B_center":    {"x": 4000, "y": 2800, "w": 512, "h": 512},
+    "C_lowerleft": {"x": 1200, "y": 4200, "w": 512, "h": 512}
+  },
+  "images": [
+    {
+      "id": "Z8Z_0026",
+      "path": "cnn/diverse_dngs/Z8Z_0026.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "diverse-early-corpus",
+      "strata": ["generalization", "mixed-detail"],
+      "notes": "Diverse preview-video example, excluded from the frozen gate."
+    },
+    {
+      "id": "Z8Z_0705",
+      "path": "cnn/diverse_dngs/Z8Z_0705.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "diverse-mid-corpus",
+      "strata": ["generalization", "texture"],
+      "notes": "Diverse preview-video example, excluded from the frozen gate."
+    },
+    {
+      "id": "Z8Z_1586",
+      "path": "cnn/diverse_dngs/Z8Z_1586.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "diverse-high-index",
+      "strata": ["generalization", "detail"],
+      "notes": "Diverse preview-video example, excluded from the frozen gate."
+    },
+    {
+      "id": "Z8Z_5284",
+      "path": "cnn/diverse_dngs/Z8Z_5284.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "diverse-detail",
+      "strata": ["detail", "edges"],
+      "notes": "Diverse preview-video example near the studio/detail range, but not a frozen gate image."
+    },
+    {
+      "id": "Z8Z_5937",
+      "path": "cnn/diverse_dngs/Z8Z_5937.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "diverse-color",
+      "strata": ["color", "mixed-detail"],
+      "notes": "Diverse preview-video example for color/detail interaction."
+    },
+    {
+      "id": "Z8Z_6680",
+      "path": "cnn/diverse_dngs/Z8Z_6680.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "same-session-ood",
+      "strata": ["hair-skin-near-blocker", "texture", "ood"],
+      "notes": "Same broad session as the Z8Z_6693 blocker, but not the frozen gate image."
+    },
+    {
+      "id": "Z8Z_7480",
+      "path": "cnn/diverse_dngs/Z8Z_7480.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "diverse-late-corpus",
+      "strata": ["generalization", "mixed-detail"],
+      "notes": "Diverse preview-video example, excluded from the frozen gate."
+    },
+    {
+      "id": "Z8Z_7955",
+      "path": "cnn/diverse_dngs/Z8Z_7955.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "diverse-late-corpus",
+      "strata": ["generalization", "high-index"],
+      "notes": "Diverse preview-video example, excluded from the frozen gate."
+    },
+    {
+      "id": "Z8Z_0040",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0040.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-early",
+      "strata": ["smooth-gradient", "generalization"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0080",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0080.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-early",
+      "strata": ["smooth-gradient", "edges"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0120",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0120.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-early-mid",
+      "strata": ["generalization", "color"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0181",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0181.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid",
+      "strata": ["shadow", "mixed-detail"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0240",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0240.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid",
+      "strata": ["foliage-organic", "texture"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0252",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0252.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid",
+      "strata": ["foliage-organic", "edges"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0284",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0284.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid",
+      "strata": ["fine-detail", "texture"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0290",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0290.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid",
+      "strata": ["fine-detail", "edges"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0320",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0320.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid",
+      "strata": ["edges", "high-detail"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0333",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0333.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid",
+      "strata": ["high-detail", "texture"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0383",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0383.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid-late",
+      "strata": ["shadow", "color"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0455",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0455.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid-late",
+      "strata": ["saturated-color", "mixed-detail"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0440",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0440.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid-late",
+      "strata": ["saturated-color", "edges"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0480",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0480.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-mid-late",
+      "strata": ["foliage-organic", "mixed-detail"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0520",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0520.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-late",
+      "strata": ["fine-detail", "texture"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0535",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0535.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-late",
+      "strata": ["fine-detail", "color"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0640",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0640.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-late",
+      "strata": ["saturated-color", "generalization"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    },
+    {
+      "id": "Z8Z_0680",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0680.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "same-session-ood",
+      "strata": ["hair-skin-near-blocker", "ood", "texture"],
+      "notes": "Same broad session as the Z8Z_6693 blocker, but not the frozen gate image."
+    },
+    {
+      "id": "Z8Z_0694",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0694.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "same-session-ood",
+      "strata": ["hair-skin-near-blocker", "ood", "texture"],
+      "notes": "Same broad session as the Z8Z_6693 blocker, but not the frozen gate image."
+    },
+    {
+      "id": "Z8Z_0718",
+      "path": "artifacts/upresable/editable_dng/Z8Z_0718.dng",
+      "sensor_dims": [8280, 5520],
+      "bit_depth": 14,
+      "character": "sequence-late",
+      "strata": ["smooth-gradient", "generalization"],
+      "notes": "Editable-DNG corpus sample used as PREVIEW breadth holdout."
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+name: Sanitizers
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sanitizers-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  sanitize:
+    name: ${{ matrix.sanitizer }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined, thread]
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build
+      CC: clang
+      CXX: clang++
+      CFLAGS: -O1 -g -fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -fno-sanitize-recover=all
+      CXXFLAGS: -O1 -g -fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -fno-sanitize-recover=all
+      LDFLAGS: -fsanitize=${{ matrix.sanitizer }}
+      GPR_TEST_CFLAGS: -O1 -g -fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -fno-sanitize-recover=all
+      GPR_TEST_LDFLAGS: -fsanitize=${{ matrix.sanitizer }}
+      ASAN_OPTIONS: halt_on_error=1:abort_on_error=1:detect_leaks=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+      JANS_DECODE_NO_TLS_CACHE: "1"
+    steps:
+      - name: Configure scratch paths
+        run: |
+          echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          echo "GPR_TEST_ARTIFACT_DIR=$RUNNER_TEMP/regression-logs" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential clang llvm
+          python3 -m pip install "numpy>=1.26,<3"
+      - name: Instrument and build full native suite
+        run: |
+          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DNEON=OFF \
+            -DBUILD_TESTING=ON -DGPR_BUILD_DIAGNOSTICS=ON -DGPR_BUILD_CODEC_UTILITIES=ON \
+            -DGPR_TEST_CODEC=ON -DGPR_TEST_CONTAINER=ON -DGPR_TEST_CAPTURE=ON
+          cmake --build "$BUILD_DIR" --parallel
+      - name: Native safety regressions
+        run: bash tools/test/run_all_regressions.sh --native-only
+      - name: Current-format fuzz corpus
+        run: bash tools/test/test_fuzz_corpus.sh
+      - name: Bounded decoder and entropy fuzzing
+        if: matrix.sanitizer == 'address'
+        env:
+          GPR_FUZZ_SECONDS: '30'
+        run: bash tools/test/test_fuzz_corpus.sh
+      - name: Upload native logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-${{ matrix.sanitizer }}
+          path: ${{ runner.temp }}/regression-logs/**/*.log
+          if-no-files-found: warn

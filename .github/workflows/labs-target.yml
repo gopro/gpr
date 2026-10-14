@@ -1,0 +1,291 @@
+name: Labs Target Bench
+
+# Manual target/self-hosted workflow for evidence that hosted CI cannot prove.
+# It is intentionally not triggered by push or pull_request because it needs a
+# Pi 5 / Mission 1 stand-in runner, a local Bayer raw source, and external
+# artifact storage. Detailed knobs are provided through config_json so the
+# dispatch form stays small enough for GitHub to validate.
+
+on:
+  workflow_dispatch:
+    inputs:
+      raw_path:
+        description: "Absolute path to the target-runner Bayer raw input"
+        required: true
+      profile:
+        description: "Target defaults profile"
+        required: true
+        default: "mission1_native12_pi20"
+        type: choice
+        options:
+          - mission1_native12_pi20
+          - z8_50mp_strict24
+          - custom_json
+      config_json:
+        description: "Optional JSON overrides for frames, role, dimensions, timing, and receipt labels"
+        required: false
+        default: "{}"
+
+concurrency:
+  group: labs-target-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pi5-sustained-capture:
+    name: Pi 5 sustained .gvid capture
+    runs-on: [self-hosted, Linux, ARM64, gpr-labs-pi5]
+    timeout-minutes: 120
+
+    steps:
+      - name: Configure scratch paths
+        run: |
+          echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          echo "GPR_EXTERNAL_ROOT=$RUNNER_TEMP/gpr_work" >> "$GITHUB_ENV"
+          echo "GPR_ARTIFACT_ROOT=$RUNNER_TEMP/gpr_work/artifacts" >> "$GITHUB_ENV"
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve dispatch config
+        env:
+          RAW_PATH_INPUT: ${{ inputs.raw_path }}
+          PROFILE_INPUT: ${{ inputs.profile }}
+          CONFIG_JSON_INPUT: ${{ inputs.config_json }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          cfg = {
+              "raw_path": os.environ["RAW_PATH_INPUT"],
+              "output_dir": str(Path(os.environ["GPR_ARTIFACT_ROOT"]) / "labs_target_bench"),
+              "scratch_dir": os.environ["TMPDIR"],
+              "source_provenance_root": ".",
+              "frames": "1440",
+              "target_fps": "20",
+              "source_width": "4096",
+              "source_height": "3072",
+              "capture_width": "4096",
+              "capture_height": "3072",
+              "quality": "8",
+              "wavelet_levels": "2",
+              "no_decimate": "true",
+              "col_decimate": "2",
+              "row_decimate": "2",
+              "pixel_format": "4",
+              "direct_gvid": "true",
+              "bench_binary": "bench_fused",
+              "mission1_native12_fll2_profile": "true",
+              "storage_target_name": "Lexar Professional SILVER PLUS SDXC/microSDXC UHS-I (128GB-1TB)",
+              "storage_target_read_mbps": "205",
+              "storage_target_write_mbps": "150",
+              "storage_target_safety_margin": "0.90",
+              "storage_target_note": "Published 128GB-1TB SILVER PLUS profile: 205 MB/s read, 150 MB/s write; 64GB microSD is 205/100.",
+              "target_name": "Pi 5 stand-in",
+              "target_role": "stand-in",
+              "raw_source_kind": "file_standin",
+              "frame_source": "file-backed Bayer stand-in",
+              "write_path": "bench_fused target-bench .gvid path",
+              "storage_medium": "target-bench filesystem stand-in",
+              "display_surface": "stand-in raw preview receipt output",
+              "presentation_path": "off-camera preview decode receipt",
+          }
+
+          if os.environ.get("PROFILE_INPUT") == "z8_50mp_strict24":
+              cfg.update({
+                  "frames": "14400",
+                  "target_fps": "24",
+                  "source_width": "8280",
+                  "source_height": "5520",
+                  "capture_width": "8280",
+                  "capture_height": "5520",
+                  "quality": "3",
+                  "no_decimate": "false",
+                  "mission1_native12_fll2_profile": "false",
+              })
+
+          raw_config = os.environ.get("CONFIG_JSON_INPUT", "").strip()
+          if raw_config:
+              overrides = json.loads(raw_config)
+              if not isinstance(overrides, dict):
+                  raise SystemExit("config_json must be a JSON object")
+              unknown = set(overrides) - set(cfg)
+              if unknown:
+                  raise SystemExit(f"Unknown config keys: {sorted(unknown)}")
+              cfg.update({str(k): str(v).lower() if isinstance(v, bool) else str(v)
+                          for k, v in overrides.items()})
+          if not cfg["raw_path"]:
+              raise SystemExit("raw_path is required")
+
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as f:
+              for key, value in cfg.items():
+                  if "\n" in value or "\r" in value:
+                      raise SystemExit(f"Multiline config value: {key}")
+                  f.write(f"{key.upper()}={value}\n")
+          PY
+
+      - name: Prepare external directories
+        id: prep
+        run: |
+          set -euo pipefail
+          mkdir -p "$SCRATCH_DIR"
+          OUT="${OUTPUT_DIR}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$OUT"
+          echo "outdir=$OUT" >> "$GITHUB_OUTPUT"
+          echo "Using output dir: $OUT"
+
+      - name: Configure Release build
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGPR_BUILD_DIAGNOSTICS=ON
+
+      - name: Build target binaries
+        run: |
+          set -euo pipefail
+          cmake --build build --target bench_fused labs_encoder_bench_cli fused_decode_cli gvid_preview_rgb_cli -j"$(nproc)"
+
+      - name: Resolve target binaries
+        run: |
+          set -euo pipefail
+          if [ "$BENCH_BINARY" = "labs_encoder_bench_cli" ]; then
+            bench_path="build/bin/labs_encoder_bench_cli"
+            fallback_path="build/source/app/labs_encoder_bench_cli"
+          else
+            bench_path="build/bin/bench_fused"
+            fallback_path="build/source/app/bench_fused/bench_fused"
+          fi
+          if [ ! -x "$bench_path" ]; then
+            bench_path="$fallback_path"
+          fi
+          if [ ! -x "$bench_path" ]; then
+            echo "$BENCH_BINARY binary not found at build/bin or source/app fallback" >&2
+            exit 1
+          fi
+          labs_shim_path="build/bin/labs_encoder_bench_cli"
+          if [ ! -x "$labs_shim_path" ]; then
+            labs_shim_path="build/source/app/labs_encoder_bench_cli"
+          fi
+          decode_cli="build/bin/fused_decode_cli"
+          if [ ! -x "$decode_cli" ]; then
+            decode_cli="build/source/app/fused_decode_cli"
+          fi
+          preview_cli="build/bin/gvid_preview_rgb_cli"
+          if [ ! -x "$preview_cli" ]; then
+            preview_cli="build/source/app/gvid_preview_rgb_cli"
+          fi
+          {
+            echo "BENCH_PATH=$bench_path"
+            echo "LABS_SHIM_PATH=$labs_shim_path"
+            echo "DECODE_CLI=$decode_cli"
+            echo "PREVIEW_CLI=$preview_cli"
+          } >> "$GITHUB_ENV"
+
+      - name: Write target preflight receipt
+        id: preflight
+        run: |
+          set -euo pipefail
+          receipt="${{ steps.prep.outputs.outdir }}/target_preflight_receipt.json"
+          python3 tools/mission1_camera_target_preflight.py \
+            --target-name "$TARGET_NAME" \
+            --target-role "$TARGET_ROLE" \
+            --repo-root "$PWD" \
+            --raw "$RAW_PATH" \
+            --output-dir "${{ steps.prep.outputs.outdir }}" \
+            --scratch-dir "$SCRATCH_DIR" \
+            --bench "$BENCH_PATH" \
+            --labs-encoder-bench-cli "$LABS_SHIM_PATH" \
+            --fused-decode-cli "$DECODE_CLI" \
+            --preview-cli "$PREVIEW_CLI" \
+            --source-width "$SOURCE_WIDTH" \
+            --source-height "$SOURCE_HEIGHT" \
+            --raw-source-kind "$RAW_SOURCE_KIND" \
+            --frame-source "$FRAME_SOURCE" \
+            --write-path "$WRITE_PATH" \
+            --storage-medium "$STORAGE_MEDIUM" \
+            --display-surface "$DISPLAY_SURFACE" \
+            --presentation-path "$PRESENTATION_PATH" \
+            --output-json "$receipt" \
+            --require-ready
+          echo "receipt=$receipt" >> "$GITHUB_OUTPUT"
+          echo "status=ok" >> "$GITHUB_OUTPUT"
+
+      - name: Run strict Labs target bench
+        id: bench
+        run: |
+          set -uo pipefail
+          bench_args=(
+            --bench "$BENCH_PATH"
+            --raw "$RAW_PATH"
+            --output-dir "${{ steps.prep.outputs.outdir }}"
+            --frames "$FRAMES"
+            --target-fps "$TARGET_FPS"
+            --source-width "$SOURCE_WIDTH"
+            --source-height "$SOURCE_HEIGHT"
+            --capture-width "$CAPTURE_WIDTH"
+            --capture-height "$CAPTURE_HEIGHT"
+            --quality "$QUALITY"
+            --wavelet-levels "$WAVELET_LEVELS"
+            --pixel-format "$PIXEL_FORMAT"
+            --storage-target-name "$STORAGE_TARGET_NAME"
+            --storage-target-read-mbps "$STORAGE_TARGET_READ_MBPS"
+            --storage-target-write-mbps "$STORAGE_TARGET_WRITE_MBPS"
+            --storage-target-safety-margin "$STORAGE_TARGET_SAFETY_MARGIN"
+            --storage-target-note "$STORAGE_TARGET_NOTE"
+            --source-provenance-root "$SOURCE_PROVENANCE_ROOT"
+          )
+          if [ "$NO_DECIMATE" = "true" ]; then
+            bench_args+=(--no-decimate)
+          else
+            bench_args+=(--col-decimate "$COL_DECIMATE" --row-decimate "$ROW_DECIMATE")
+          fi
+          if [ "$DIRECT_GVID" = "true" ]; then
+            bench_args+=(--direct-gvid)
+          fi
+          if [ "$MISSION1_NATIVE12_FLL2_PROFILE" = "true" ]; then
+            export FUSED_PIN=1
+            export FUSED_PIN_P2=1
+            export GPR_INCLUDE_LL=1
+            export FUSED_RAW_LL=1
+            export FUSED_LL_PREDICT=1
+            export FUSED_LL_PREDICTOR=avg
+            export FUSED_LL_RICE_KS=7,5,5,5
+            export FUSED_LL_RICE_FAST=1
+            export FUSED_LL_ASSUME_U16=1
+            export FUSED_INLINE_TOKENIZE=1
+            export FUSED_DEFER_RANS=1
+            export GPR_BENCH_GVID_SCATTER=1
+            export FUSED_REFERENCE_HORIZONTAL=1
+            export FUSED_STRIPE_ROWS=384
+            export GPR_INLINE_DENOISE_HARD=1
+            export GPR_INLINE_DENOISE_T_LH=2
+            export GPR_INLINE_DENOISE_T_HL=3
+            export GPR_INLINE_DENOISE_T_HH=3
+          fi
+          python3 tools/run_labs_target_bench.py \
+            "${bench_args[@]}" \
+            2>&1 | tee "$RUNNER_TEMP/labs_target_bench_stdout.txt"
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload operational receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: labs-target-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            ${{ steps.prep.outputs.outdir }}/target_preflight_receipt.json
+            ${{ steps.prep.outputs.outdir }}/labs_target_bench.json
+            ${{ runner.temp }}/labs_target_bench_stdout.txt
+
+      - name: Enforce preflight and benchmark verdict
+        env:
+          PREFLIGHT_STATUS: ${{ steps.preflight.outputs.status }}
+          BENCH_STATUS: ${{ steps.bench.outputs.status }}
+        run: |
+          test "$PREFLIGHT_STATUS" = ok
+          test "$BENCH_STATUS" = 0

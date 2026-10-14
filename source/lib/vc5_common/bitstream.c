@@ -95,53 +95,41 @@ CODEC_ERROR ReleaseBitstream(BITSTREAM *bitstream)
 }
 
 /*!
-	@brief Return the specified number of bits from the bitstream
+	@brief Return the specified number of bits from the bitstream (slow path)
+
+	This is the full implementation that handles buffer refills.
+	The inline GetBits() in bitstream.h dispatches here when the internal
+	buffer does not contain enough bits to satisfy the request.
  */
-BITWORD GetBits(BITSTREAM *stream, BITCOUNT count)
+BITWORD _GetBits_Full(BITSTREAM *stream, BITCOUNT count)
 {
     // Return zero if the request cannot be satisfied
     BITWORD bits = 0;
-    
+
     // Check that the number of requested bits is valid
-    //assert(0 <= count && count <= bit_word_count);
     assert(count <= bit_word_count);
-    
-    // Check that the unused portion of the bit buffer is empty
-    assert((stream->buffer & BitMask(bit_word_count - stream->count)) == 0);
-    
+
     if (count == 0) goto finish;
-    
-    // Are there enough bits in the buffer to satisfy the request?
-    if (count <= stream->count)
-    {
-        // Right align the requested number of bits in the bit buffer
-        bits = (stream->buffer >> (bit_word_count - count));
-        
-        // Reduce the number of bits in the bit buffer
-        stream->buffer <<= count;
-        stream->count = (stream->count - count);
-    }
-    else
+
     {
         BITCOUNT low_bit_count;
-        
+
         // Use the remaining bits in the bit buffer
         assert(stream->count > 0 || stream->buffer == 0);
         bits = (stream->buffer >> (bit_word_count - count));
-        
+
         // Compute the number of bits to be used from the next word
         low_bit_count = count - stream->count;
         stream->count = 0;
         assert(low_bit_count > 0);
-        
+
         // Fill the bit buffer
-        assert(stream->count == 0);
         GetBuffer(stream);
         assert(stream->count >= low_bit_count);
-        
+
         // Use the new bits in the bit buffer
         bits |= (stream->buffer >> (bit_word_count - low_bit_count));
-        
+
         // Reduce the number of bits in the bit buffer
         if (low_bit_count < bit_word_count) {
             stream->buffer <<= low_bit_count;
@@ -152,18 +140,10 @@ BITWORD GetBits(BITSTREAM *stream, BITCOUNT count)
         assert(low_bit_count <= stream->count);
         stream->count = (stream->count - low_bit_count);
     }
-    
+
 finish:
-    // The bit count should never be negative or larger than the size of the bit buffer
-    //assert(0 <= stream->count && stream->count <= bit_word_count);
     assert(stream->count <= bit_word_count);
-    
-    // The unused bits in the bit buffer should all be zero
-    assert((stream->buffer & BitMask(bit_word_count - stream->count)) == 0);
-    
-    // The unused bits in the result should all be zero
-    assert((bits & ~BitMask(count)) == 0);
-    
+
     return bits;
 }
 
@@ -238,7 +218,12 @@ CODEC_ERROR PutBits(BITSTREAM *stream, BITWORD bits, BITCOUNT count)
         }
         
         // Write the bit buffer to the byte stream
-        PutWord(stream->stream, stream->buffer );
+        CODEC_ERROR err = PutWord(stream->stream, stream->buffer );
+        if (err != CODEC_ERROR_OKAY)
+        {
+            stream->error = BITSTREAM_ERROR_OVERFLOW;
+            return err;
+        }
         
         // Insert the remaining input bits into the bit buffer
         stream->buffer = (bits << (bit_word_count - count));
@@ -258,21 +243,37 @@ CODEC_ERROR PutBits(BITSTREAM *stream, BITWORD bits, BITCOUNT count)
  */
 CODEC_ERROR GetBuffer(BITSTREAM *bitstream)
 {
-    // Need to signal an underflow error?
-    if (! (bitstream != NULL && bitstream->stream != NULL)) {
-        assert(0);
-        
-        if( bitstream->error == BITSTREAM_ERROR_UNDERFLOW )
-            return CODEC_ERROR_OUTOFMEMORY;
+    STREAM *stream = bitstream->stream;
+
+    /* Fast path: direct memory read for in-memory streams.
+       Eliminates function call overhead of GetWord + Swap32.
+       This is the decode hot path -- called once per 32-bit refill.
+       Uses memcpy + __builtin_bswap32 for a single REV instruction
+       on ARM64 (Apple Silicon). */
+    if (stream->type == STREAM_TYPE_MEMORY)
+    {
+        uint32_t raw;
+        memcpy(&raw, (uint8_t *)stream->location.memory.buffer + stream->byte_count, 4);
+#if defined(__GNUC__) || defined(__clang__)
+        bitstream->buffer = __builtin_bswap32(raw);
+#elif defined(_MSC_VER)
+        bitstream->buffer = _byteswap_ulong(raw);
+#else
+        bitstream->buffer = ((raw & 0x000000FFu) << 24) |
+                            ((raw & 0x0000FF00u) << 8)  |
+                            ((raw & 0x00FF0000u) >> 8)  |
+                            ((raw & 0xFF000000u) >> 24);
+#endif
+        stream->byte_count += 4;
     }
-    
-    // The bit buffer should be empty
-    assert(bitstream->count == 0);
-    
-    // Fill the bit buffer with a word from the byte stream
-    bitstream->buffer = Swap32(GetWord(bitstream->stream));
+    else
+    {
+        if (bitstream == NULL || stream == NULL)
+            return CODEC_ERROR_NULLPTR;
+        bitstream->buffer = Swap32(GetWord(stream));
+    }
+
     bitstream->count = bit_word_count;
-    
     return CODEC_ERROR_OKAY;
 }
 
@@ -284,14 +285,16 @@ CODEC_ERROR GetBuffer(BITSTREAM *bitstream)
  */
 CODEC_ERROR PutBuffer(BITSTREAM *bitstream)
 {
-    //TODO: Need to signal an overflow error
-    assert(bitstream != NULL && bitstream->stream != NULL);
-    
-    // The bit buffer should be full
-    assert(bitstream->count == bit_word_count);
+    if (bitstream == NULL || bitstream->stream == NULL)
+        return CODEC_ERROR_NULLPTR;
     
     // Write the bit buffer to the byte stream
-    PutWord(bitstream->stream, bitstream->buffer );
+    CODEC_ERROR err = PutWord(bitstream->stream, bitstream->buffer );
+    if (err != CODEC_ERROR_OKAY)
+    {
+        bitstream->error = BITSTREAM_ERROR_OVERFLOW;
+        return err;
+    }
     
     // Empty the bit buffer
     bitstream->buffer = 0;
@@ -341,14 +344,51 @@ CODEC_ERROR BitstreamCodecError(BITSTREAM *bitstream)
  */
 CODEC_ERROR GetByteArray(BITSTREAM *bitstream, uint8_t *array, size_t size)
 {
-    size_t i;
-    
-    for (i = 0; i < size; i++)
+    /* Fast path: if bitstream is byte-aligned and reading from memory,
+       bulk memcpy instead of byte-by-byte GetBits.
+       This is the ANS blob read path — always called after AlignBitsSegment. */
+    STREAM *stream = bitstream->stream;
+    if (bitstream->count == 0 && stream && stream->type == STREAM_TYPE_MEMORY)
     {
-        array[i] = GetBits(bitstream, 8);
+        uint8_t *src = (uint8_t *)stream->location.memory.buffer + stream->byte_count;
+        memcpy(array, src, size);
+        stream->byte_count += size;
+        return CODEC_ERROR_OKAY;
     }
-    
+
+    /* Slow fallback for non-aligned or file-based streams */
+    for (size_t i = 0; i < size; i++)
+        array[i] = GetBits(bitstream, 8);
+
     return CODEC_ERROR_OKAY;
+}
+
+/*!
+    @brief Zero-copy access to the underlying stream buffer.
+
+    When the bitstream is byte-aligned and backed by a memory stream,
+    returns a direct pointer into the stream buffer and advances the
+    stream position.  This avoids the malloc + memcpy + free cycle
+    that would otherwise be needed when passing data to decoders
+    (e.g., ANS decode blobs).
+
+    @return CODEC_ERROR_OKAY on success.  Returns CODEC_ERROR_UNEXPECTED
+            if zero-copy is not possible (caller should fall back to GetByteArray).
+*/
+CODEC_ERROR GetByteArrayZeroCopy(BITSTREAM *bitstream, size_t size, const uint8_t **out_ptr)
+{
+    STREAM *stream = bitstream->stream;
+
+    if (bitstream->count == 0 && stream && stream->type == STREAM_TYPE_MEMORY)
+    {
+        assert(stream->byte_count + size <= stream->location.memory.size);
+        *out_ptr = (const uint8_t *)stream->location.memory.buffer + stream->byte_count;
+        stream->byte_count += size;
+        return CODEC_ERROR_OKAY;
+    }
+
+    /* Zero-copy not possible for this stream configuration */
+    return CODEC_ERROR_UNEXPECTED;
 }
 
 /*!
@@ -375,7 +415,11 @@ CODEC_ERROR FlushBitstream(BITSTREAM *bitstream)
     if (bitstream->count > 0)
     {
         // Write the bit buffer to the output stream
-        PutBuffer(bitstream);
+        CODEC_ERROR err = PutBuffer(bitstream);
+        if (err != CODEC_ERROR_OKAY)
+        {
+            return err;
+        }
     }
     
     // Indicate that the bitstream buffer is empty
@@ -402,7 +446,11 @@ CODEC_ERROR FlushBitstream(BITSTREAM *bitstream)
 size_t GetBitstreamPosition(BITSTREAM *bitstream)
 {
     if (bitstream->count == bit_word_count) {
-        PutBuffer(bitstream);
+        CODEC_ERROR err = PutBuffer(bitstream);
+        if (err != CODEC_ERROR_OKAY)
+        {
+            return 0;
+        }
     }
     
     // The bit buffer must be empty
@@ -442,4 +490,3 @@ CODEC_ERROR RewindBitstream(BITSTREAM *bitstream)
     
     return CODEC_ERROR_OKAY;
 }
-

@@ -21,6 +21,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <cstdio>
 
 using namespace std;
 
@@ -399,7 +400,11 @@ ostream& operator<<(ostream& output, const gpr_profile_info& x)
     
     print_val( output, "illuminant1", x.illuminant1, 0, false );
     
-    print_val( output, "illuminant2", x.illuminant2, 0, true );
+    print_val( output, "illuminant2", x.illuminant2, 0, false );
+
+    print_val( output, "baseline_exposure", x.baseline_exposure, 0, false );
+
+    print_val( output, "analog_balance", x.analog_balance, 3, true );
     
     end_tag( "profile_info", output );
     
@@ -489,6 +494,19 @@ ostream& operator<<(ostream& output, const gpr_tuning_info& x)
     print_val( output, "warp_red_coefficient", x.warp_red_coefficient );
     
     print_val( output, "warp_blue_coefficient", x.warp_blue_coefficient );
+
+    print_val( output, "fix_vignette_radial_valid", x.fix_vignette_radial_valid );
+
+    for ( int i = 0; i < 5; i++ )
+    {
+        char key[64];
+        snprintf( key, sizeof(key), "fix_vignette_radial_param_%d", i );
+        print_val( output, key, x.fix_vignette_radial_params[i] );
+    }
+
+    print_val( output, "fix_vignette_radial_center_h", x.fix_vignette_radial_center_h );
+
+    print_val( output, "fix_vignette_radial_center_v", x.fix_vignette_radial_center_v );
     
     print_val( output, "gain_map", x.gain_map );
     

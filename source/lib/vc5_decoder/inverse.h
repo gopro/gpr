@@ -44,6 +44,13 @@ extern "C" {
                                              //ROI roi, PIXEL *buffer, size_t buffer_size,
                                              int descale, QUANT quantization[]);
 
+    CODEC_ERROR InvertHorizontal16s(PIXEL *lowpass, PIXEL *highpass, PIXEL *output,
+                                    DIMENSION input_width, DIMENSION output_width);
+
+    CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, PIXEL *output,
+                                           DIMENSION input_width, DIMENSION output_width,
+                                           int descale);
+
 #ifdef __cplusplus
 }
 #endif

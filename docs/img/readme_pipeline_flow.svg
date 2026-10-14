@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="560" viewBox="0 0 1180 560" role="img" aria-labelledby="title desc">
+  <title id="title">GPR four-effort pipeline map</title>
+  <desc id="desc">Pipeline diagram for the four GPR efforts: best RAW stills, GoPro RAW video MVP, premium still SR, and raw video reconstruction with PSF research.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 800 28px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
+      .sub { font: 500 14px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
+      .lane { font: 900 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #334155; letter-spacing: .04em; }
+      .box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; }
+      .codec { fill: #eff6ff; stroke: #2563eb; stroke-width: 1.4; }
+      .model { fill: #f0fdf4; stroke: #16a34a; stroke-width: 1.4; }
+      .warn { fill: #fff7ed; stroke: #d97706; stroke-width: 1.4; }
+      .done { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 1.4; }
+      .research { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.4; }
+      .label { font: 800 15px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
+      .small { font: 500 12.5px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
+      .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1180" height="560"/>
+  <text class="title" x="40" y="46">Four Big Efforts, One Editable Bayer Source</text>
+  <text class="sub" x="40" y="70">Capture Bayer once, keep it editable, then choose the still/video/reconstruction path that matches the job.</text>
+
+  <text class="lane" x="40" y="118">1. BEST RAW STILLS</text>
+  <rect class="box" x="40" y="132" width="170" height="70" rx="8"/>
+  <text class="label" x="62" y="160">50 / 100 MP DNG</text>
+  <text class="small" x="62" y="181">normal Bayer CFA</text>
+  <path class="arrow" d="M210 167 H260"/>
+  <rect class="codec" x="260" y="132" width="205" height="70" rx="8"/>
+  <text class="label" x="282" y="160">GPR still tiers</text>
+  <text class="small" x="282" y="181">9.80 / 15.05 / 27.17 MB</text>
+  <path class="arrow" d="M465 167 H515"/>
+  <rect class="model" x="515" y="132" width="205" height="70" rx="8"/>
+  <text class="label" x="537" y="160">Noise sidecars</text>
+  <text class="small" x="537" y="181">remove/add texture safely</text>
+  <path class="arrow" d="M720 167 H770"/>
+  <rect class="done" x="770" y="132" width="300" height="70" rx="8"/>
+  <text class="label" x="792" y="160">Editable RAW still</text>
+  <text class="small" x="792" y="181">X2D/Z8 covered; Mission/iPhone darkframes open</text>
+
+  <text class="lane" x="40" y="230">2. GOPRO RAW VIDEO MVP</text>
+  <rect class="box" x="40" y="244" width="170" height="70" rx="8"/>
+  <text class="label" x="62" y="272">4K Bayer frames</text>
+  <text class="small" x="62" y="293">Mission native12 source</text>
+  <path class="arrow" d="M210 279 H260"/>
+  <rect class="codec" x="260" y="244" width="205" height="70" rx="8"/>
+  <text class="label" x="282" y="272">Native12 .gvid</text>
+  <text class="small" x="282" y="293">20.50 fps wall, zero drops</text>
+  <path class="arrow" d="M465 279 H515"/>
+  <rect class="done" x="515" y="244" width="205" height="70" rx="8"/>
+  <text class="label" x="537" y="272">1024 preview</text>
+  <text class="small" x="537" y="293">same raw stream, 20+ fps</text>
+  <path class="arrow" d="M720 279 H770"/>
+  <rect class="warn" x="770" y="244" width="300" height="70" rx="8"/>
+  <text class="label" x="792" y="272">Camera-role closure</text>
+  <text class="small" x="792" y="293">real sensor, SD writer, rear display still open</text>
+
+  <text class="lane" x="40" y="342">3. PREMIUM STILL / SR</text>
+  <rect class="box" x="40" y="356" width="170" height="70" rx="8"/>
+  <text class="label" x="62" y="384">Candidate RAW</text>
+  <text class="small" x="62" y="405">no REF at render time</text>
+  <path class="arrow" d="M210 391 H260"/>
+  <rect class="model" x="260" y="356" width="205" height="70" rx="8"/>
+  <text class="label" x="282" y="384">Slow offline CNN</text>
+  <text class="small" x="282" y="405">spend compute for stills</text>
+  <path class="arrow" d="M465 391 H515"/>
+  <rect class="warn" x="515" y="356" width="205" height="70" rx="8"/>
+  <text class="label" x="537" y="384">Promotion gate</text>
+  <text class="small" x="537" y="405">5% / 5% + nonnegative tails</text>
+  <path class="arrow" d="M720 391 H770"/>
+  <rect class="research" x="770" y="356" width="300" height="70" rx="8"/>
+  <text class="label" x="792" y="384">Current state</text>
+  <text class="small" x="792" y="405">Gate23 rejected; new objective required</text>
+
+  <text class="lane" x="40" y="454">4. RAW VIDEO RECONSTRUCTION</text>
+  <rect class="box" x="40" y="468" width="170" height="70" rx="8"/>
+  <text class="label" x="62" y="496">4K .gvid</text>
+  <text class="small" x="62" y="517">editable Bayer stream</text>
+  <path class="arrow" d="M210 503 H260"/>
+  <rect class="model" x="260" y="468" width="205" height="70" rx="8"/>
+  <text class="label" x="282" y="496">4K cleanup / 8K SR</text>
+  <text class="small" x="282" y="517">offline, approved for post</text>
+  <path class="arrow" d="M465 503 H515"/>
+  <rect class="done" x="515" y="468" width="205" height="70" rx="8"/>
+  <text class="label" x="537" y="496">Raw + ProRes</text>
+  <text class="small" x="537" y="517">editable .gvid and review media</text>
+  <path class="arrow" d="M720 503 H770"/>
+  <rect class="research" x="770" y="468" width="300" height="70" rx="8"/>
+  <text class="label" x="792" y="496">PSF / blur research</text>
+  <text class="small" x="792" y="517">replacement only after beating locked receipts</text>
+</svg>

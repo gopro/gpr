@@ -31,10 +31,51 @@
 
 /*!
 	@brief Maximum coefficient magnitude in the codebook
-	
+
 	@todo Need to calculate the maximum value from the codebook
 */
 const int maximum_codebook_value = 255;
+
+/*!
+	@brief Precomputed integer LUT for inverse cubic companding
+
+	Maps magnitude m (0-255) to m + m^3 * 768 / (255^3).
+	Eliminates double-precision floating point from the decoder's inner loops.
+*/
+static int32_t uncompand_lut[256];
+static int uncompand_lut_initialized = 0;
+
+void InitUncompandTable(void)
+{
+	if (uncompand_lut_initialized)
+		return;
+
+	uncompand_lut[0] = 0;
+	for (int i = 1; i < 256; i++)
+	{
+		// Use the same formula as UncompandedValue but compute once
+		double cubic = (double)i;
+		cubic *= i;
+		cubic *= i;
+		cubic *= 768;
+		cubic /= 255.0 * 255.0 * 255.0;
+		uncompand_lut[i] = i + (int32_t)cubic;
+	}
+
+	uncompand_lut_initialized = 1;
+}
+
+int32_t UncompandedValueFast(int32_t value)
+{
+	int32_t magnitude = absolute(value);
+
+	if (magnitude > 255)
+		magnitude = 255;
+
+	magnitude = uncompand_lut[magnitude];
+
+	return ((value < 0) ? neg(magnitude) : magnitude);
+}
 
 
 /*!

@@ -155,8 +155,8 @@ typedef float float_t;
 // GPR version numbering
 // =================================================================================================
 
-#define GPR_VERSION_MAJOR        1
-#define GPR_VERSION_MINOR        0
-#define GPR_VERSION_REVISION     0
+#define GPR_VERSION_MAJOR        2
+#define GPR_VERSION_MINOR        3
+#define GPR_VERSION_REVISION     1
 
 #endif // GPR_PLATFORM_H

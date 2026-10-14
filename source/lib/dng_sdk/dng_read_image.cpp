@@ -2582,9 +2582,14 @@ class dng_read_tiles_task : public dng_area_task
 			fMinTaskArea = 16 * 16;
 			fUnitCell    = dng_point (16, 16);
 			fMaxTileSize = dng_point (16, 16);
-			
+
 			}
-	
+
+		bool MultiThreadSafe () const
+			{
+			return true;
+			}
+
 		void Process (uint32 /* threadIndex */,
 					  const dng_rect & /* tile */,
 					  dng_abort_sniffer *sniffer)

@@ -1,0 +1,183 @@
+name: CI
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master, review/gopro-baseline, review/product-runtime]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  regression:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: LinuxRelease, os: ubuntu-latest, build_type: Release}
+          - {name: LinuxDebug, os: ubuntu-latest, build_type: Debug}
+          - {name: MacRelease, os: macos-latest, build_type: Release}
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build
+      FAST: "0"
+      GPR_CAPABILITIES_FAST: ${{ matrix.os == 'macos-latest' && '0' || '1' }}
+      GPR_TIMING_TOLERANCE: ${{ matrix.build_type == 'Debug' && '4.0' || matrix.os == 'macos-latest' && '4.0' || '1.0' }}
+      GPR_TIMING_SAMPLE_MAX_PIXELS: ${{ matrix.os == 'macos-latest' && '120000000' || '12192768' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure scratch paths
+        run: |
+          echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          echo "GPR_TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          echo "GPR_EXTERNAL_ROOT=$RUNNER_TEMP/gpr_work" >> "$GITHUB_ENV"
+          echo "GPR_TEST_ARTIFACT_DIR=$RUNNER_TEMP/regression-logs" >> "$GITHUB_ENV"
+          echo "GPR_TOOLS=$BUILD_DIR/source/app/gpr_tools/gpr_tools" >> "$GITHUB_ENV"
+      - name: Test dependencies
+        run: python3 -m pip install "numpy>=1.26,<3" "rawpy>=0.21,<1" "tifffile>=2024,<2027"
+      - name: CPU model dependencies
+        if: runner.os == 'Linux'
+        run: python3 -m pip install "torch>=2.5,<3" "torchvision>=0.20,<1" --index-url https://download.pytorch.org/whl/cpu
+      - name: macOS model dependencies
+        if: runner.os == 'macOS'
+        run: python3 -m pip install "torch>=2.5,<3" "torchvision>=0.20,<1"
+      - name: Reconstruction dependencies
+        run: |
+          python3 -m pip install "pillow>=10,<13" "opencv-python-headless>=4.10,<5" \
+            "scikit-image>=0.24,<1" "pytorch-msssim>=1,<2" "lpips>=0.1.4,<0.2" "PyWavelets>=1.5,<2"
+          python3 -m pip check
+      - name: Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libavformat-dev libavcodec-dev libavutil-dev pkg-config clang nasm zlib1g-dev ffmpeg
+      - name: macOS desktop dependencies
+        if: runner.os == 'macOS'
+        run: brew install libraw ffmpeg pkg-config
+      - name: Build
+        # Instrument one existing job; use the other two for normal builds.
+        # Compiler setup is a separate step so CMake inherits the wrappers.
+        run: |
+          if [ "${{ matrix.name }}" = LinuxRelease ]; then
+            python3 -m pip install "coverage>=7,<8" "gcovr==8.4"
+            bash tools/test/configure_coverage.sh
+          fi
+      - name: Compile
+        run: |
+          cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_TESTING=ON \
+            -DGPR_BUILD_DIAGNOSTICS=ON -DGPR_BUILD_CODEC_UTILITIES=ON \
+            -DGPR_TEST_CODEC=ON -DGPR_TEST_STILLS=ON -DGPR_TEST_CONTAINER=ON \
+            -DGPR_TEST_CAPTURE=ON -DGPR_TEST_PREVIEW=ON -DGPR_TEST_RECONSTRUCTION=ON
+          cmake --build "$BUILD_DIR" --parallel 4
+      - name: Repository checks
+        run: |
+          python3 tests/check_repository.py
+          python3 tests/test_check_repository.py
+          python3 tools/verify_production_artifacts.py
+          python3 tools/test/test_verify_production_artifacts.py
+          python3 tools/test/test_registry_evidence_scope.py
+          python3 tools/test/test_audit_feature_coverage.py
+          python3 tools/test/test_capability_criteria.py
+          python3 tools/test/test_production_registry.py
+          python3 tools/test/test_desktop_backend_config.py
+          python3 tools/test/test_feature_series.py --self-test
+      - name: Repository history guard
+        if: matrix.name == 'LinuxRelease'
+        run: python3 tools/test/check_sensitive_content.py --history
+      - name: Build desktop tools
+        run: |
+          make -C tools/gvid_mov
+          if [ "$(uname -s)" = Darwin ]; then
+            make -C tools/gpr2prores GPR_BUILD="$BUILD_DIR"
+          fi
+      - name: Desktop output regressions
+        run: |
+          if [ "$(uname -s)" = Darwin ]; then
+            python3 tools/test/test_desktop_outputs.py
+          else
+            python3 tools/test/test_desktop_outputs.py --wrapper-only
+          fi
+      - name: Optional desktop backend builds
+        if: matrix.name == 'MacRelease'
+        env:
+          GPR_TEST_DESKTOP_BUILD_PROFILES: '1'
+        run: bash tools/test/test_desktop_build_profiles.sh
+      - name: Native regressions
+        run: ctest --test-dir "$BUILD_DIR" --output-on-failure
+      - name: Lean and optional build profiles
+        if: matrix.name == 'LinuxDebug'
+        run: python3 tools/test/test_build_profiles.py --build
+      - name: Patched FFmpeg integration
+        if: matrix.name == 'LinuxDebug'
+        run: bash tools/test/test_ffmpeg_integration.sh --runtime-root "$GITHUB_WORKSPACE" --build "$BUILD_DIR" --jobs 3 --build-timeout 1800
+      - name: Installed SDK consumer
+        run: bash tools/test/test_installed_sdk.sh --build-tree "$BUILD_DIR"
+      - name: Current-format fuzz corpus
+        run: bash tools/test/test_fuzz_corpus.sh
+      - name: Reconstruction contracts
+        run: |
+          python3 tests/test_reconstruction_models.py
+          python3 tools/test/test_mission1_sr_runtime.py
+          python3 tests/test_preview_fixture_paths.py
+          python3 tests/quality_gates/check_registry_consistency.py
+          python3 tests/quality_gates/audit_ship_pipelines.py --strict
+          python3 tools/test/test_bayer_resample.py
+          python3 tools/test/test_raw_resolution_targets.py
+          python3 tools/test/test_build_camera_noise_calibration.py
+          python3 tools/test/test_convert_darkframe_calibration_to_noise_sidecars.py
+          python3 tools/test/test_build_camera_noise_runtime_policy.py
+          python3 tools/test/test_pack_bayer_detail_residual_sidecar.py
+          python3 tools/test/test_package_mission1_sr_sequence_receipt.py
+          bash tools/test/test_render_gvid_sr_registry.sh
+      - name: Stills regressions
+        run: |
+          bash tools/test/test_gpr_tools_raw_gpr_roundtrip.sh
+          bash tools/test/test_still_matrix.sh
+          python3 tools/test/test_still_metadata.py
+          python3 tools/test/test_still_matrix_harness.py
+      - name: Native preview regressions
+        run: python3 tools/test/test_native_preview.py
+      - name: Container regressions
+        run: |
+          python3 tools/test/test_gvid_conformance.py
+          python3 tools/test/test_gvid_reader.py
+          bash tools/test/test_gvid_pack.sh
+          bash tools/test/test_gvid_metadata.sh
+      - name: Capture regressions
+        run: |
+          python3 tools/test/test_mission1_dma_source_sim.py
+          bash tools/test/test_labs_encoder_bench_cli.sh
+          bash tools/test/test_fused_context_env_capture.sh
+          bash tools/test/test_labs_target_bench_smoke.sh
+          bash tools/test/test_bench_fused_stream_source.sh
+          bash tools/test/test_bench_fused_quality_env.sh
+          bash tools/test/test_mission1_native12_fll2_t2_profile.sh
+      - name: Full integration regressions
+        run: bash tools/test/run_all_regressions.sh
+      - name: Independent feature adoption
+        if: matrix.name == 'MacRelease'
+        run: bash tools/test/test_feature_adoption.sh
+      - name: Collect feature execution coverage
+        if: always() && matrix.name == 'LinuxRelease'
+        env:
+          GPR_RUNTIME_REF: ${{ github.base_ref == 'review/product-runtime' && github.event.pull_request.base.sha || github.event.pull_request.head.sha || github.sha }}
+        run: bash tools/test/collect_feature_coverage.sh
+      - name: Upload regression logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regressions-${{ matrix.name }}
+          path: |
+            ${{ runner.temp }}/regression-logs/**/*.log
+            ${{ runner.temp }}/regression-logs/**/*.json
+          if-no-files-found: warn
