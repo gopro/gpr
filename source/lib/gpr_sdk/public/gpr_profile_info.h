@@ -45,10 +45,57 @@
         
         Matrix      color_matrix_1;
         Matrix      color_matrix_2;
-     
+
+        Matrix      forward_matrix_1;
+        Matrix      forward_matrix_2;
+        bool        has_forward_matrix;
+
         uint16_t    illuminant1;
         uint16_t    illuminant2;
-        
+
+        double      baseline_exposure;
+        double      analog_balance[3];
+
+        /* ProfileHueSatMapData — per-hue color correction LUT */
+        uint32_t    hue_sat_map_dims[3];    /* [hue, sat, val] divisions */
+        float       *hue_sat_map_data1;     /* illuminant 1: dims[0]*dims[1]*dims[2]*3 floats */
+        float       *hue_sat_map_data2;     /* illuminant 2 (may be NULL) */
+        uint32_t    hue_sat_map_encoding;
+
+        /* ProfileLookTableData — 3D tone-and-color look LUT (the "camera look").
+           Adobe-converted Z8/Nikon DNGs ship a ~24×24×40 HSV-delta map here
+           that defines the rendered tone curve. Without it, raw decoders
+           fall back to a neutral rendering — saturation/hue land in the
+           wrong place (Y-PSNR ~17 dB on the gate's smooth-gradient test).
+           Plumbed in/out alongside HueSatMap so gpr_tools roundtrips preserve
+           the source DNG's color look. */
+        uint32_t    look_table_dims[3];     /* [hue, sat, val] divisions */
+        float       *look_table_data;       /* dims[0]*dims[1]*dims[2]*3 floats; NULL if absent */
+        uint32_t    look_table_encoding;
+
+        /* Tone-rendering metadata. Without these the decoded DNG renders
+           ~2× brighter than the source: sips falls back to a generic curve
+           and the gate's Y-PSNR collapses to ~17 dB on smooth gradients
+           even though the bayer round-trip is 61 dB. */
+        uint32_t    tone_curve_count;       /* number of (x,y) pairs */
+        float       *tone_curve_data;       /* count * 2 floats; NULL if absent */
+        double      baseline_exposure_offset;
+        uint32_t    default_black_render;   /* dng_default_black_render_None=0 or Auto=1 */
+        bool        has_tone_curve;
+        bool        has_baseline_exposure_offset;
+        bool        has_default_black_render;
+
+        /* Negative-level render hints. The original gpr_sdk hardcoded
+           BaselineNoise=1 and BaselineSharpness=1 on output, and never
+           read BayerGreenSplit at all. Plumbing them from source so
+           sips' rendering doesn't drift on portrait-content DNGs. */
+        double      baseline_noise;
+        double      baseline_sharpness;
+        uint32_t    bayer_green_split;
+        bool        has_baseline_noise;
+        bool        has_baseline_sharpness;
+        bool        has_bayer_green_split;
+
     } gpr_profile_info;
 
     void gpr_profile_info_set_defaults(gpr_profile_info* x);

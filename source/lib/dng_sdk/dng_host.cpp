@@ -17,6 +17,12 @@
 
 #include "dng_abort_sniffer.h"
 #include "dng_area_task.h"
+
+#if !defined(_WIN32)
+#include <pthread.h>
+#include <unistd.h>
+#endif
+
 #include "dng_bad_pixels.h"
 #include "dng_exceptions.h"
 #include "dng_exif.h"
@@ -228,24 +234,154 @@ bool dng_host::IsTransientError (dng_error_code code)
 		
 /*****************************************************************************/
 
+#if !defined(_WIN32)
+namespace {
+
+struct dng_area_task_worker_args
+	{
+	dng_area_task *task;
+	uint32 threadIndex;
+	dng_rect area;
+	dng_point tileSize;
+	dng_abort_sniffer *sniffer;
+	bool failed;
+	dng_error_code errorCode;
+	};
+
+extern "C" void *dng_area_task_worker (void *arg)
+	{
+	dng_area_task_worker_args *a = (dng_area_task_worker_args *) arg;
+	try
+		{
+		a->task->ProcessOnThread (a->threadIndex, a->area, a->tileSize, a->sniffer);
+		}
+	catch (const dng_exception &e)
+		{
+		a->failed = true;
+		a->errorCode = e.ErrorCode ();
+		}
+	catch (...)
+		{
+		a->failed = true;
+		a->errorCode = dng_error_unknown;
+		}
+	return NULL;
+	}
+
+}
+#endif
+
 void dng_host::PerformAreaTask (dng_area_task &task,
 								const dng_rect &area)
 	{
-	
+
+#if !defined(_WIN32)
+	uint32 threadCount = PerformAreaTaskThreads ();
+
+	if (threadCount > 1 && task.MultiThreadSafe ())
+		{
+		dng_point tileSize (task.FindTileSize (area));
+		uint32 tv = (tileSize.v > 0) ? (uint32) tileSize.v : 16u;
+		uint32 th = (tileSize.h > 0) ? (uint32) tileSize.h : 16u;
+		uint32 tilesV = (area.H () + tv - 1) / tv;
+		uint32 tilesH = (area.W () + th - 1) / th;
+		bool splitOnH = (tilesH >= tilesV);
+		uint32 totalTiles = splitOnH ? tilesH : tilesV;
+
+		if (totalTiles < 2)
+			{
+			dng_area_task::Perform (task, area, &Allocator (), Sniffer ());
+			return;
+			}
+
+		uint32 actualThreads = Min_uint32 (totalTiles, threadCount);
+		if (actualThreads > 32) actualThreads = 32;
+		uint32 tilesPerThread = (totalTiles + actualThreads - 1) / actualThreads;
+
+		task.Start (actualThreads, tileSize, &Allocator (), Sniffer ());
+
+		pthread_t threads [32];
+		dng_area_task_worker_args args [32];
+		uint32 created = 0;
+		uint32 workers = 0;
+
+		for (uint32 t = 0; t < actualThreads; ++t)
+			{
+			args [t].task        = &task;
+			args [t].threadIndex = t;
+			args [t].tileSize    = tileSize;
+			args [t].sniffer     = Sniffer ();
+			args [t].failed      = false;
+			args [t].errorCode   = dng_error_none;
+
+			if (splitOnH)
+				{
+				int32 left  = area.l + (int32) (t * tilesPerThread * th);
+				int32 right = left + (int32) (tilesPerThread * th);
+				if (left >= area.r) break;
+				if (right > area.r) right = area.r;
+				args [t].area = dng_rect (area.t, left, area.b, right);
+				}
+			else
+				{
+				int32 top    = area.t + (int32) (t * tilesPerThread * tv);
+				int32 bottom = top + (int32) (tilesPerThread * tv);
+				if (top >= area.b) break;
+				if (bottom > area.b) bottom = area.b;
+				args [t].area = dng_rect (top, area.l, bottom, area.r);
+				}
+
+			++workers;
+
+			if (pthread_create (&threads [created], NULL, dng_area_task_worker, &args [t]) == 0)
+				{
+				++created;
+				}
+			else
+				{
+				dng_area_task_worker (&args [t]);
+				}
+			}
+
+		for (uint32 t = 0; t < created; ++t)
+			{
+			pthread_join (threads [t], NULL);
+			}
+
+		for (uint32 t = 0; t < workers; ++t)
+			{
+			if (args [t].failed)
+				{
+				Throw_dng_error (args [t].errorCode);
+				}
+			}
+
+		task.Finish (workers);
+		return;
+		}
+#endif
+
 	dng_area_task::Perform (task,
 							area,
 							&Allocator (),
 							Sniffer ());
-	
+
 	}
-		
+
 /*****************************************************************************/
 
 uint32 dng_host::PerformAreaTaskThreads ()
 	{
-	
+
+#if !defined(_WIN32)
+	long ncpu = sysconf (_SC_NPROCESSORS_ONLN);
+	if (ncpu < 1) ncpu = 1;
+	if (ncpu > 8) ncpu = 8;
+	return (uint32) ncpu;
+#else
 	return 1;
-	
+#endif
+
 	}
 
 /*****************************************************************************/

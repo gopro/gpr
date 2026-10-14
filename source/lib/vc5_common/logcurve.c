@@ -20,39 +20,84 @@
 
 #include "common.h"
 
-uint16_t EncoderLogCurve[LOG_CURVE_TABLE_LENGTH];
+static int _logcurve_bypass = 0;
 
-uint16_t DecoderLogCurve[LOG_CURVE_TABLE_LENGTH];
+int vc5_logcurve_bypass(void)
+{
+    return _logcurve_bypass;
+}
+
+void vc5_logcurve_set_bypass(int bypass)
+{
+    _logcurve_bypass = bypass;
+}
+
+/* Encoder log curves are touched per Bayer pixel in the fused encoder's
+ * scalar gather (one load per channel per output). Page-aligning the
+ * tables (4 KB) keeps each table on a contiguous span of TLB entries
+ * (8 pages for the 32 KB 14-bit table, 32 pages for the 128 KB 16-bit
+ * table) — the alignment doesn't change the page count but removes
+ * arbitrary linker-driven offsets so consecutive pages map cleanly into
+ * L1d's 4-way associativity without conflicting with adjacent allocations.
+ * Decoder tables get the same treatment for symmetry. Cost: ~7 KB of
+ * BSS slack on average across the 6 tables. */
+uint16_t EncoderLogCurve12[LOG_CURVE_TABLE_LENGTH_12] __attribute__((aligned(4096)));
+uint16_t EncoderLogCurve14[LOG_CURVE_TABLE_LENGTH_14] __attribute__((aligned(4096)));
+uint16_t EncoderLogCurve16[LOG_CURVE_TABLE_LENGTH_16] __attribute__((aligned(4096)));
+
+uint16_t DecoderLogCurve12[LOG_CURVE_TABLE_LENGTH_12] __attribute__((aligned(4096)));
+uint16_t DecoderLogCurve14[LOG_CURVE_TABLE_LENGTH_14] __attribute__((aligned(4096)));
+uint16_t DecoderLogCurve16[LOG_CURVE_TABLE_LENGTH_16] __attribute__((aligned(4096)));
+
+static void SetupDecoderCurve(uint16_t *table, int bits)
+{
+    const int max_input = (1 << bits) - 1;
+    const double denom = log10(113.0);
+    const int max_output = (1 << 16) - 1;
+
+    // Antilog: the mathematical inverse of the encoder log curve.
+    // Encoder: y = max_out * log10(x/max_in * 112 + 1) / log10(113)
+    // Decoder: x = max_out * (10^(y/max_in * log10(113)) - 1) / 112
+    for (int i = 0; i <= max_input; ++i)
+    {
+        const double norm = (double)i / max_input;
+        const double exp_val = pow(10.0, norm * denom);
+        const double output = max_output * (exp_val - 1.0) / 112.0;
+        int out_int = (int)(output + 0.5);
+        if (out_int < 0) out_int = 0;
+        if (out_int > max_output) out_int = max_output;
+        table[i] = (uint16_t)out_int;
+    }
+}
 
 void SetupDecoderLogCurve(void)
 {
-    int i;
-    const int log_table_size = sizeof(DecoderLogCurve) / sizeof(DecoderLogCurve[0]);
-    
-    const int max_16_bit = (1 << 16) - 1;
-    
-    for( i = 0; i < log_table_size; i++ )
+    static int initialized = 0;
+    if (initialized) return;
+    SetupDecoderCurve(DecoderLogCurve12, 12);
+    SetupDecoderCurve(DecoderLogCurve14, 14);
+    SetupDecoderCurve(DecoderLogCurve16, 16);
+    initialized = 1;
+}
+
+static void SetupEncoderLogCurveBits(uint16_t* table, int input_bits, int output_bits)
+{
+    const int max_input_val = (1 << input_bits) - 1;
+    const int max_output_val = (1 << output_bits) - 1;
+    const double denom = log10(113.0);
+
+    for(int i = 0; i <= max_input_val; i++ )
     {
-        //input 12-bit, output 16-bit
-        float input = i;
-        float output = max_16_bit * (pow(113.0, input/4095.0) - 1.0)/112.0;
-        
-        DecoderLogCurve[i]  = minimum( (int)output, max_16_bit );
+        const double input = maximum(0, i);
+        const double norm  = (input / max_input_val * 112.0) + 1.0;
+        const double output = max_output_val * (log10(norm) / denom);
+        table[i] = (uint16_t)output;
     }
 }
 
 void SetupEncoderLogCurve(void)
 {
-    int i;
-    const int max_input_val = LOG_CURVE_TABLE_LENGTH - 1;
-    
-    for( i = 0; i < LOG_CURVE_TABLE_LENGTH; i++ )
-    {
-        //input 16-bit, output 12-bit
-        float input = maximum( 0, i );
-        float output = 4095.0 * (log10(input/max_input_val * 112.0 + 1.0)/log10(113));
-
-        EncoderLogCurve[i]  = ( (uint16_t)output );
-    }
+    SetupEncoderLogCurveBits(EncoderLogCurve12, 12, 12);
+    SetupEncoderLogCurveBits(EncoderLogCurve14, 14, 14);
+    SetupEncoderLogCurveBits(EncoderLogCurve16, 16, 16);
 }
-

@@ -22,7 +22,7 @@
 #define BITSTREAM_TAG_SIZE				16
 
 /*!
-	@brief Read the next tag-valie pair from the bitstream.
+	@brief Read the next tag-value pair from the bitstream.
 
 	The next tag is read from the bitstream and the next value that
 	immediately follows the tag in the bitstreeam are read from the
@@ -38,10 +38,42 @@
 
 	If the value is the length of the payload then it encodes the number
 	of bytes in the segment payload, not counting the segment header.
+
+	Optimized: when the bitstream internal buffer is empty and reading
+	from a contiguous memory stream, reads the 32-bit tag-value pair
+	directly from the buffer pointer, bypassing GetBits/GetBuffer.
 */
 TAGVALUE GetSegment(BITSTREAM *stream)
 {
 	TAGVALUE segment;
+
+	/* Fast path: bitstream buffer is empty, read 32-bit tag+value directly
+	   from the memory stream.  This is the common case because tags are
+	   always 32-bit aligned after AlignBitsSegment(). */
+	if (stream->count == 0 && stream->stream != NULL &&
+	    stream->stream->type == STREAM_TYPE_MEMORY)
+	{
+		uint8_t *p = (uint8_t *)stream->stream->location.memory.buffer
+		           + stream->stream->byte_count;
+		/* VC-5 bitstream is big-endian: tag is first 16 bits, value is next 16 bits */
+		segment.tuple.tag   = (TAGWORD)((int16_t)((p[0] << 8) | p[1]));
+		segment.tuple.value = (TAGWORD)((int16_t)((p[2] << 8) | p[3]));
+		stream->stream->byte_count += 4;
+		return segment;
+	}
+
+	/* Fast path: all 32 bits are in the bitstream buffer */
+	if (stream->count == 32)
+	{
+		uint32_t word = stream->buffer;
+		segment.tuple.tag   = (TAGWORD)((int16_t)(word >> 16));
+		segment.tuple.value = (TAGWORD)((int16_t)(word & 0xFFFF));
+		stream->buffer = 0;
+		stream->count = 0;
+		return segment;
+	}
+
+	/* Fallback: general GetBits path */
 	segment.tuple.tag = (TAGWORD)GetBits(stream, 16);
 	segment.tuple.value = (TAGWORD)GetBits(stream, 16);
 	return segment;

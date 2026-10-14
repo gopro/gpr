@@ -67,7 +67,7 @@ public:
         
         ("InputFilePath,i",                                 input_file_path,                            string(""),             "Input file path")
         
-        ("OutputPixelFormat,x",                             output_pixel_format,                        string("rggb14"),       "Output pixel format [rggb12, rggb12p, rggb14, gbrg12, gbrg12p]")
+        ("OutputPixelFormat,x",                             output_pixel_format,                        string("rggb14"),       "Output pixel format [rggb12, rggb14, rggb16, gbrg12, gbrg14, gbrg16, grbg12, grbg14, grbg16, bggr12, bggr14, bggr16]")
         
         ("OutputFilePath,o",                                output_file_path,                           string(""),             "Output file path")
         
@@ -125,6 +125,38 @@ int main(int argc, char *argv[])
     else if( strcmp(args.output_pixel_format.c_str(), "gbrg14") == 0 )
     {
         vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_14;
+    }
+    else if( strcmp(args.output_pixel_format.c_str(), "rggb16") == 0 )
+    {
+        vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_16;
+    }
+    else if( strcmp(args.output_pixel_format.c_str(), "gbrg16") == 0 )
+    {
+        vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_16;
+    }
+    else if( strcmp(args.output_pixel_format.c_str(), "grbg12") == 0 )
+    {
+        vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_GRBG_12;
+    }
+    else if( strcmp(args.output_pixel_format.c_str(), "grbg14") == 0 )
+    {
+        vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_GRBG_14;
+    }
+    else if( strcmp(args.output_pixel_format.c_str(), "grbg16") == 0 )
+    {
+        vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_GRBG_16;
+    }
+    else if( strcmp(args.output_pixel_format.c_str(), "bggr12") == 0 )
+    {
+        vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_BGGR_12;
+    }
+    else if( strcmp(args.output_pixel_format.c_str(), "bggr14") == 0 )
+    {
+        vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_BGGR_14;
+    }
+    else if( strcmp(args.output_pixel_format.c_str(), "bggr16") == 0 )
+    {
+        vc5_decoder_params.pixel_format = VC5_DECODER_PIXEL_FORMAT_BGGR_16;
     }
     else
     {
@@ -204,7 +236,7 @@ int main(int argc, char *argv[])
             
             file.fill( '0' );
             file.width( 4 );
-            file << (DecoderLogCurve[i] >> 4);
+            file << (DecoderLogCurve12[i] >> 4);
             
             file << endl;
         }

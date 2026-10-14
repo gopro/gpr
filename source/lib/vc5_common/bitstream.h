@@ -102,13 +102,31 @@ extern "C" {
 
     CODEC_ERROR ReleaseBitstream(BITSTREAM *stream);
 
-    BITWORD GetBits(BITSTREAM *stream, BITCOUNT count);
+    BITWORD _GetBits_Full(BITSTREAM *stream, BITCOUNT count);
 
     CODEC_ERROR PutBits(BITSTREAM *stream, BITWORD bits, BITCOUNT count);
 
     BITWORD AddBits(BITSTREAM *stream, BITWORD bits, BITCOUNT count);
 
     CODEC_ERROR GetBuffer(BITSTREAM *stream);
+
+    /*!
+        @brief Inline fast path for GetBits — avoids function call when enough
+               bits are already in the internal buffer (the common case).
+
+        Falls back to _GetBits_Full for the slow path (buffer refill needed).
+    */
+    static INLINE BITWORD GetBits(BITSTREAM *stream, BITCOUNT count)
+    {
+        if (count <= stream->count)
+        {
+            BITWORD bits = stream->buffer >> (32 - count);
+            stream->buffer <<= count;
+            stream->count -= count;
+            return bits;
+        }
+        return _GetBits_Full(stream, count);
+    }
 
     CODEC_ERROR PutBuffer(BITSTREAM *stream);
 
@@ -125,6 +143,21 @@ extern "C" {
     CODEC_ERROR FlushBitstream(BITSTREAM *bitstream);
 
     CODEC_ERROR GetByteArray(BITSTREAM *bitstream, uint8_t *array, size_t size);
+
+    /*!
+        @brief Zero-copy access to the underlying stream buffer.
+
+        When the bitstream is byte-aligned and backed by a memory stream,
+        returns a direct pointer into the stream buffer and advances the
+        stream position by @p size bytes.  No data is copied.
+
+        @param bitstream    The bitstream to read from.
+        @param size         Number of bytes to consume.
+        @param out_ptr      [out] Receives pointer to the data in the stream buffer.
+        @return CODEC_ERROR_OKAY on success, or an error if zero-copy is not possible
+                (e.g., file-backed stream or non-aligned bitstream).
+    */
+    CODEC_ERROR GetByteArrayZeroCopy(BITSTREAM *bitstream, size_t size, const uint8_t **out_ptr);
 
     CODEC_ERROR PutByteArray(BITSTREAM *bitstream, const uint8_t *block, size_t size);
 

@@ -1,0 +1,399 @@
+{
+  "$doc": "Pipeline registry. The ONLY place where {codec, cnn, demosaicer} triples are named. Run-gate refuses to test a pipeline that isn't here. Use the full name in artifact paths, PR descriptions, and claims_log.md — never an ad-hoc short form like 'ML2_q3_CNN' (the short form was the failure mode this scaffolding exists to fix).",
+  "$naming": "codec=<codec_id>+cnn=<cnn_id>+demosaic=<demosaic_id>. Hyphens within an id are fine; '+' separates the triple. If a field is absent (e.g. no CNN), use 'none' (codec=sl_q3+cnn=none+demosaic=sips).",
+  "$rules": [
+    "Adding a pipeline: required fields populated, no ad-hoc 'TODO' fields.",
+    "Renaming a pipeline: forbidden in same PR as an artifact run. Rename + re-run in separate PRs.",
+    "If you can't fill `ckpt_sha256`, you can't register the pipeline. Run `sha256sum` on the .pt file."
+  ],
+  "$use_for_doc": "Codec use_for retains runtime intent. Pipeline ship_class identifies the quality family, not production selection. release_selection distinguishes the eight ship roots, existing offline UPRESABLE, selected offline production, review-only candidates, and historical compatibility records.",
+  "demosaicers": {
+    "sips_via_gpr_tools": {
+      "$doc": "Bayer plane → DNG via gpr_tools (Adobe DNG SDK preserves color matrix from source DNG params) → PNG via macOS sips (Apple's CIRawFilter). Gold standard for color science. Requires source DNG for color matrix.",
+      "binary": "build-local/source/app/gpr_tools/gpr_tools",
+      "needs_source_dng": true
+    }
+  },
+  "codecs": {
+    "gpr_tools_q0": {
+      "$doc": "Legacy CineForm VC5 encoder via gpr_tools at q=0. Used by the registered STILL ship roots.",
+      "binary": "build-local/source/app/gpr_tools/gpr_tools",
+      "quality": 0,
+      "encoder_kind": "legacy_gpr_tools",
+      "env": {},
+      "use_for": "still"
+    },
+    "gpr_tools_q3": {
+      "$doc": "Legacy CineForm VC5 encoder via gpr_tools at q=3. Used by the registered STILL ship roots.",
+      "binary": "build-local/source/app/gpr_tools/gpr_tools",
+      "quality": 3,
+      "encoder_kind": "legacy_gpr_tools",
+      "env": {},
+      "use_for": "still"
+    },
+    "gpr_tools_q8": {
+      "$doc": "Legacy CineForm VC5 encoder via gpr_tools at q=8. Used by the registered STILL ship roots.",
+      "binary": "build-local/source/app/gpr_tools/gpr_tools",
+      "quality": 8,
+      "encoder_kind": "legacy_gpr_tools",
+      "env": {},
+      "use_for": "still"
+    },
+    "ml2_q3": {
+      "$doc": "2-level FUSED q=3 codec used by the registered VIDEO_FREEZE alternate.",
+      "binary": "build-local/bin/test_fused_roundtrip",
+      "env": {
+        "GPR_INCLUDE_LL": "1",
+        "FUSED_MULTI_LEVEL": "1",
+        "FUSED_WAVELET_LEVELS": "2"
+      },
+      "quality": 3,
+      "use_for": "video"
+    },
+    "ml2_q3_dec2": {
+      "$doc": "2-level FUSED q=3 with 2x2 decimation. Half-res capture, 1/4 pixels. Pair with a 2x super-res CNN on the desktop. Historical capture timing is separate from offline production selection.",
+      "binary": "build-local/bin/test_fused_roundtrip",
+      "env": {
+        "GPR_INCLUDE_LL": "1",
+        "FUSED_MULTI_LEVEL": "1",
+        "FUSED_WAVELET_LEVELS": "2",
+        "GPR_COL_DECIMATE": "2",
+        "GPR_ROW_DECIMATE": "2"
+      },
+      "quality": 3,
+      "use_for": "video"
+    },
+    "mission1_native12_t233": {
+      "$doc": "Mission 1 native 12MP Bayer recompression profile: q8, one wavelet level, no decimation, exact predictive LL, FLL2/T233 highpass dead-zones LH/HL/HH=2/3/3, direct .gvid scatter write. Capture timing evidence is separate from offline reconstruction selection.",
+      "binary": "build-local/bin/bench_fused",
+      "env": {
+        "FUSED_PIN": "1",
+        "FUSED_PIN_P2": "1",
+        "GPR_INCLUDE_LL": "1",
+        "FUSED_RAW_LL": "1",
+        "FUSED_LL_PREDICT": "1",
+        "FUSED_LL_PREDICTOR": "avg",
+        "FUSED_LL_RICE_KS": "7,5,5,5",
+        "FUSED_LL_RICE_FAST": "1",
+        "FUSED_LL_ASSUME_U16": "1",
+        "FUSED_INLINE_TOKENIZE": "1",
+        "FUSED_DEFER_RANS": "1",
+        "GPR_BENCH_GVID_SCATTER": "1",
+        "FUSED_REFERENCE_HORIZONTAL": "1",
+        "FUSED_STRIPE_ROWS": "384",
+        "GPR_INLINE_DENOISE_HARD": "1",
+        "GPR_INLINE_DENOISE_T_LH": "2",
+        "GPR_INLINE_DENOISE_T_HL": "3",
+        "GPR_INLINE_DENOISE_T_HH": "3"
+      },
+      "quality": 8,
+      "wavelet_levels": 1,
+      "pixel_format": "rggb12",
+      "source_width": 4096,
+      "source_height": 3072,
+      "use_for": "video"
+    },
+    "ml2_q3_l1x2": {
+      "$doc": "ml2_q3 with all L1 highpass doubled (LH1/HL1: 96→192, HH1: 144→288).",
+      "binary": "build-local/bin/test_fused_roundtrip",
+      "env": {
+        "GPR_INCLUDE_LL": "1",
+        "FUSED_MULTI_LEVEL": "1",
+        "FUSED_WAVELET_LEVELS": "2",
+        "GPR_QUANT_OVERRIDE": "7:192,8:192,9:288"
+      },
+      "quality": 3,
+      "use_for": "video"
+    },
+    "ml2_q3_l2x2_l1x2": {
+      "$doc": "Both L2 and L1 doubled: 4/5: 24→48, 6: 12→24, 7/8: 96→192, 9: 144→288.",
+      "binary": "build-local/bin/test_fused_roundtrip",
+      "env": {
+        "GPR_INCLUDE_LL": "1",
+        "FUSED_MULTI_LEVEL": "1",
+        "FUSED_WAVELET_LEVELS": "2",
+        "GPR_QUANT_OVERRIDE": "4:48,5:48,6:24,7:192,8:192,9:288"
+      },
+      "quality": 3,
+      "use_for": "video"
+    },
+    "ml2_q3_l2x2_l1x2_hh1x2": {
+      "$doc": "2-level FUSED q=3 with doubled L2/L1 highpass and additional L1 HH quantization. Used by the smallest VIDEO_FREEZE ship root; exact slots remain in env.",
+      "binary": "build-local/bin/test_fused_roundtrip",
+      "env": {
+        "GPR_INCLUDE_LL": "1",
+        "FUSED_MULTI_LEVEL": "1",
+        "FUSED_WAVELET_LEVELS": "2",
+        "GPR_QUANT_OVERRIDE": "4:48,5:48,6:24,7:192,8:192,9:576"
+      },
+      "quality": 3,
+      "use_for": "experiment"
+    }
+  },
+  "cnns": {
+    "bibo1x_ane_gpr_tools_q3": {
+      "$doc": "Release-required checkpoint for the registered production selection; architecture, configuration and hash are pinned below.",
+      "ckpt_path": "models/BayInBayOut_1x_AAon_w16_ANE_gpr_tools_q3.pt",
+      "cnn_arch_variant": "F_ane_no_sr",
+      "trained_against_codec": "gpr_tools_q3",
+      "residual_scale": 0.01,
+      "raw_norm": 16383,
+      "ckpt_sha256": "df22af432710bddabd223047c2db2d0edf2808dd17c4341694a974e045ec87cd",
+      "record_scope": "release_required"
+    },
+    "bibo1x_ane_ml2_q3": {
+      "$doc": "Release-required checkpoint for the registered production selection; architecture, configuration and hash are pinned below.",
+      "ckpt_path": "models/BayInBayOut_1x_AAon_w16_ANE_ML2_q3.pt",
+      "cnn_arch_variant": "F_ane_no_sr",
+      "trained_against_codec": "ml2_q3",
+      "residual_scale": 0.01,
+      "raw_norm": 16383,
+      "ckpt_sha256": "7fac7c28f13830c716fede8c9caf129fc7d949151508b70530449f13151fade9",
+      "record_scope": "release_required"
+    },
+    "bibo2x_ane_ml2_q3_dec2_diverse": {
+      "$doc": "Release-required checkpoint for the registered production selection; architecture, configuration and hash are pinned below.",
+      "ckpt_path": "models/BayInBayOut_2x_AAon_w16_ANE_ML2_q3_dec2_diverse.pt",
+      "cnn_arch_variant": "F_ane",
+      "trained_against_codec": "ml2_q3_dec2",
+      "residual_scale": 0.01,
+      "raw_norm": 16383,
+      "ckpt_sha256": "bd3636d2c026639e3d8c9636de491c662fe05e67bdaa4451061901b47b37659b",
+      "record_scope": "release_required"
+    },
+    "mission1_native12_8k_sr_q4t2_coord_detail_alpha0p5_v1": {
+      "$doc": "Selected 8K alpha0p5 offline editable-raw production checkpoint.",
+      "ckpt_path": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/interp_step1_to_balanced_step200/q4t2_coord_detail_balanced_step001_to_step200_alpha0p5.pt",
+      "ckpt_sha256": "791628778f74b13542677edeb5de7934b88d274531a8ec1755d8cf3d6388fb07",
+      "cnn_arch_variant": "coord_detail_preclean_adapter_pixelshuffle_bayer2x",
+      "trained_against_codec": "mission1_native12_t233",
+      "init_checkpoint": "artifacts/current_goal_sr_preclean_aux_broad_recovery_20260618/eval_checkpoints/preclean_aux_broad_recovery_w96_d6_rs03_gw08_lap01_aux05_1600_step000200.pt",
+      "width": 96,
+      "depth": 6,
+      "residual_scale": 0.3,
+      "gradient_weight": 0.4,
+      "laplacian_weight": 0.05,
+      "detail_phase_weight": 0.1,
+      "coordinate_channels": true,
+      "deterministic_detail_channels": true,
+      "raw_norm": 16383,
+      "input_bayer": "4096x3072 Mission 1 q4/t2 detail-residual sidecar lows; regenerated 4140x2760 Z8 q4/t2 detail-residual sidecar lows",
+      "output_scale": "2x Bayer",
+      "tile": 512,
+      "overlap": 32,
+      "training_pairs_path": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/mission42_z8all24_q4t2_plus_targetdetail_hardtiles_w96.npz",
+      "training_pairs_sha256": "59aa38bac909e8221f48de2b20e9b00d2cc4cc3f6cf24d143bf4cba08e387205",
+      "hard_tile_manifest": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/mission3_z8all24_targetdetail_hardtiles_q4t2_preclean_step0200.json",
+      "hard_tile_manifest_sha256": "cf169290b30bd53ba5c48a807d9e55178a63f3c425a69630643cee0110ed3c4e",
+      "training_receipt": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/hardtile_coord_detail_gw4_lap005_phase01_s400/q4t2_coord_detail_hardtile_gw4_lap005_phase01_s400.pt.json",
+      "training_receipt_sha256": "79f12429817c93854be4c67a49cbf912305c00490a6adc801585008e94dc8dbd",
+      "interpolation_summary": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/interp_step1_to_balanced_step200/interpolation_summary.json",
+      "interpolation_summary_sha256": "43a37261ccd2eeb414c3290d46998f329c2b0b975a64b30f3a44b82c36b88c65",
+      "mission_broad_holdout_receipt": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/interp_step1_to_balanced_step200/alpha0p5_mission42_broad_fullframe/summary.json",
+      "mission_broad_holdout_receipt_sha256": "b520b5bad0936faaa2794a255b7d2cd4734bb14fecc294ec6086cb66ac4bd371",
+      "z8_regenerated_holdout_receipt": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/interp_step1_to_balanced_step200/alpha0p5_z8all24_broad_fullframe/summary.json",
+      "z8_regenerated_holdout_receipt_sha256": "d132b099731f3a943b865aca072031b3dc6adc03c9169a5ceec73c7f2b90bdf3",
+      "promotion_review_decision": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/interp_step1_to_balanced_step200/alpha0p5_broad_decision.json",
+      "promotion_review_decision_sha256": "6e98510d49c77b4dc763b254ffbdd66924081687aa810e83ef7574f00c3c6329",
+      "baseline_q4t2_broad_summary": "artifacts/current_goal_sr_detail_residual_q4t2_broad_gate_20260619/summary.json",
+      "baseline_q4t2_broad_summary_sha256": "3edc2ea7a7f00ab1d03f5ad2c7de8eb8b66e4b3ef7fc1e228f4d65d21d29065d",
+      "dashboard": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/interp_step1_to_balanced_step200/alpha0p5_mission42_broad_fullframe/index.html",
+      "z8_dashboard": "artifacts/current_goal_cnn_hardtile_gate_aligned_20260624/interp_step1_to_balanced_step200/alpha0p5_z8all24_broad_fullframe/index.html",
+      "gvid_decode_sr_multiframe_receipt": "artifacts/mission1_native12_gvid_to_8k_sr_coord_detail_alpha0p5_multiframe_20260624/receipt.json",
+      "gvid_decode_sr_multiframe_receipt_sha256": "07dc2fd456c3d4836594f3b73a11e6601f3cf62cc05cbd8a7777e547793bfcb7",
+      "gvid_decode_sr_multiframe_summary": {
+        "frames": 3,
+        "input_gvid_frames": 3,
+        "gvid_sha256": "6dea3c44949e5559898fd337175df8d357fc1e976d117f9d3918aaae79a35596",
+        "median_decode_plus_sr_write_s": 0.8983670420821757,
+        "median_decode_plus_sr_write_fps": 1.1131307730104014,
+        "median_decode_reported_s": 0.0145,
+        "max_rss_mb": 715.15625,
+        "intermediates_retained": true,
+        "status": "pass_registry_gvid_decode_to_sr"
+      },
+      "gvid_decode_sr_packaging_receipt": "artifacts/mission1_native12_gvid_to_8k_sr_coord_detail_alpha0p5_packaging_q3_20260624/packaging_receipt.json",
+      "gvid_decode_sr_packaging_receipt_sha256": "749824bb69cda552015062293410e72137b7c9d0a968675c60837d849233f008",
+      "production_promotion_receipt": "artifacts/mission1_8k_sr_production_promotion_20260625/production_promotion.json",
+      "production_promotion_receipt_sha256": "1e24b2551d889ced2508d011b77f725a1eb8e855b23a6843127aedc4240db5c9",
+      "packaging_gpr_quality": 3,
+      "gvid_decode_sr_packaging_summary": {
+        "frame_index": 0,
+        "editable_gpr": "pass_sdk_wrapped_gpr_readback_psnr14_64_12db_and_gpr_to_dng_opens",
+        "prores_review": "pass_2048x1536_prores_from_sr_dng; two-frame receipt reports time_base 1/24 and duration_ts 2",
+        "mission_metadata_transplant": "not refreshed for coord-detail alpha0p5 candidate; generic SDK wrapper path validated"
+      },
+      "runtime_entrypoint": "tools/cnn/render_gvid_sr_receipt.py",
+      "status": "offline_production_runtime_and_packaging_refreshed",
+      "record_scope": "release_required"
+    },
+    "mission1_native12_4k_cleanup_rgb_cfa_w40_v1": {
+      "$doc": "Visually approved 4K cleanup checkpoint, retained for offline review only; not selected for production.",
+      "ckpt_path": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/bayer_rgb_target_w40_d5_rs015_gamma2_grad1_raw2_bayer2_step1000.pt",
+      "ckpt_sha256": "baabbd3650c8e09032849e83cfc1526d8a30a47508c55a9a00f5a4e182e16aa1",
+      "cnn_arch_variant": "bayer_rgb_target_cleanup_1x",
+      "trained_against_codec": "mission1_native12_t233",
+      "width": 40,
+      "depth": 5,
+      "residual_scale": 0.15,
+      "gradient_weight": 1,
+      "raw_weight": 2,
+      "bayer_weight": 2,
+      "raw_norm": 16383,
+      "input_bayer": "4096x3072 Mission 1 q4/t2 low Bayer",
+      "output_scale": "1x Bayer",
+      "training_receipt": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/bayer_rgb_target_w40_d5_rs015_gamma2_grad1_raw2_bayer2_step1000.pt.json",
+      "training_receipt_sha256": "17064271975c8b50e732606d45b81254e0c341470a20ea59c10868ae9d919737",
+      "promotion_review_decision": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/mission42_strict_rgb_cfa_candidate_decision.json",
+      "promotion_review_decision_sha256": "352eb7986120fda4366ff30bb5bded0d826acfa6170005af6cc6e56031dd5ba9",
+      "mission42_rgb_cfa_summary": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/mission42_rgb_cfa_target_gate_wb_review/summary.json",
+      "mission42_rgb_cfa_summary_sha256": "609ac5a1c1ffa0acf5e73cdfea4131bb01287788bb3bbc9ef09e646497a0c317",
+      "mission42_rgb_cfa_dashboard": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/mission42_rgb_cfa_target_gate_wb_review/index.html",
+      "mission42_tone_audit_summary": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/mission42_4k_cnn_tone_audit_20260625/summary.json",
+      "mission42_tone_audit_summary_sha256": "d50c87a98fd9f7831f78bea8b32858ef76bc2cbb7664526c105acbc2e67c5e32",
+      "mission42_tone_audit_dashboard": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/mission42_4k_cnn_tone_audit_20260625/index.html",
+      "gvid_4k_packaging_receipt": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/mission42_4k_cnn_gvid_packaging_q8/labs_target_bench.json",
+      "gvid_4k_packaging_receipt_sha256": "6b15d0cc2640dbd0b41ea0ec3ad07a561a9331a0a579bcbbdadad147c21c1c86",
+      "gvid_4k_packaging_summary": {
+        "frames": 42,
+        "width": 4096,
+        "height": 3072,
+        "fps_metadata": 20,
+        "gvid_sha256": "483d755bac4781c3cb19b4b39a610090e2ba7acc31c618ecec03a4bb19cd2e44",
+        "median_encode_plus_write_ms": 9.202,
+        "wall_fps": 74.08844732471468,
+        "zero_drops": true,
+        "interrupted_tail_recovery_frames": 41,
+        "host": "local non-target bench host"
+      },
+      "gvid_4k_to_prores_receipt": "artifacts/current_goal_bayer_rgb_target_cleanup_20260625/train_w40_d5_rs015_gamma2_grad1_raw2_bayer2/mission42_4k_cnn_prores_review/receipt.json",
+      "gvid_4k_to_prores_receipt_sha256": "c6851607113ec37d16b87686db03801d61b43c6bbbf29a4c92ed759d8c827c22",
+      "prores_review_summary": {
+        "frames": 42,
+        "width": 4096,
+        "height": 3072,
+        "fps": 20,
+        "mov_sha256": "936a3a8bb3dca8d9387f7b9477d22e806014b440717993731aeb98c4569440c4"
+      },
+      "runtime_entrypoint": "tools/cnn/train_bayer_rgb_target_cleanup.py",
+      "status": "review_only_visual_signed_off_camera_handoff_separate",
+      "record_scope": "review_only"
+    },
+    "none": {
+      "$doc": "No CNN — codec output is the final result."
+    }
+  },
+  "pipelines": {
+    "codec=ml2_q3_l2x2_l1x2_hh1x2+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools": {
+      "codec": "ml2_q3_l2x2_l1x2_hh1x2",
+      "cnn": "bibo1x_ane_ml2_q3",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "VIDEO_FREEZE",
+      "$role": "ship-video-freeze-smallest",
+      "$doc": "VIDEO_FREEZE ship root. Production selection is declared here; validation belongs to the exact pipeline receipt.",
+      "release_selection": "ship_root"
+    },
+    "codec=ml2_q3_l1x2+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools": {
+      "codec": "ml2_q3_l1x2",
+      "cnn": "bibo1x_ane_ml2_q3",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "VIDEO_FREEZE",
+      "$role": "ship-video-freeze-primary",
+      "$doc": "VIDEO_FREEZE ship root. Production selection is declared here; validation belongs to the exact pipeline receipt.",
+      "release_selection": "ship_root"
+    },
+    "codec=gpr_tools_q0+cnn=bibo1x_ane_gpr_tools_q3+demosaic=sips_via_gpr_tools": {
+      "codec": "gpr_tools_q0",
+      "cnn": "bibo1x_ane_gpr_tools_q3",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "STILL",
+      "$role": "ship-still-smallest",
+      "$doc": "STILL ship root. Production selection is declared here; validation belongs to the exact pipeline receipt.",
+      "release_selection": "ship_root"
+    },
+    "codec=gpr_tools_q8+cnn=none+demosaic=sips_via_gpr_tools": {
+      "codec": "gpr_tools_q8",
+      "cnn": "none",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "STILL",
+      "$role": "ship-still-archival-no-cnn",
+      "$doc": "STILL ship root. Production selection is declared here; validation belongs to the exact pipeline receipt.",
+      "release_selection": "ship_root"
+    },
+    "codec=gpr_tools_q3+cnn=bibo1x_ane_gpr_tools_q3+demosaic=sips_via_gpr_tools": {
+      "codec": "gpr_tools_q3",
+      "cnn": "bibo1x_ane_gpr_tools_q3",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "STILL",
+      "$role": "ship-still-primary",
+      "$doc": "STILL ship root. Production selection is declared here; validation belongs to the exact pipeline receipt.",
+      "release_selection": "ship_root"
+    },
+    "codec=ml2_q3_dec2+cnn=bibo2x_ane_ml2_q3_dec2_diverse+demosaic=sips_via_gpr_tools": {
+      "codec": "ml2_q3_dec2",
+      "cnn": "bibo2x_ane_ml2_q3_dec2_diverse",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "UPRESABLE",
+      "use_for": "UPRESABLE",
+      "production_scope": "offline_review_only",
+      "$role": "UPRESABLE production chain - existing offline editable-raw workflow",
+      "$doc": "Existing offline UPRESABLE editable-raw production chain; separate from live-camera capture readiness.",
+      "release_selection": "existing_offline",
+      "execution_scope": "offline",
+      "output_kind": "editable_raw"
+    },
+    "codec=mission1_native12_t233+cnn=mission1_native12_8k_sr_q4t2_coord_detail_alpha0p5_v1+demosaic=sips_via_gpr_tools": {
+      "codec": "mission1_native12_t233",
+      "cnn": "mission1_native12_8k_sr_q4t2_coord_detail_alpha0p5_v1",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "UPRESABLE",
+      "use_for": "UPRESABLE_NATIVE12_8K_OFFLINE_REGISTRY_REVIEW",
+      "production_scope": "offline_production",
+      "$role": "offline-production-mission1-native12-8k-sr-q4t2-coord-detail-alpha0p5-20260625",
+      "$doc": "Selected 8K alpha0p5 offline editable-raw production path; not a live-camera path.",
+      "release_selection": "production",
+      "execution_scope": "offline",
+      "output_kind": "editable_raw"
+    },
+    "codec=mission1_native12_t233+cnn=mission1_native12_4k_cleanup_rgb_cfa_w40_v1+demosaic=sips_via_gpr_tools": {
+      "codec": "mission1_native12_t233",
+      "cnn": "mission1_native12_4k_cleanup_rgb_cfa_w40_v1",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "UPRESABLE",
+      "use_for": "MISSION1_NATIVE12_4K_CLEANUP_REGISTRY_REVIEW",
+      "production_scope": "offline_review_only",
+      "$role": "offline-review-only",
+      "$doc": "Visually approved 4K cleanup, retained for offline review only; not selected for production.",
+      "release_selection": "review_only",
+      "execution_scope": "offline",
+      "output_kind": "editable_raw",
+      "visual_review_status": "approved"
+    },
+    "codec=ml2_q3_l2x2_l1x2+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools": {
+      "codec": "ml2_q3_l2x2_l1x2",
+      "cnn": "bibo1x_ane_ml2_q3",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "VIDEO_FREEZE",
+      "$role": "ship-video-freeze-smallest-conservative",
+      "$doc": "VIDEO_FREEZE ship root. Production selection is declared here; validation belongs to the exact pipeline receipt.",
+      "release_selection": "ship_root"
+    },
+    "codec=ml2_q3+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools": {
+      "codec": "ml2_q3",
+      "cnn": "bibo1x_ane_ml2_q3",
+      "demosaic": "sips_via_gpr_tools",
+      "ship_class": "VIDEO_FREEZE",
+      "$role": "ship-video-freeze-alternate-tighter-lpips",
+      "$doc": "VIDEO_FREEZE ship root. Production selection is declared here; validation belongs to the exact pipeline receipt.",
+      "release_selection": "ship_root"
+    }
+  },
+  "$archive_note": "Historical and unselected candidates are in pipelines/research_registry.json on the companion validation branch. Production tools do not load that registry. The pre-isolation registry is preserved at archive/before-production-isolation-2026-10-13.",
+  "$evidence_scope": {
+    "version": 1,
+    "ship_root_count": 8,
+    "selection_field": "release_selection",
+    "historical_records": "Retained for checkpoint lookup and evidence history; not release requirements.",
+    "firmware_capture": "Separate evidence scope; historical strict-24 results are not current offline release blockers."
+  }
+}
