@@ -1,0 +1,83 @@
+{
+  "pipeline": "codec=ml2_q3_l1x2+cnn=bibo1x_ane_ml2_q3+demosaic=sips_via_gpr_tools",
+  "ship_class": "VIDEO_FREEZE",
+  "run_hash": "5c3cce4c472d4197",
+  "path_relocation": {
+    "source_revision": "3d675ef95d2e1470af0a60abb81994eb09bb5aa6",
+    "original_receipt_sha256": "13e59301def441e5314b561c631f1c8701efeb14f4aa2371d6c6ef642ebd3b83",
+    "note": "Paths relocated; metrics, verdicts and original run identity unchanged."
+  },
+  "gates_sha": "0d77521faa7c4eee",
+  "started_at": "2026-05-31T07:42:58-0500",
+  "images": {
+    "Z8Z_0001": {
+      "y_psnr": 41.77042868914888,
+      "ms_ssim": 0.9960188269615173,
+      "lpips": 0.02671905606985092,
+      "dE2000_mean": 1.0278575420379639,
+      "bayer_psnr_codec": 40.28984640845623,
+      "bayer_psnr_final": 52.620839817287894,
+      "enc_bytes": 5529379,
+      "enc_ms": 41.1,
+      "ref_crop": "tests/quality_gates/runs/5c3cce4c472d4197/Z8Z_0001_REF_crop_A_detail.png",
+      "pipeline_crop": "tests/quality_gates/runs/5c3cce4c472d4197/Z8Z_0001_PIPELINE_crop_A_detail.png",
+      "verdict": "PASS",
+      "fails": []
+    },
+    "Z8Z_0067": {
+      "y_psnr": 49.9949183572089,
+      "ms_ssim": 0.9973249435424805,
+      "lpips": 0.04235083609819412,
+      "dE2000_mean": 0.5485618710517883,
+      "bayer_psnr_codec": 53.0610333387651,
+      "bayer_psnr_final": 61.221042011809715,
+      "enc_bytes": 4056911,
+      "enc_ms": 41.4,
+      "ref_crop": "tests/quality_gates/runs/5c3cce4c472d4197/Z8Z_0067_REF_crop_A_detail.png",
+      "pipeline_crop": "tests/quality_gates/runs/5c3cce4c472d4197/Z8Z_0067_PIPELINE_crop_A_detail.png",
+      "verdict": "PASS",
+      "fails": []
+    },
+    "Z8Z_5323": {
+      "y_psnr": 38.2895011156329,
+      "ms_ssim": 0.9814082980155945,
+      "lpips": 0.050005752593278885,
+      "dE2000_mean": 1.0857592821121216,
+      "bayer_psnr_codec": 40.78209142921624,
+      "bayer_psnr_final": 45.51713289900087,
+      "enc_bytes": 9311780,
+      "enc_ms": 49.8,
+      "ref_crop": "tests/quality_gates/runs/5c3cce4c472d4197/Z8Z_5323_REF_crop_A_detail.png",
+      "pipeline_crop": "tests/quality_gates/runs/5c3cce4c472d4197/Z8Z_5323_PIPELINE_crop_A_detail.png",
+      "verdict": "PASS",
+      "fails": []
+    },
+    "Z8Z_6693": {
+      "y_psnr": 35.808457645952785,
+      "ms_ssim": 0.9709515571594238,
+      "lpips": 0.07598492503166199,
+      "dE2000_mean": 1.4341866970062256,
+      "bayer_psnr_codec": 37.668261099461574,
+      "bayer_psnr_final": 43.21276349073199,
+      "enc_bytes": 12326291,
+      "enc_ms": 53.3,
+      "ref_crop": "tests/quality_gates/runs/5c3cce4c472d4197/Z8Z_6693_REF_crop_A_detail.png",
+      "pipeline_crop": "tests/quality_gates/runs/5c3cce4c472d4197/Z8Z_6693_PIPELINE_crop_A_detail.png",
+      "verdict": "PASS",
+      "fails": []
+    }
+  },
+  "worst_first": [
+    "Z8Z_6693",
+    "Z8Z_5323",
+    "Z8Z_0067",
+    "Z8Z_0001"
+  ],
+  "worst_image": {
+    "id": "Z8Z_6693",
+    "visual_diff_png": "tests/quality_gates/runs/5c3cce4c472d4197/WORST_Z8Z_6693_visual_diff.png",
+    "lpips": 0.07598492503166199
+  },
+  "verdict": "PASS",
+  "finished_at": "2026-05-31T07:43:39-0500"
+}
