@@ -274,6 +274,19 @@ CODEC_ERROR SetTransformPrescale(TRANSFORM *transform, int precision)
 		PRESCALE spatial_prescale[]  = {0, 2, 2, 0, 0, 0, 0, 0};
 		memcpy(transform->prescale, spatial_prescale, sizeof(transform->prescale));
 	}
+	else if (precision == 14)
+	{
+		// For 14-bit, prescale [0, 2, 2] keeps lowpass within 16-bit range
+		PRESCALE spatial_prescale[]  = {0, 2, 2, 0, 0, 0, 0, 0};
+		memcpy(transform->prescale, spatial_prescale, sizeof(transform->prescale));
+	}
+	else if (precision >= 15)
+	{
+		// For 16-bit inputs, need prescale=2 at level 0 to prevent lowpass overflow
+		// (without it, level 0 lowpass = 4x input which exceeds 16-bit storage)
+		PRESCALE spatial_prescale[]  = {2, 3, 3, 0, 0, 0, 0, 0};
+		memcpy(transform->prescale, spatial_prescale, sizeof(transform->prescale));
+	}
 	else
 	{
 		//TODO: Need to handle other precisions
@@ -459,7 +472,8 @@ void WaveletToRGB( gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL*
     dst_image->buffer   = allocator.Alloc( size );
     
     const int32_t midpoint  = (1 << (input_precision_bits - 1));
-    const int32_t shift     = input_precision_bits - 12;
+    const int table_bits = (input_precision_bits <= 12) ? 12 : (input_precision_bits <= 14 ? 14 : 16);
+    const int shift      = (input_precision_bits > table_bits) ? (input_precision_bits - table_bits) : 0;
     
     unsigned char*  RGB_dst_8bits  = dst_image->buffer;
     unsigned short* RGB_dst_16bits = dst_image->buffer;
@@ -474,10 +488,9 @@ void WaveletToRGB( gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL*
             int32_t R = 2 * ( RG_src[(src_width - x - 1) + y * src_pitch] - midpoint) + G;
             int32_t B = 2 * ( BG_src[(src_width - x - 1) + y * src_pitch] - midpoint) + G;
             
-            // R,G,B are in 16-bit range since DecoderLogCurve outputs in 16 bits (although it's input is 12 bits)
-            R = DecoderLogCurve[ clamp_uint( (R >> shift), 12) ];
-            G = DecoderLogCurve[ clamp_uint( (G >> shift), 12) ];
-            B = DecoderLogCurve[ clamp_uint( (B >> shift), 12) ];
+            R = DecodeLogValue((R >> shift), table_bits);
+            G = DecodeLogValue((G >> shift), table_bits);
+            B = DecodeLogValue((B >> shift), table_bits);
 
             if( output_precision_bits == 8 )
             {

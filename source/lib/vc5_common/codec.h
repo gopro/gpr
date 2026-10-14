@@ -112,6 +112,10 @@ typedef enum _codec_tag
     CODEC_TAG_LargeMetadata = 0x6100,			//!< Large chunk containing metadata tuples (VC-5 Part 7)
 #endif
     
+    // GPR v2.0 extensions
+    CODEC_TAG_BandCodingMethod = 200,       //!< 0 = VLC; 1/2 = legacy ANS; 3/4 = interleaved companded/raw ANS
+    CODEC_TAG_FormatVersion = 201,          //!< Informational legacy version tag; not emitted by current writer
+
 } CODEC_TAG;
 
 #if VC5_ENABLED_PART(VC5_PART_IMAGE_FORMATS)
@@ -234,7 +238,7 @@ typedef struct _codec_state
 		//DIMENSION width;				//!< Width of the decoded band
 		//DIMENSION height;				//!< Height of the decoded band
 		uint_least8_t subband;			//!< Subband index
-		//uint_least8_t encoding;		//!< Band encoding method
+		uint_least8_t coding_method;	//!< 0 = VLC run-length (default), 1 = ANS
 		uint16_t quantization;			//!< Quantization parameter
 
 	} band;			//!< Information about the current highpass band

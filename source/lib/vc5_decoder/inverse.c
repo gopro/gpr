@@ -18,351 +18,414 @@
 
 #include "headers.h"
 
+#if ENABLED(NEON)
+#include <arm_neon.h>
+#endif
+
 //! Rounding adjustment used by the inverse wavelet transforms
 static const int32_t rounding = 4;
 
+#if ENABLED(NEON)
+
+/*! @brief Inline dequantize 4 pixels for ANS raw mode (negative quant).
+    Returns abs(input) * |quant| with original sign restored. */
+static INLINE int32x4_t DequantInline4_NEON(const PIXEL *src, int col, int32x4_t quant_vec)
+{
+    int32x4_t v = vld1q_s32(&src[col]);
+    int32x4_t abs_v = vabsq_s32(v);
+    int32x4_t dequant = vmulq_s32(abs_v, quant_vec);
+    uint32x4_t neg_mask = vcltq_s32(v, vdupq_n_s32(0));
+    return vbslq_s32(neg_mask, vnegq_s32(dequant), dequant);
+}
+
+/*!
+ @brief NEON helper: vertical inverse middle-row filter for 4 columns
+ Computes even and odd outputs from 3 rows of lowpass and 1 row of highpass.
+ even = ((row0 - row2 + 4) >> 3 + row1 + hp) >> 1
+ odd  = ((-row0 + row2 + 4) >> 3 + row1 - hp) >> 1
+ */
+static INLINE void InvertVerticalMiddle4_NEON(
+    const PIXEL *row0, const PIXEL *row1, const PIXEL *row2,
+    const PIXEL *hp, PIXEL *even_out, PIXEL *odd_out, int col)
+{
+    const int32x4_t four = vdupq_n_s32(4);
+
+    int32x4_t r0 = vld1q_s32(&row0[col]);
+    int32x4_t r1 = vld1q_s32(&row1[col]);
+    int32x4_t r2 = vld1q_s32(&row2[col]);
+    int32x4_t h  = vld1q_s32(&hp[col]);
+
+    // even path: (r0 - r2 + 4) >> 3 + r1 + h, then >> 1
+    int32x4_t diff = vsubq_s32(r0, r2);
+    diff = vaddq_s32(diff, four);
+    diff = vshrq_n_s32(diff, 3);
+    int32x4_t even_v = vaddq_s32(vaddq_s32(diff, r1), h);
+    even_v = vshrq_n_s32(even_v, 1);
+    vst1q_s32(&even_out[col], even_v);
+
+    // odd path: (-r0 + r2 + 4) >> 3 + r1 - h, then >> 1
+    int32x4_t diff_odd = vsubq_s32(r2, r0);
+    diff_odd = vaddq_s32(diff_odd, four);
+    diff_odd = vshrq_n_s32(diff_odd, 3);
+    int32x4_t odd_v = vsubq_s32(vaddq_s32(diff_odd, r1), h);
+    odd_v = vshrq_n_s32(odd_v, 1);
+    vst1q_s32(&odd_out[col], odd_v);
+}
+
+/*!
+ @brief 8-wide vertical filter: process 8 columns per call (2x throughput).
+ Uses 20 registers — fits in ARM64's 32-register file with room to spare.
+ */
+static INLINE void InvertVerticalMiddle8_NEON(
+    const PIXEL *row0, const PIXEL *row1, const PIXEL *row2,
+    const PIXEL *hp, PIXEL *even_out, PIXEL *odd_out, int col)
+{
+    const int32x4_t four = vdupq_n_s32(4);
+
+    /* Load 8 values from each source (2 × 4-wide) */
+    int32x4_t r0a = vld1q_s32(&row0[col]);
+    int32x4_t r0b = vld1q_s32(&row0[col + 4]);
+    int32x4_t r1a = vld1q_s32(&row1[col]);
+    int32x4_t r1b = vld1q_s32(&row1[col + 4]);
+    int32x4_t r2a = vld1q_s32(&row2[col]);
+    int32x4_t r2b = vld1q_s32(&row2[col + 4]);
+    int32x4_t ha  = vld1q_s32(&hp[col]);
+    int32x4_t hb  = vld1q_s32(&hp[col + 4]);
+
+    /* Even path: (r0 - r2 + 4) >> 3 + r1 + h, then >> 1 */
+    int32x4_t da = vshrq_n_s32(vaddq_s32(vsubq_s32(r0a, r2a), four), 3);
+    int32x4_t db = vshrq_n_s32(vaddq_s32(vsubq_s32(r0b, r2b), four), 3);
+    int32x4_t ea = vshrq_n_s32(vaddq_s32(vaddq_s32(da, r1a), ha), 1);
+    int32x4_t eb = vshrq_n_s32(vaddq_s32(vaddq_s32(db, r1b), hb), 1);
+    vst1q_s32(&even_out[col], ea);
+    vst1q_s32(&even_out[col + 4], eb);
+
+    /* Odd path: (-r0 + r2 + 4) >> 3 + r1 - h, then >> 1 */
+    int32x4_t oa = vshrq_n_s32(vaddq_s32(vsubq_s32(r2a, r0a), four), 3);
+    int32x4_t ob = vshrq_n_s32(vaddq_s32(vsubq_s32(r2b, r0b), four), 3);
+    int32x4_t ova = vshrq_n_s32(vsubq_s32(vaddq_s32(oa, r1a), ha), 1);
+    int32x4_t ovb = vshrq_n_s32(vsubq_s32(vaddq_s32(ob, r1b), hb), 1);
+    vst1q_s32(&odd_out[col], ova);
+    vst1q_s32(&odd_out[col + 4], ovb);
+}
+
+/*!
+ @brief 8-wide fused dequantize + vertical filter for ANS raw mode.
+ */
+static INLINE void InvertVerticalMiddle8_Fused_NEON(
+    const PIXEL *row0, const PIXEL *row1, const PIXEL *row2,
+    const PIXEL *hp_raw, int32x4_t hp_quant,
+    PIXEL *even_out, PIXEL *odd_out, int col)
+{
+    const int32x4_t four = vdupq_n_s32(4);
+
+    int32x4_t r0a = vld1q_s32(&row0[col]);
+    int32x4_t r0b = vld1q_s32(&row0[col + 4]);
+    int32x4_t r1a = vld1q_s32(&row1[col]);
+    int32x4_t r1b = vld1q_s32(&row1[col + 4]);
+    int32x4_t r2a = vld1q_s32(&row2[col]);
+    int32x4_t r2b = vld1q_s32(&row2[col + 4]);
+    int32x4_t ha  = DequantInline4_NEON(hp_raw, col, hp_quant);
+    int32x4_t hb  = DequantInline4_NEON(hp_raw, col + 4, hp_quant);
+
+    int32x4_t da = vshrq_n_s32(vaddq_s32(vsubq_s32(r0a, r2a), four), 3);
+    int32x4_t db = vshrq_n_s32(vaddq_s32(vsubq_s32(r0b, r2b), four), 3);
+    int32x4_t ea = vshrq_n_s32(vaddq_s32(vaddq_s32(da, r1a), ha), 1);
+    int32x4_t eb = vshrq_n_s32(vaddq_s32(vaddq_s32(db, r1b), hb), 1);
+    vst1q_s32(&even_out[col], ea);
+    vst1q_s32(&even_out[col + 4], eb);
+
+    int32x4_t oa = vshrq_n_s32(vaddq_s32(vsubq_s32(r2a, r0a), four), 3);
+    int32x4_t ob = vshrq_n_s32(vaddq_s32(vsubq_s32(r2b, r0b), four), 3);
+    int32x4_t ova = vshrq_n_s32(vsubq_s32(vaddq_s32(oa, r1a), ha), 1);
+    int32x4_t ovb = vshrq_n_s32(vsubq_s32(vaddq_s32(ob, r1b), hb), 1);
+    vst1q_s32(&odd_out[col], ova);
+    vst1q_s32(&odd_out[col + 4], ovb);
+}
+
+/*!
+ @brief Fused dequantize + vertical filter for middle rows (ANS raw mode).
+ Reads raw highpass band data directly and dequantizes inline during the filter,
+ eliminating the separate DequantizeBandRow16s call and its temp buffer writes.
+ */
+static INLINE void InvertVerticalMiddle4_Fused_NEON(
+    const PIXEL *row0, const PIXEL *row1, const PIXEL *row2,
+    const PIXEL *hp_raw, int32x4_t hp_quant,
+    PIXEL *even_out, PIXEL *odd_out, int col)
+{
+    const int32x4_t four = vdupq_n_s32(4);
+
+    int32x4_t r0 = vld1q_s32(&row0[col]);
+    int32x4_t r1 = vld1q_s32(&row1[col]);
+    int32x4_t r2 = vld1q_s32(&row2[col]);
+    /* Fused dequantize: load raw hp, abs*quant, restore sign */
+    int32x4_t h = DequantInline4_NEON(hp_raw, col, hp_quant);
+
+    int32x4_t diff = vsubq_s32(r0, r2);
+    diff = vaddq_s32(diff, four);
+    diff = vshrq_n_s32(diff, 3);
+    int32x4_t even_v = vaddq_s32(vaddq_s32(diff, r1), h);
+    even_v = vshrq_n_s32(even_v, 1);
+    vst1q_s32(&even_out[col], even_v);
+
+    int32x4_t diff_odd = vsubq_s32(r2, r0);
+    diff_odd = vaddq_s32(diff_odd, four);
+    diff_odd = vshrq_n_s32(diff_odd, 3);
+    int32x4_t odd_v = vsubq_s32(vaddq_s32(diff_odd, r1), h);
+    odd_v = vshrq_n_s32(odd_v, 1);
+    vst1q_s32(&odd_out[col], odd_v);
+}
+
+/*!
+ @brief NEON helper: vertical inverse middle-row filter for Descale variant
+ Same as above but uses DivideByShift(x,1) = x >> 1 instead of >> 1
+ (which is the same operation, so the only diff is conceptual)
+ */
+static INLINE void InvertVerticalMiddle4Descale_NEON(
+    const PIXEL *row0, const PIXEL *row1, const PIXEL *row2,
+    const PIXEL *hp, PIXEL *even_out, PIXEL *odd_out, int col)
+{
+    const int32x4_t four = vdupq_n_s32(4);
+
+    int32x4_t r0 = vld1q_s32(&row0[col]);
+    int32x4_t r1 = vld1q_s32(&row1[col]);
+    int32x4_t r2 = vld1q_s32(&row2[col]);
+    int32x4_t h  = vld1q_s32(&hp[col]);
+
+    int32x4_t diff = vsubq_s32(r0, r2);
+    diff = vaddq_s32(diff, four);
+    diff = vshrq_n_s32(diff, 3);
+    int32x4_t even_v = vaddq_s32(vaddq_s32(diff, r1), h);
+    even_v = vshrq_n_s32(even_v, 1);
+    vst1q_s32(&even_out[col], even_v);
+
+    int32x4_t diff_odd = vsubq_s32(r2, r0);
+    diff_odd = vaddq_s32(diff_odd, four);
+    diff_odd = vshrq_n_s32(diff_odd, 3);
+    int32x4_t odd_v = vsubq_s32(vaddq_s32(diff_odd, r1), h);
+    odd_v = vshrq_n_s32(odd_v, 1);
+    vst1q_s32(&odd_out[col], odd_v);
+}
+#endif
+
 /*!
  @brief Apply the inverse horizontal wavelet transform
- This routine applies the inverse wavelet transform to a row of
- lowpass and highpass coefficients, producing an output row that
- is write as wide.
  */
-STATIC CODEC_ERROR InvertHorizontal16s(PIXEL *lowpass,            //!< Horizontal lowpass coefficients
-                                       PIXEL *highpass,        //!< Horizontal highpass coefficients
-                                       PIXEL *output,            //!< Row of reconstructed results
-                                       DIMENSION input_width,    //!< Number of values in the input row
-                                       DIMENSION output_width  //!< Number of values in the output row
-)
+CODEC_ERROR InvertHorizontal16s(PIXEL *lowpass, PIXEL *highpass, PIXEL *output,
+                                DIMENSION input_width, DIMENSION output_width)
 {
     const int last_column = input_width - 1;
-    
     int32_t even;
     int32_t odd;
-    
-    // Start processing at the beginning of the row
     int column = 0;
-    
-    // Process the first two output points with special filters for the left border
-    even = 0;
-    odd = 0;
-    
-    // Apply the even reconstruction filter to the lowpass band
-    even += 11 * lowpass[column + 0];
-    even -=  4 * lowpass[column + 1];
-    even +=  1 * lowpass[column + 2];
-    even += rounding;
+
+    // Left border
+    even = 11 * lowpass[0] - 4 * lowpass[1] + lowpass[2] + rounding;
     even = DivideByShift(even, 3);
-    
-    // Add the highpass correction
-    even += highpass[column];
-    even >>= 1;
-    
-    // The lowpass result should be a positive number
-    //assert(0 <= even && even <= INT16_MAX);
-    
-    // Apply the odd reconstruction filter to the lowpass band
-    odd += 5 * lowpass[column + 0];
-    odd += 4 * lowpass[column + 1];
-    odd -= 1 * lowpass[column + 2];
-    odd += rounding;
+    even = (even + highpass[0]) >> 1;
+
+    odd = 5 * lowpass[0] + 4 * lowpass[1] - lowpass[2] + rounding;
     odd = DivideByShift(odd, 3);
-    
-    // Subtract the highpass correction
-    odd -= highpass[column];
-    odd >>= 1;
-    
-    // The lowpass result should be a positive number
-    //assert(0 <= odd && odd <= INT16_MAX);
-    
-    // Store the last two output points produced by the loop
-    output[2 * column + 0] = clamp_uint14(even);
-    output[2 * column + 1] = clamp_uint14(odd);
-    
-    // Advance to the next input column (second pair of output values)
-    column++;
-    
-    // Process the rest of the columns up to the last column in the row
+    odd = (odd - highpass[0]) >> 1;
+
+    output[0] = ClampPixel(even);
+    output[1] = ClampPixel(odd);
+    column = 1;
+
+#if ENABLED(NEON)
+    {
+        const int32x4_t four = vdupq_n_s32(4);
+
+        /* 8-wide: process 8 input columns → 16 output pixels per iteration */
+        for (; column + 7 < last_column; column += 8)
+        {
+            /* First 4 columns */
+            int32x4_t lp_la = vld1q_s32(&lowpass[column - 1]);
+            int32x4_t lp_ca = vld1q_s32(&lowpass[column]);
+            int32x4_t lp_ra = vld1q_s32(&lowpass[column + 1]);
+            int32x4_t hp_ca = vld1q_s32(&highpass[column]);
+            /* Second 4 columns */
+            int32x4_t lp_lb = vld1q_s32(&lowpass[column + 3]);
+            int32x4_t lp_cb = vld1q_s32(&lowpass[column + 4]);
+            int32x4_t lp_rb = vld1q_s32(&lowpass[column + 5]);
+            int32x4_t hp_cb = vld1q_s32(&highpass[column + 4]);
+
+            int32x4_t ea = vshrq_n_s32(vaddq_s32(vaddq_s32(vshrq_n_s32(vaddq_s32(vsubq_s32(lp_la, lp_ra), four), 3), lp_ca), hp_ca), 1);
+            int32x4_t oa = vshrq_n_s32(vsubq_s32(vaddq_s32(vshrq_n_s32(vaddq_s32(vsubq_s32(lp_ra, lp_la), four), 3), lp_ca), hp_ca), 1);
+            int32x4_t eb = vshrq_n_s32(vaddq_s32(vaddq_s32(vshrq_n_s32(vaddq_s32(vsubq_s32(lp_lb, lp_rb), four), 3), lp_cb), hp_cb), 1);
+            int32x4_t ob = vshrq_n_s32(vsubq_s32(vaddq_s32(vshrq_n_s32(vaddq_s32(vsubq_s32(lp_rb, lp_lb), four), 3), lp_cb), hp_cb), 1);
+
+            int32x4x2_t ia = { .val = { ea, oa } };
+            int32x4x2_t ib = { .val = { eb, ob } };
+            vst2q_s32(&output[2 * column], ia);
+            vst2q_s32(&output[2 * (column + 4)], ib);
+        }
+
+        /* 4-wide cleanup */
+        for (; column + 3 < last_column; column += 4)
+        {
+            int32x4_t lp_left   = vld1q_s32(&lowpass[column - 1]);
+            int32x4_t lp_center = vld1q_s32(&lowpass[column]);
+            int32x4_t lp_right  = vld1q_s32(&lowpass[column + 1]);
+            int32x4_t hp_center = vld1q_s32(&highpass[column]);
+
+            int32x4_t diff_e = vsubq_s32(lp_left, lp_right);
+            diff_e = vaddq_s32(diff_e, four);
+            diff_e = vshrq_n_s32(diff_e, 3);
+            int32x4_t even_v = vaddq_s32(diff_e, lp_center);
+            even_v = vaddq_s32(even_v, hp_center);
+            even_v = vshrq_n_s32(even_v, 1);
+
+            int32x4_t diff_o = vsubq_s32(lp_right, lp_left);
+            diff_o = vaddq_s32(diff_o, four);
+            diff_o = vshrq_n_s32(diff_o, 3);
+            int32x4_t odd_v = vaddq_s32(diff_o, lp_center);
+            odd_v = vsubq_s32(odd_v, hp_center);
+            odd_v = vshrq_n_s32(odd_v, 1);
+
+            int32x4x2_t interleaved;
+            interleaved.val[0] = even_v;
+            interleaved.val[1] = odd_v;
+            vst2q_s32(&output[2 * column], interleaved);
+        }
+    }
+#endif
+
+    // Scalar middle columns
     for (; column < last_column; column++)
     {
-        int32_t even = 0;        // Result of convolution with even filter
-        int32_t odd = 0;        // Result of convolution with odd filter
-        
-        // Apply the even reconstruction filter to the lowpass band
-        
-        even += lowpass[column - 1];
-        even -= lowpass[column + 1];
-        even += 4;
+        even = lowpass[column - 1] - lowpass[column + 1] + 4;
         even >>= 3;
-        even += lowpass[column + 0];
-        
-        // Add the highpass correction
-        even += highpass[column];
-        even >>= 1;
-        
-        // The lowpass result should be a positive number
-        //assert(0 <= even && even <= INT16_MAX);
-        
-        // Place the even result in the even column
-        //output[2 * column + 0] = clamp_uint12(even);
-        output[2 * column + 0] = clamp_uint14(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
-        odd -= lowpass[column - 1];
-        odd += lowpass[column + 1];
-        odd += 4;
+        even += lowpass[column];
+        even = (even + highpass[column]) >> 1;
+        output[2 * column] = ClampPixel(even);
+
+        odd = -lowpass[column - 1] + lowpass[column + 1] + 4;
         odd >>= 3;
-        odd += lowpass[column + 0];
-        
-        // Subtract the highpass correction
-        odd -= highpass[column];
-        odd >>= 1;
-        
-        // The lowpass result should be a positive number
-        //assert(0 <= odd && odd <= INT16_MAX);
-        
-        // Place the odd result in the odd column
-        //output[2 * column + 1] = clamp_uint14(odd);
-        output[2 * column + 1] = clamp_uint14(odd);
+        odd += lowpass[column];
+        odd = (odd - highpass[column]) >> 1;
+        output[2 * column + 1] = ClampPixel(odd);
     }
-    
-    // Should have exited the loop at the column for right border processing
+
     assert(column == last_column);
-    
-    // Process the last two output points with special filters for the right border
-    even = 0;
-    odd = 0;
-    
-    // Apply the even reconstruction filter to the lowpass band
-    even += 5 * lowpass[column + 0];
-    even += 4 * lowpass[column - 1];
-    even -= 1 * lowpass[column - 2];
-    even += rounding;
+
+    // Right border
+    even = 5 * lowpass[column] + 4 * lowpass[column - 1] - lowpass[column - 2] + rounding;
     even = DivideByShift(even, 3);
-    
-    // Add the highpass correction
-    even += highpass[column];
-    even >>= 1;
-    
-    // The lowpass result should be a positive number
-    //assert(0 <= even && even <= INT16_MAX);
-    
-    // Place the even result in the even column
-    output[2 * column + 0] = clamp_uint14(even);
-    
+    even = (even + highpass[column]) >> 1;
+    output[2 * column] = ClampPixel(even);
+
     if (2 * column + 1 < output_width)
     {
-        // Apply the odd reconstruction filter to the lowpass band
-        odd += 11 * lowpass[column + 0];
-        odd -=  4 * lowpass[column - 1];
-        odd +=  1 * lowpass[column - 2];
-        odd += rounding;
+        odd = 11 * lowpass[column] - 4 * lowpass[column - 1] + lowpass[column - 2] + rounding;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
-        odd -= highpass[column];
-        odd >>= 1;
-        
-        // The lowpass result should be a positive number
-        //assert(0 <= odd && odd <= INT16_MAX);
-        
-        // Place the odd result in the odd column
-        output[2 * column + 1] = clamp_uint14(odd);
+        odd = (odd - highpass[column]) >> 1;
+        output[2 * column + 1] = ClampPixel(odd);
     }
-    
+
     return CODEC_ERROR_OKAY;
 }
 
 /*!
- @brief Apply the inverse horizontal wavelet transform
- This routine is similar to @ref InvertHorizontal16s, but a scale factor
- that was applied during encoding is removed from the output values.
+ @brief Apply the inverse horizontal wavelet transform with descaling
  */
-STATIC CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, PIXEL *output,
-                                              DIMENSION input_width, DIMENSION output_width,
-                                              int descale)
+CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, PIXEL *output,
+                                       DIMENSION input_width, DIMENSION output_width,
+                                       int descale)
 {
     const int last_column = input_width - 1;
-    
-    // Start processing at the beginning of the row
     int column = 0;
-    
     int descale_shift = 0;
-    
-    int32_t even;
-    int32_t odd;
-    
-    /*
-     The implementation of the inverse filter includes descaling by a factor of two
-     because the last division by two in the computation of the even and odd results
-     that is performed using a right arithmetic shift has been omitted from the code.
-     */
-    if (descale == 2) {
-        descale_shift = 1;
-    }
-    
-    // Check that the descaling value is reasonable
+    int32_t even, odd;
+
+    if (descale == 2) descale_shift = 1;
+    else if (descale == 3) descale_shift = 2;
     assert(descale_shift >= 0);
-    
-    // Process the first two output points with special filters for the left border
-    even = 0;
-    odd = 0;
-    
-    // Apply the even reconstruction filter to the lowpass band
-    even += 11 * lowpass[column + 0];
-    even -=  4 * lowpass[column + 1];
-    even +=  1 * lowpass[column + 2];
-    even += rounding;
+
+    // Left border
+    even = 11 * lowpass[0] - 4 * lowpass[1] + lowpass[2] + rounding;
     even = DivideByShift(even, 3);
-    
-    // Add the highpass correction
-    even += highpass[column];
-    
-    // Remove any scaling used during encoding
-    even <<= descale_shift;
-    
-    // The lowpass result should be a positive number
-    //assert(0 <= even && even <= INT16_MAX);
-    
-    // Apply the odd reconstruction filter to the lowpass band
-    odd += 5 * lowpass[column + 0];
-    odd += 4 * lowpass[column + 1];
-    odd -= 1 * lowpass[column + 2];
-    odd += rounding;
+    even = (even + highpass[0]) << descale_shift;
+
+    odd = 5 * lowpass[0] + 4 * lowpass[1] - lowpass[2] + rounding;
     odd = DivideByShift(odd, 3);
-    
-    // Subtract the highpass correction
-    odd -= highpass[column];
-    
-    // Remove any scaling used during encoding
-    odd <<= descale_shift;
-    
-    // The lowpass result should be a positive number
-    //assert(0 <= odd && odd <= INT16_MAX);
-    
-    output[2 * column + 0] = ClampPixel(even);
-    output[2 * column + 1] = ClampPixel(odd);
-    
-    // Advance to the next input column (second pair of output values)
-    column++;
-    
-    // Process the rest of the columns up to the last column in the row
+    odd = (odd - highpass[0]) << descale_shift;
+
+    output[0] = ClampPixel(even);
+    output[1] = ClampPixel(odd);
+    column = 1;
+
+#if ENABLED(NEON)
+    {
+        const int32x4_t four = vdupq_n_s32(4);
+        const int32x4_t descale_vec = vdupq_n_s32(descale_shift);
+
+        for (; column + 3 < last_column; column += 4)
+        {
+            int32x4_t lp_left   = vld1q_s32(&lowpass[column - 1]);
+            int32x4_t lp_center = vld1q_s32(&lowpass[column]);
+            int32x4_t lp_right  = vld1q_s32(&lowpass[column + 1]);
+            int32x4_t hp_center = vld1q_s32(&highpass[column]);
+
+            int32x4_t diff_e = vsubq_s32(lp_left, lp_right);
+            diff_e = vaddq_s32(diff_e, four);
+            diff_e = vshrq_n_s32(diff_e, 3);
+            int32x4_t even_v = vaddq_s32(diff_e, lp_center);
+            even_v = vaddq_s32(even_v, hp_center);
+            even_v = vshlq_s32(even_v, descale_vec);
+
+            int32x4_t diff_o = vsubq_s32(lp_right, lp_left);
+            diff_o = vaddq_s32(diff_o, four);
+            diff_o = vshrq_n_s32(diff_o, 3);
+            int32x4_t odd_v = vaddq_s32(diff_o, lp_center);
+            odd_v = vsubq_s32(odd_v, hp_center);
+            odd_v = vshlq_s32(odd_v, descale_vec);
+
+            int32x4x2_t interleaved;
+            interleaved.val[0] = even_v;
+            interleaved.val[1] = odd_v;
+            vst2q_s32(&output[2 * column], interleaved);
+        }
+    }
+#endif
+
+    // Scalar middle columns
     for (; column < last_column; column++)
     {
-        int32_t even = 0;        // Result of convolution with even filter
-        int32_t odd = 0;        // Result of convolution with odd filter
-        
-        // Apply the even reconstruction filter to the lowpass band
-        even += lowpass[column - 1];
-        even -= lowpass[column + 1];
-        even += 4;
+        even = lowpass[column - 1] - lowpass[column + 1] + 4;
         even >>= 3;
-        even += lowpass[column + 0];
-        
-        // Add the highpass correction
-        even += highpass[column];
-        
-        // Remove any scaling used during encoding
-        even <<= descale_shift;
-        
-        // The lowpass result should be a positive number
-        //assert(0 <= even && even <= INT16_MAX);
-        
-        // Place the even result in the even column
-        output[2 * column + 0] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
-        odd -= lowpass[column - 1];
-        odd += lowpass[column + 1];
-        odd += 4;
+        even += lowpass[column];
+        even = (even + highpass[column]) << descale_shift;
+        output[2 * column] = ClampPixel(even);
+
+        odd = -lowpass[column - 1] + lowpass[column + 1] + 4;
         odd >>= 3;
-        odd += lowpass[column + 0];
-        
-        // Subtract the highpass correction
-        odd -= highpass[column];
-        
-        // Remove any scaling used during encoding
-        odd <<= descale_shift;
-        
-        // The lowpass result should be a positive number
-        //assert(0 <= odd && odd <= INT16_MAX);
-        
-        // Place the odd result in the odd column
+        odd += lowpass[column];
+        odd = (odd - highpass[column]) << descale_shift;
         output[2 * column + 1] = ClampPixel(odd);
     }
-    
-    // Should have exited the loop at the column for right border processing
+
     assert(column == last_column);
-    
-    // Process the last two output points with special filters for the right border
-    even = 0;
-    odd = 0;
-    
-    // Apply the even reconstruction filter to the lowpass band
-    even += 5 * lowpass[column + 0];
-    even += 4 * lowpass[column - 1];
-    even -= 1 * lowpass[column - 2];
-    even += rounding;
+
+    // Right border
+    even = 5 * lowpass[column] + 4 * lowpass[column - 1] - lowpass[column - 2] + rounding;
     even = DivideByShift(even, 3);
-    
-    // Add the highpass correction
-    even += highpass[column];
-    
-    // Remove any scaling used during encoding
-    even <<= descale_shift;
-    
-    // The lowpass result should be a positive number
-    //assert(0 <= even && even <= INT16_MAX);
-    
-    // Place the even result in the even column
-    output[2 * column + 0] = ClampPixel(even);
-    
+    even = (even + highpass[column]) << descale_shift;
+    output[2 * column] = ClampPixel(even);
+
     if (2 * column + 1 < output_width)
     {
-        // Apply the odd reconstruction filter to the lowpass band
-        odd += 11 * lowpass[column + 0];
-        odd -=  4 * lowpass[column - 1];
-        odd +=  1 * lowpass[column - 2];
-        odd += rounding;
+        odd = 11 * lowpass[column] - 4 * lowpass[column - 1] + lowpass[column - 2] + rounding;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
-        odd -= highpass[column];
-        
-        // Remove any scaling used during encoding
-        odd <<= descale_shift;
-        
-        // The lowpass result should be a positive number
-        //assert(0 <= odd && odd <= INT16_MAX);
-        
-        // Place the odd result in the odd column
+        odd = (odd - highpass[column]) << descale_shift;
         output[2 * column + 1] = ClampPixel(odd);
     }
-    
+
     return CODEC_ERROR_OKAY;
 }
 
 /*!
-	@brief Apply the inverse spatial wavelet filter
-	Dequantize the coefficients in the highpass bands and apply the
-	inverse spatial wavelet filter to compute a lowpass band that
-	has twice the width and height of the input bands.
-	The inverse vertical filter is applied to the upper and lower bands
-	on the left and the upper and lower bands on the right.  The inverse
-	horizontal filter is applied to the left and right (lowpass and highpass)
-	results from the vertical inverse.  Each application of the inverse
-	vertical filter produces two output rows and each application of the
-	inverse horizontal filter produces an output row that is twice as wide.
-	The inverse wavelet filter is a three tap filter.
-	
-	For the even output values, add and subtract the off-center values,
-	add the rounding correction, and divide by eight, then add the center
-	value, add the highpass coefficient, and divide by two.
-	
-	For the odd output values, the add and subtract operations for the
-	off-center values are reversed the the highpass coefficient is subtracted.
-	Divisions are implemented by right arithmetic shifts.
-	Special formulas for the inverse vertical filter are applied to the top
-	and bottom rows.
+	@brief Apply the inverse spatial wavelet filter (no descaling)
  */
 CODEC_ERROR InvertSpatialQuant16s(gpr_allocator *allocator,
                                   PIXEL *lowlow_band, int lowlow_pitch,
@@ -379,400 +442,445 @@ CODEC_ERROR InvertSpatialQuant16s(gpr_allocator *allocator,
     PIXEL *highlow = highlow_band;
     PIXEL *highhigh = highhigh_band;
     PIXEL *output = output_image;
-    PIXEL *even_lowpass;
-    PIXEL *even_highpass;
-    PIXEL *odd_lowpass;
-    PIXEL *odd_highpass;
-    PIXEL *even_output;
-    PIXEL *odd_output;
+    PIXEL *even_lowpass, *even_highpass, *odd_lowpass, *odd_highpass;
+    PIXEL *even_output, *odd_output;
     size_t buffer_row_size;
     int last_row = input_height - 1;
     int row, column;
-    
     PIXEL *lowhigh_row[3];
-    
     PIXEL *lowhigh_line[3];
-    PIXEL *highlow_line;
-    PIXEL *highhigh_line;
-    
+    PIXEL *highlow_line, *highhigh_line;
+
     QUANT highlow_quantization = quantization[HL_BAND];
     QUANT lowhigh_quantization = quantization[LH_BAND];
     QUANT highhigh_quantization = quantization[HH_BAND];
-    
-    // Compute positions within the temporary buffer for each row of horizontal lowpass
-    // and highpass intermediate coefficients computed by the vertical inverse transform
+
     buffer_row_size = input_width * sizeof(PIXEL);
-    
-    // Compute the positions of the even and odd rows of coefficients
-    even_lowpass = (PIXEL *)allocator->Alloc(buffer_row_size);
-    even_highpass = (PIXEL *)allocator->Alloc(buffer_row_size);
-    odd_lowpass = (PIXEL *)allocator->Alloc(buffer_row_size);
-    odd_highpass = (PIXEL *)allocator->Alloc(buffer_row_size);
-    
-    // Compute the positions of the dequantized highpass rows
-    lowhigh_line[0] = (PIXEL *)allocator->Alloc(buffer_row_size);
-    lowhigh_line[1] = (PIXEL *)allocator->Alloc(buffer_row_size);
-    lowhigh_line[2] = (PIXEL *)allocator->Alloc(buffer_row_size);
-    highlow_line = (PIXEL *)allocator->Alloc(buffer_row_size);
-    highhigh_line = (PIXEL *)allocator->Alloc(buffer_row_size);
-    
-    // Convert pitch from bytes to pixels
-    lowlow_pitch /= sizeof(PIXEL);
-    lowhigh_pitch /= sizeof(PIXEL);
-    highlow_pitch /= sizeof(PIXEL);
+
+    /* Single arena allocation for all 9 row buffers (1 malloc instead of 9) */
+    size_t aligned_row = (buffer_row_size + 15) & ~(size_t)15;
+    uint8_t *arena = (uint8_t *)allocator->Alloc(aligned_row * 9);
+    if (!arena) return CODEC_ERROR_OUTOFMEMORY;
+    even_lowpass    = (PIXEL *)(arena + aligned_row * 0);
+    even_highpass   = (PIXEL *)(arena + aligned_row * 1);
+    odd_lowpass     = (PIXEL *)(arena + aligned_row * 2);
+    odd_highpass    = (PIXEL *)(arena + aligned_row * 3);
+    lowhigh_line[0] = (PIXEL *)(arena + aligned_row * 4);
+    lowhigh_line[1] = (PIXEL *)(arena + aligned_row * 5);
+    lowhigh_line[2] = (PIXEL *)(arena + aligned_row * 6);
+    highlow_line    = (PIXEL *)(arena + aligned_row * 7);
+    highhigh_line   = (PIXEL *)(arena + aligned_row * 8);
+
+    lowlow_pitch   /= sizeof(PIXEL);
+    lowhigh_pitch  /= sizeof(PIXEL);
+    highlow_pitch  /= sizeof(PIXEL);
     highhigh_pitch /= sizeof(PIXEL);
-    output_pitch /= sizeof(PIXEL);
-    
-    // Initialize the pointers to the even and odd output rows
+    output_pitch   /= sizeof(PIXEL);
+
     even_output = output;
-    odd_output = output + output_pitch;
-    
-    // Apply the vertical border filter to the first row
+    odd_output  = output + output_pitch;
+
+    // First row (top border)
     row = 0;
-    
-    // Set pointers to the first three rows in the first highpass band
     lowhigh_row[0] = lowhigh + 0 * lowhigh_pitch;
     lowhigh_row[1] = lowhigh + 1 * lowhigh_pitch;
     lowhigh_row[2] = lowhigh + 2 * lowhigh_pitch;
-    
-    // Dequantize three rows of highpass coefficients in the first highpass band
+
     DequantizeBandRow16s(lowhigh_row[0], input_width, lowhigh_quantization, lowhigh_line[0]);
     DequantizeBandRow16s(lowhigh_row[1], input_width, lowhigh_quantization, lowhigh_line[1]);
     DequantizeBandRow16s(lowhigh_row[2], input_width, lowhigh_quantization, lowhigh_line[2]);
-    
-    // Dequantize one row of coefficients each in the second and third highpass bands
-    DequantizeBandRow16s(highlow, input_width, highlow_quantization, highlow_line);
+    DequantizeBandRow16s(highlow,  input_width, highlow_quantization,  highlow_line);
     DequantizeBandRow16s(highhigh, input_width, highhigh_quantization, highhigh_line);
-    
-    for (column = 0; column < input_width; column++)
+
+    column = 0;
+#if ENABLED(NEON)
     {
-        int32_t even = 0;		// Result of convolution with even filter
-        int32_t odd = 0;		// Result of convolution with odd filter
-        
-        
-        /***** Compute the vertical inverse for the left two bands *****/
-        
-        // Apply the even reconstruction filter to the lowpass band
+        const int width_m4 = (input_width / 4) * 4;
+        const int32x4_t four = vdupq_n_s32(4);
+        const int32x4_t c11 = vdupq_n_s32(11);
+        const int32x4_t c5  = vdupq_n_s32(5);
+        const int32x4_t c4  = vdupq_n_s32(4);
+
+        for (; column < width_m4; column += 4)
+        {
+            /* Left bands (lowlow + highlow) - top border */
+            int32x4_t r0 = vld1q_s32(&lowlow[column + 0 * lowlow_pitch]);
+            int32x4_t r1 = vld1q_s32(&lowlow[column + 1 * lowlow_pitch]);
+            int32x4_t r2 = vld1q_s32(&lowlow[column + 2 * lowlow_pitch]);
+            int32x4_t hp = vld1q_s32(&highlow_line[column]);
+
+            /* even = (11*r0 - 4*r1 + r2 + 4) >> 3 + hp, then >> 1 */
+            int32x4_t even_v = vmulq_s32(c11, r0);
+            even_v = vmlsq_s32(even_v, c4, r1);
+            even_v = vaddq_s32(even_v, r2);
+            even_v = vaddq_s32(even_v, four);
+            even_v = vshrq_n_s32(even_v, 3);
+            even_v = vaddq_s32(even_v, hp);
+            even_v = vshrq_n_s32(even_v, 1);
+            vst1q_s32(&even_lowpass[column], even_v);
+
+            /* odd = (5*r0 + 4*r1 - r2 + 4) >> 3 - hp, then >> 1 */
+            int32x4_t odd_v = vmulq_s32(c5, r0);
+            odd_v = vmlaq_s32(odd_v, c4, r1);
+            odd_v = vsubq_s32(odd_v, r2);
+            odd_v = vaddq_s32(odd_v, four);
+            odd_v = vshrq_n_s32(odd_v, 3);
+            odd_v = vsubq_s32(odd_v, hp);
+            odd_v = vshrq_n_s32(odd_v, 1);
+            vst1q_s32(&odd_lowpass[column], odd_v);
+
+            /* Right bands (lowhigh + highhigh) - top border */
+            r0 = vld1q_s32(&lowhigh_line[0][column]);
+            r1 = vld1q_s32(&lowhigh_line[1][column]);
+            r2 = vld1q_s32(&lowhigh_line[2][column]);
+            hp = vld1q_s32(&highhigh_line[column]);
+
+            even_v = vmulq_s32(c11, r0);
+            even_v = vmlsq_s32(even_v, c4, r1);
+            even_v = vaddq_s32(even_v, r2);
+            even_v = vaddq_s32(even_v, four);
+            even_v = vshrq_n_s32(even_v, 3);
+            even_v = vaddq_s32(even_v, hp);
+            even_v = vshrq_n_s32(even_v, 1);
+            vst1q_s32(&even_highpass[column], even_v);
+
+            odd_v = vmulq_s32(c5, r0);
+            odd_v = vmlaq_s32(odd_v, c4, r1);
+            odd_v = vsubq_s32(odd_v, r2);
+            odd_v = vaddq_s32(odd_v, four);
+            odd_v = vshrq_n_s32(odd_v, 3);
+            odd_v = vsubq_s32(odd_v, hp);
+            odd_v = vshrq_n_s32(odd_v, 1);
+            vst1q_s32(&odd_highpass[column], odd_v);
+        }
+    }
+#endif
+    for (; column < input_width; column++)
+    {
+        int32_t even = 0, odd = 0;
+
+        // Left bands (lowlow + highlow) - top border filter
         even += 11 * lowlow[column + 0 * lowlow_pitch];
         even -=  4 * lowlow[column + 1 * lowlow_pitch];
         even +=  1 * lowlow[column + 2 * lowlow_pitch];
         even += rounding;
         even = DivideByShift(even, 3);
-        
-        // Add the highpass correction
         even += highlow_line[column];
         even >>= 1;
-        
-        // The inverse of the left two bands should be a positive number
-        //assert(0 <= even && even <= INT16_MAX);
-        
-        // Place the even result in the even row
         even_lowpass[column] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
+
         odd += 5 * lowlow[column + 0 * lowlow_pitch];
         odd += 4 * lowlow[column + 1 * lowlow_pitch];
         odd -= 1 * lowlow[column + 2 * lowlow_pitch];
         odd += rounding;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
         odd -= highlow_line[column];
         odd >>= 1;
-        
-        // The inverse of the left two bands should be a positive number
-        //assert(0 <= odd && odd <= INT16_MAX);
-        
-        // Place the odd result in the odd row
         odd_lowpass[column] = ClampPixel(odd);
-        
-        
-        /***** Compute the vertical inverse for the right two bands *****/
-        
-        even = 0;
-        odd = 0;
-        
-        // Apply the even reconstruction filter to the lowpass band
+
+        // Right bands (lowhigh + highhigh) - top border filter
+        even = 0; odd = 0;
         even += 11 * lowhigh_line[0][column];
         even -=  4 * lowhigh_line[1][column];
         even +=  1 * lowhigh_line[2][column];
         even += rounding;
         even = DivideByShift(even, 3);
-        
-        // Add the highpass correction
         even += highhigh_line[column];
         even >>= 1;
-        
-        // Place the even result in the even row
         even_highpass[column] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
+
         odd += 5 * lowhigh_line[0][column];
         odd += 4 * lowhigh_line[1][column];
         odd -= 1 * lowhigh_line[2][column];
         odd += rounding;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
         odd -= highhigh_line[column];
         odd >>= 1;
-        
-        // Place the odd result in the odd row
         odd_highpass[column] = ClampPixel(odd);
     }
-    
-    // Apply the inverse horizontal transform to the even and odd rows
+
     InvertHorizontal16s(even_lowpass, even_highpass, even_output, input_width, output_width);
-    InvertHorizontal16s(odd_lowpass, odd_highpass, odd_output, input_width, output_width);
-    
-    // Advance to the next pair of even and odd output rows
+    InvertHorizontal16s(odd_lowpass,  odd_highpass,  odd_output,  input_width, output_width);
+
     even_output += 2 * output_pitch;
-    odd_output += 2 * output_pitch;
-    
-    // Always advance the highpass row pointers
-    highlow += highlow_pitch;
+    odd_output  += 2 * output_pitch;
+    highlow  += highlow_pitch;
     highhigh += highhigh_pitch;
-    
-    // Advance the row index
     row++;
-    
-    // Process the middle rows using the interior reconstruction filters
+
+    // Middle rows
+    /* Detect fused-dequantize eligibility: negative quant = ANS raw mode.
+       In fused mode, the vertical filter reads raw band data and dequantizes
+       inline, eliminating the separate DequantizeBandRow16s + temp buffer. */
+    int fuse_highlow  = (highlow_quantization < 0);
+    int fuse_highhigh = (highhigh_quantization < 0);
+#if ENABLED(NEON)
+    int32x4_t hl_quant_vec = vdupq_n_s32(fuse_highlow  ? -highlow_quantization  : 1);
+    int32x4_t hh_quant_vec = vdupq_n_s32(fuse_highhigh ? -highhigh_quantization : 1);
+#endif
+
     for (; row < last_row; row++)
     {
-        // Dequantize one row from each of the two highpass bands
-        DequantizeBandRow16s(highlow, input_width, highlow_quantization, highlow_line);
-        DequantizeBandRow16s(highhigh, input_width, highhigh_quantization, highhigh_line);
-        
-        // Process the entire row
-        for (column = 0; column < input_width; column++)
+        /* Only dequantize separately if NOT fusing (VLC mode with uncompanding) */
+        if (!fuse_highlow)
+            DequantizeBandRow16s(highlow,  input_width, highlow_quantization,  highlow_line);
+        if (!fuse_highhigh)
+            DequantizeBandRow16s(highhigh, input_width, highhigh_quantization, highhigh_line);
+
+        column = 0;
+#if ENABLED(NEON)
         {
-            int32_t even = 0;		// Result of convolution with even filter
-            int32_t odd = 0;		// Result of convolution with odd filter
-            
-            
-            /***** Compute the vertical inverse for the left two bands *****/
-            
-            // Apply the even reconstruction filter to the lowpass band
+            /* 8-wide loop: process 8 columns per iteration for 2x throughput */
+            const int width_m8 = (input_width / 8) * 8;
+            for (; column < width_m8; column += 8)
+            {
+                if (fuse_highlow)
+                    InvertVerticalMiddle8_Fused_NEON(
+                        lowlow + 0 * lowlow_pitch, lowlow + 1 * lowlow_pitch, lowlow + 2 * lowlow_pitch,
+                        highlow, hl_quant_vec, even_lowpass, odd_lowpass, column);
+                else
+                    InvertVerticalMiddle8_NEON(
+                        lowlow + 0 * lowlow_pitch, lowlow + 1 * lowlow_pitch, lowlow + 2 * lowlow_pitch,
+                        highlow_line, even_lowpass, odd_lowpass, column);
+
+                if (fuse_highhigh)
+                    InvertVerticalMiddle8_Fused_NEON(
+                        lowhigh_line[0], lowhigh_line[1], lowhigh_line[2],
+                        highhigh, hh_quant_vec, even_highpass, odd_highpass, column);
+                else
+                    InvertVerticalMiddle8_NEON(
+                        lowhigh_line[0], lowhigh_line[1], lowhigh_line[2],
+                        highhigh_line, even_highpass, odd_highpass, column);
+            }
+            /* 4-wide cleanup for remaining 4-7 columns */
+            const int width_m4 = (input_width / 4) * 4;
+            for (; column < width_m4; column += 4)
+            {
+                if (fuse_highlow)
+                    InvertVerticalMiddle4_Fused_NEON(
+                        lowlow + 0 * lowlow_pitch, lowlow + 1 * lowlow_pitch, lowlow + 2 * lowlow_pitch,
+                        highlow, hl_quant_vec, even_lowpass, odd_lowpass, column);
+                else
+                    InvertVerticalMiddle4_NEON(
+                        lowlow + 0 * lowlow_pitch, lowlow + 1 * lowlow_pitch, lowlow + 2 * lowlow_pitch,
+                        highlow_line, even_lowpass, odd_lowpass, column);
+
+                if (fuse_highhigh)
+                    InvertVerticalMiddle4_Fused_NEON(
+                        lowhigh_line[0], lowhigh_line[1], lowhigh_line[2],
+                        highhigh, hh_quant_vec, even_highpass, odd_highpass, column);
+                else
+                    InvertVerticalMiddle4_NEON(
+                        lowhigh_line[0], lowhigh_line[1], lowhigh_line[2],
+                        highhigh_line, even_highpass, odd_highpass, column);
+            }
+        }
+#endif
+        /* Scalar cleanup for remaining columns (< 4).
+           For fused mode, dequantize the tail columns inline. */
+        for (; column < input_width; column++)
+        {
+            int32_t even = 0, odd = 0;
+            int32_t hl_val, hh_val;
+
+            /* Inline dequantize for fused ANS mode, or read from pre-dequantized buffer */
+            if (fuse_highlow) {
+                int32_t v = highlow[column];
+                hl_val = (v > 0) ? v * (-highlow_quantization) : (v < 0) ? -((-v) * (-highlow_quantization)) : 0;
+            } else {
+                hl_val = highlow_line[column];
+            }
+            if (fuse_highhigh) {
+                int32_t v = highhigh[column];
+                hh_val = (v > 0) ? v * (-highhigh_quantization) : (v < 0) ? -((-v) * (-highhigh_quantization)) : 0;
+            } else {
+                hh_val = highhigh_line[column];
+            }
+
             even += lowlow[column + 0 * lowlow_pitch];
             even -= lowlow[column + 2 * lowlow_pitch];
-            even += 4;
-            even >>= 3;
+            even += 4; even >>= 3;
             even += lowlow[column + 1 * lowlow_pitch];
-            
-            // Add the highpass correction
-            even += highlow_line[column];
+            even += hl_val;
             even >>= 1;
-            
-            // The inverse of the left two bands should be a positive number
-            //assert(0 <= even && even <= INT16_MAX);
-            
-            // Place the even result in the even row
             even_lowpass[column] = ClampPixel(even);
-            
-            // Apply the odd reconstruction filter to the lowpass band
+
             odd -= lowlow[column + 0 * lowlow_pitch];
             odd += lowlow[column + 2 * lowlow_pitch];
-            odd += 4;
-            odd >>= 3;
+            odd += 4; odd >>= 3;
             odd += lowlow[column + 1 * lowlow_pitch];
-            
-            // Subtract the highpass correction
-            odd -= highlow_line[column];
+            odd -= hl_val;
             odd >>= 1;
-            
-            // The inverse of the left two bands should be a positive number
-            //assert(0 <= odd && odd <= INT16_MAX);
-            
-            // Place the odd result in the odd row
             odd_lowpass[column] = ClampPixel(odd);
-            
-            
-            /***** Compute the vertical inverse for the right two bands *****/
-            
-            even = 0;
-            odd = 0;
-            
-            // Apply the even reconstruction filter to the lowpass band
+
+            even = 0; odd = 0;
             even += lowhigh_line[0][column];
             even -= lowhigh_line[2][column];
-            even += 4;
-            even >>= 3;
+            even += 4; even >>= 3;
             even += lowhigh_line[1][column];
-            
-            // Add the highpass correction
-            even += highhigh_line[column];
+            even += hh_val;
             even >>= 1;
-            
-            // Place the even result in the even row
             even_highpass[column] = ClampPixel(even);
-            
-            // Apply the odd reconstruction filter to the lowpass band
+
             odd -= lowhigh_line[0][column];
             odd += lowhigh_line[2][column];
-            odd += 4;
-            odd >>= 3;
+            odd += 4; odd >>= 3;
             odd += lowhigh_line[1][column];
-            
-            // Subtract the highpass correction
-            odd -= highhigh_line[column];
+            odd -= hh_val;
             odd >>= 1;
-            
-            // Place the odd result in the odd row
             odd_highpass[column] = ClampPixel(odd);
         }
-        
-        // Apply the inverse horizontal transform to the even and odd rows and descale the results
+
         InvertHorizontal16s(even_lowpass, even_highpass, even_output, input_width, output_width);
-        InvertHorizontal16s(odd_lowpass, odd_highpass, odd_output, input_width, output_width);
-        
-        // Advance to the next input row in each band
-        lowlow += lowlow_pitch;
-        lowhigh += lowhigh_pitch;
-        highlow += highlow_pitch;
+        InvertHorizontal16s(odd_lowpass,  odd_highpass,  odd_output,  input_width, output_width);
+
+        lowlow   += lowlow_pitch;
+        lowhigh  += lowhigh_pitch;
+        highlow  += highlow_pitch;
         highhigh += highhigh_pitch;
-        
-        // Advance to the next pair of even and odd output rows
         even_output += 2 * output_pitch;
-        odd_output += 2 * output_pitch;
-        
+        odd_output  += 2 * output_pitch;
+
         if (row < last_row - 1)
         {
-            // Compute the address of the next row in the lowhigh band
             PIXEL *lowhigh_row_ptr = (lowhigh + 2 * lowhigh_pitch);
-            //PIXEL *lowhigh_row_ptr = (lowhigh + lowhigh_pitch);
-            
-            // Shift the rows in the buffer of dequantized lowhigh bands
             PIXEL *temp = lowhigh_line[0];
             lowhigh_line[0] = lowhigh_line[1];
             lowhigh_line[1] = lowhigh_line[2];
             lowhigh_line[2] = temp;
-            
-            // Undo quantization for the next row in the lowhigh band
             DequantizeBandRow16s(lowhigh_row_ptr, input_width, lowhigh_quantization, lowhigh_line[2]);
         }
     }
-    
-    // Should have exited the loop at the last row
+
     assert(row == last_row);
-    
-    // Advance the lowlow pointer to the last row in the band
     lowlow += lowlow_pitch;
-    
-    // Check that the band pointers are on the last row in each wavelet band
+
     assert(lowlow == (lowlow_band + last_row * lowlow_pitch));
-    
     assert(highlow == (highlow_band + last_row * highlow_pitch));
     assert(highhigh == (highhigh_band + last_row * highhigh_pitch));
-    
-    // Undo quantization for the highlow and highhigh bands
-    DequantizeBandRow16s(highlow, input_width, highlow_quantization, highlow_line);
+
+    DequantizeBandRow16s(highlow,  input_width, highlow_quantization,  highlow_line);
     DequantizeBandRow16s(highhigh, input_width, highhigh_quantization, highhigh_line);
-    
-    // Apply the vertical border filter to the last row
-    for (column = 0; column < input_width; column++)
+
+    // Last row (bottom border)
+    column = 0;
+#if ENABLED(NEON)
     {
-        int32_t even = 0;		// Result of convolution with even filter
-        int32_t odd = 0;		// Result of convolution with odd filter
-        
-        
-        /***** Compute the vertical inverse for the left two bands *****/
-        
-        // Apply the even reconstruction filter to the lowpass band
-        even += 5 * lowlow[column + 0 * lowlow_pitch];
-        even += 4 * lowlow[column - 1 * lowlow_pitch];
-        even -= 1 * lowlow[column - 2 * lowlow_pitch];
+        const int width_m4 = (input_width / 4) * 4;
+        const int32x4_t four = vdupq_n_s32(4);
+        const int32x4_t c11 = vdupq_n_s32(11);
+        const int32x4_t c5  = vdupq_n_s32(5);
+        const int32x4_t c4  = vdupq_n_s32(4);
+
+        for (; column < width_m4; column += 4)
+        {
+            /* Left bands - bottom border:
+               even = (5*r0 + 4*r_m1 - r_m2 + 4) >> 3 + hp, then >> 1
+               odd  = (11*r0 - 4*r_m1 + r_m2 + 4) >> 3 - hp, then >> 1 */
+            int32x4_t r0  = vld1q_s32(&lowlow[column + 0 * lowlow_pitch]);
+            int32x4_t rm1 = vld1q_s32(&lowlow[column - 1 * lowlow_pitch]);
+            int32x4_t rm2 = vld1q_s32(&lowlow[column - 2 * lowlow_pitch]);
+            int32x4_t hp  = vld1q_s32(&highlow_line[column]);
+
+            int32x4_t even_v = vmulq_s32(c5, r0);
+            even_v = vmlaq_s32(even_v, c4, rm1);
+            even_v = vsubq_s32(even_v, rm2);
+            even_v = vaddq_s32(even_v, four);
+            even_v = vshrq_n_s32(even_v, 3);
+            even_v = vaddq_s32(even_v, hp);
+            even_v = vshrq_n_s32(even_v, 1);
+            vst1q_s32(&even_lowpass[column], even_v);
+
+            int32x4_t odd_v = vmulq_s32(c11, r0);
+            odd_v = vmlsq_s32(odd_v, c4, rm1);
+            odd_v = vaddq_s32(odd_v, rm2);
+            odd_v = vaddq_s32(odd_v, four);
+            odd_v = vshrq_n_s32(odd_v, 3);
+            odd_v = vsubq_s32(odd_v, hp);
+            odd_v = vshrq_n_s32(odd_v, 1);
+            vst1q_s32(&odd_lowpass[column], odd_v);
+
+            /* Right bands - bottom border */
+            r0  = vld1q_s32(&lowhigh_line[2][column]);
+            rm1 = vld1q_s32(&lowhigh_line[1][column]);
+            rm2 = vld1q_s32(&lowhigh_line[0][column]);
+            hp  = vld1q_s32(&highhigh_line[column]);
+
+            even_v = vmulq_s32(c5, r0);
+            even_v = vmlaq_s32(even_v, c4, rm1);
+            even_v = vsubq_s32(even_v, rm2);
+            even_v = vaddq_s32(even_v, four);
+            even_v = vshrq_n_s32(even_v, 3);
+            even_v = vaddq_s32(even_v, hp);
+            even_v = vshrq_n_s32(even_v, 1);
+            vst1q_s32(&even_highpass[column], even_v);
+
+            odd_v = vmulq_s32(c11, r0);
+            odd_v = vmlsq_s32(odd_v, c4, rm1);
+            odd_v = vaddq_s32(odd_v, rm2);
+            odd_v = vaddq_s32(odd_v, four);
+            odd_v = vshrq_n_s32(odd_v, 3);
+            odd_v = vsubq_s32(odd_v, hp);
+            odd_v = vshrq_n_s32(odd_v, 1);
+            vst1q_s32(&odd_highpass[column], odd_v);
+        }
+    }
+#endif
+    for (; column < input_width; column++)
+    {
+        int32_t even = 0, odd = 0;
+
+        // Left bands - bottom border
+        even += 5  * lowlow[column + 0 * lowlow_pitch];
+        even += 4  * lowlow[column - 1 * lowlow_pitch];
+        even -= 1  * lowlow[column - 2 * lowlow_pitch];
         even += 4;
         even = DivideByShift(even, 3);
-        
-        // Add the highpass correction
         even += highlow_line[column];
         even >>= 1;
-        
-        // The inverse of the left two bands should be a positive number
-        //assert(0 <= even && even <= INT16_MAX);
-        
-        // Place the even result in the even row
         even_lowpass[column] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
+
         odd += 11 * lowlow[column + 0 * lowlow_pitch];
         odd -=  4 * lowlow[column - 1 * lowlow_pitch];
         odd +=  1 * lowlow[column - 2 * lowlow_pitch];
         odd += 4;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
         odd -= highlow_line[column];
         odd >>= 1;
-        
-        // The inverse of the left two bands should be a positive number
-        //assert(0 <= odd && odd <= INT16_MAX);
-        
-        // Place the odd result in the odd row
         odd_lowpass[column] = ClampPixel(odd);
-        
-        
-        // Compute the vertical inverse for the right two bands //
-        
-        even = 0;
-        odd = 0;
-        
-        // Apply the even reconstruction filter to the lowpass band
-        even += 5 * lowhigh_line[2][column];
-        even += 4 * lowhigh_line[1][column];
-        even -= 1 * lowhigh_line[0][column];
+
+        // Right bands - bottom border
+        even = 0; odd = 0;
+        even += 5  * lowhigh_line[2][column];
+        even += 4  * lowhigh_line[1][column];
+        even -= 1  * lowhigh_line[0][column];
         even += 4;
         even = DivideByShift(even, 3);
-        
-        // Add the highpass correction
         even += highhigh_line[column];
         even >>= 1;
-        
-        // Place the even result in the even row
         even_highpass[column] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
+
         odd += 11 * lowhigh_line[2][column];
         odd -=  4 * lowhigh_line[1][column];
         odd +=  1 * lowhigh_line[0][column];
         odd += 4;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
         odd -= highhigh_line[column];
         odd >>= 1;
-        
-        // Place the odd result in the odd row
         odd_highpass[column] = ClampPixel(odd);
     }
-    
-    // Apply the inverse horizontal transform to the even and odd rows and descale the results
+
     InvertHorizontal16s(even_lowpass, even_highpass, even_output, input_width, output_width);
-    
-    // Is the output wavelet shorter than twice the height of the input wavelet?
-    if (2 * row + 1 < output_height) {
+    if (2 * row + 1 < output_height)
         InvertHorizontal16s(odd_lowpass, odd_highpass, odd_output, input_width, output_width);
-    }
-    
-    // Free the scratch buffers
-    allocator->Free(even_lowpass);
-    allocator->Free(even_highpass);
-    allocator->Free(odd_lowpass);
-    allocator->Free(odd_highpass);
-    
-    allocator->Free(lowhigh_line[0]);
-    allocator->Free(lowhigh_line[1]);
-    allocator->Free(lowhigh_line[2]);
-    allocator->Free(highlow_line);
-    allocator->Free(highhigh_line);
-    
+
+    allocator->Free(arena);
+
     return CODEC_ERROR_OKAY;
 }
 
 /*!
 	@brief Apply the inverse spatial transform with descaling
-	This routine is similar to @ref InvertSpatialQuant16s, but a scale factor
-	that was applied during encoding is removed from the output values.
  */
 CODEC_ERROR InvertSpatialQuantDescale16s(gpr_allocator *allocator,
                                          PIXEL *lowlow_band, int lowlow_pitch,
@@ -789,400 +897,373 @@ CODEC_ERROR InvertSpatialQuantDescale16s(gpr_allocator *allocator,
     PIXEL *highlow = highlow_band;
     PIXEL *highhigh = highhigh_band;
     PIXEL *output = output_image;
-    PIXEL *even_lowpass;
-    PIXEL *even_highpass;
-    PIXEL *odd_lowpass;
-    PIXEL *odd_highpass;
-    PIXEL *even_output;
-    PIXEL *odd_output;
+    PIXEL *even_lowpass, *even_highpass, *odd_lowpass, *odd_highpass;
+    PIXEL *even_output, *odd_output;
     size_t buffer_row_size;
     int last_row = input_height - 1;
     int row, column;
-    
     PIXEL *lowhigh_row[3];
-    
     PIXEL *lowhigh_line[3];
-    PIXEL *highlow_line;
-    PIXEL *highhigh_line;
-    
+    PIXEL *highlow_line, *highhigh_line;
+
     QUANT highlow_quantization = quantization[HL_BAND];
     QUANT lowhigh_quantization = quantization[LH_BAND];
     QUANT highhigh_quantization = quantization[HH_BAND];
-    
-    // Compute positions within the temporary buffer for each row of horizontal lowpass
-    // and highpass intermediate coefficients computed by the vertical inverse transform
+
     buffer_row_size = input_width * sizeof(PIXEL);
-    
-    // Allocate space for the even and odd rows of results from the inverse vertical filter
-    even_lowpass = (PIXEL *)allocator->Alloc(buffer_row_size);
-    even_highpass = (PIXEL *)allocator->Alloc(buffer_row_size);
-    odd_lowpass = (PIXEL *)allocator->Alloc(buffer_row_size);
-    odd_highpass = (PIXEL *)allocator->Alloc(buffer_row_size);
-    
-    // Allocate scratch space for the dequantized highpass coefficients
-    lowhigh_line[0] = (PIXEL *)allocator->Alloc(buffer_row_size);
-    lowhigh_line[1] = (PIXEL *)allocator->Alloc(buffer_row_size);
-    lowhigh_line[2] = (PIXEL *)allocator->Alloc(buffer_row_size);
-    highlow_line = (PIXEL *)allocator->Alloc(buffer_row_size);
-    highhigh_line = (PIXEL *)allocator->Alloc(buffer_row_size);
-    
-    // Convert pitch from bytes to pixels
-    lowlow_pitch /= sizeof(PIXEL);
-    lowhigh_pitch /= sizeof(PIXEL);
-    highlow_pitch /= sizeof(PIXEL);
+
+    /* Single arena allocation for all 9 row buffers (1 malloc instead of 9) */
+    size_t aligned_row = (buffer_row_size + 15) & ~(size_t)15;
+    uint8_t *arena = (uint8_t *)allocator->Alloc(aligned_row * 9);
+    if (!arena) return CODEC_ERROR_OUTOFMEMORY;
+    even_lowpass    = (PIXEL *)(arena + aligned_row * 0);
+    even_highpass   = (PIXEL *)(arena + aligned_row * 1);
+    odd_lowpass     = (PIXEL *)(arena + aligned_row * 2);
+    odd_highpass    = (PIXEL *)(arena + aligned_row * 3);
+    lowhigh_line[0] = (PIXEL *)(arena + aligned_row * 4);
+    lowhigh_line[1] = (PIXEL *)(arena + aligned_row * 5);
+    lowhigh_line[2] = (PIXEL *)(arena + aligned_row * 6);
+    highlow_line    = (PIXEL *)(arena + aligned_row * 7);
+    highhigh_line   = (PIXEL *)(arena + aligned_row * 8);
+
+    lowlow_pitch   /= sizeof(PIXEL);
+    lowhigh_pitch  /= sizeof(PIXEL);
+    highlow_pitch  /= sizeof(PIXEL);
     highhigh_pitch /= sizeof(PIXEL);
-    output_pitch /= sizeof(PIXEL);
-    
-    // Initialize the pointers to the even and odd output rows
+    output_pitch   /= sizeof(PIXEL);
+
     even_output = output;
-    odd_output = output + output_pitch;
-    
-    // Apply the vertical border filter to the first row
+    odd_output  = output + output_pitch;
+
+    // First row (top border)
     row = 0;
-    
-    // Set pointers to the first three rows in the first highpass band
     lowhigh_row[0] = lowhigh + 0 * lowhigh_pitch;
     lowhigh_row[1] = lowhigh + 1 * lowhigh_pitch;
     lowhigh_row[2] = lowhigh + 2 * lowhigh_pitch;
-    
-    // Dequantize three rows of highpass coefficients in the first highpass band
+
     DequantizeBandRow16s(lowhigh_row[0], input_width, lowhigh_quantization, lowhigh_line[0]);
     DequantizeBandRow16s(lowhigh_row[1], input_width, lowhigh_quantization, lowhigh_line[1]);
     DequantizeBandRow16s(lowhigh_row[2], input_width, lowhigh_quantization, lowhigh_line[2]);
-    
-    // Dequantize one row of coefficients each in the second and third highpass bands
-    DequantizeBandRow16s(highlow, input_width, highlow_quantization, highlow_line);
+    DequantizeBandRow16s(highlow,  input_width, highlow_quantization,  highlow_line);
     DequantizeBandRow16s(highhigh, input_width, highhigh_quantization, highhigh_line);
-    
-    for (column = 0; column < input_width; column++)
+
+    column = 0;
+#if ENABLED(NEON)
     {
-        int32_t even = 0;		// Result of convolution with even filter
-        int32_t odd = 0;		// Result of convolution with odd filter
-        
-        
-        /***** Compute the vertical inverse for the left two bands *****/
-        
-        // Apply the even reconstruction filter to the lowpass band
+        const int width_m4 = (input_width / 4) * 4;
+        const int32x4_t four = vdupq_n_s32(4);
+        const int32x4_t c11 = vdupq_n_s32(11);
+        const int32x4_t c5  = vdupq_n_s32(5);
+        const int32x4_t c4  = vdupq_n_s32(4);
+
+        for (; column < width_m4; column += 4)
+        {
+            /* Left bands - top border (descale: DivideByShift(x,1) = >> 1) */
+            int32x4_t r0 = vld1q_s32(&lowlow[column + 0 * lowlow_pitch]);
+            int32x4_t r1 = vld1q_s32(&lowlow[column + 1 * lowlow_pitch]);
+            int32x4_t r2 = vld1q_s32(&lowlow[column + 2 * lowlow_pitch]);
+            int32x4_t hp = vld1q_s32(&highlow_line[column]);
+
+            int32x4_t even_v = vmulq_s32(c11, r0);
+            even_v = vmlsq_s32(even_v, c4, r1);
+            even_v = vaddq_s32(even_v, r2);
+            even_v = vaddq_s32(even_v, four);
+            even_v = vshrq_n_s32(even_v, 3);
+            even_v = vaddq_s32(even_v, hp);
+            even_v = vshrq_n_s32(even_v, 1);
+            vst1q_s32(&even_lowpass[column], even_v);
+
+            int32x4_t odd_v = vmulq_s32(c5, r0);
+            odd_v = vmlaq_s32(odd_v, c4, r1);
+            odd_v = vsubq_s32(odd_v, r2);
+            odd_v = vaddq_s32(odd_v, four);
+            odd_v = vshrq_n_s32(odd_v, 3);
+            odd_v = vsubq_s32(odd_v, hp);
+            odd_v = vshrq_n_s32(odd_v, 1);
+            vst1q_s32(&odd_lowpass[column], odd_v);
+
+            /* Right bands - top border */
+            r0 = vld1q_s32(&lowhigh_line[0][column]);
+            r1 = vld1q_s32(&lowhigh_line[1][column]);
+            r2 = vld1q_s32(&lowhigh_line[2][column]);
+            hp = vld1q_s32(&highhigh_line[column]);
+
+            even_v = vmulq_s32(c11, r0);
+            even_v = vmlsq_s32(even_v, c4, r1);
+            even_v = vaddq_s32(even_v, r2);
+            even_v = vaddq_s32(even_v, four);
+            even_v = vshrq_n_s32(even_v, 3);
+            even_v = vaddq_s32(even_v, hp);
+            even_v = vshrq_n_s32(even_v, 1);
+            vst1q_s32(&even_highpass[column], even_v);
+
+            odd_v = vmulq_s32(c5, r0);
+            odd_v = vmlaq_s32(odd_v, c4, r1);
+            odd_v = vsubq_s32(odd_v, r2);
+            odd_v = vaddq_s32(odd_v, four);
+            odd_v = vshrq_n_s32(odd_v, 3);
+            odd_v = vsubq_s32(odd_v, hp);
+            odd_v = vshrq_n_s32(odd_v, 1);
+            vst1q_s32(&odd_highpass[column], odd_v);
+        }
+    }
+#endif
+    for (; column < input_width; column++)
+    {
+        int32_t even = 0, odd = 0;
+
+        // Left bands - top border (descale uses DivideByShift(x,1) instead of >>1)
         even += 11 * lowlow[column + 0 * lowlow_pitch];
         even -=  4 * lowlow[column + 1 * lowlow_pitch];
         even +=  1 * lowlow[column + 2 * lowlow_pitch];
         even += rounding;
         even = DivideByShift(even, 3);
-        
-        // Add the highpass correction
         even += highlow_line[column];
         even = DivideByShift(even, 1);
-        
-        // The inverse of the left two bands should be a positive number
-        //assert(0 <= even && even <= INT16_MAX);
-        
-        // Place the even result in the even row
         even_lowpass[column] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
+
         odd += 5 * lowlow[column + 0 * lowlow_pitch];
         odd += 4 * lowlow[column + 1 * lowlow_pitch];
         odd -= 1 * lowlow[column + 2 * lowlow_pitch];
         odd += rounding;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
         odd -= highlow_line[column];
         odd = DivideByShift(odd, 1);
-        
-        // The inverse of the left two bands should be a positive number
-        //assert(0 <= odd && odd <= INT16_MAX);
-        
-        // Place the odd result in the odd row
         odd_lowpass[column] = ClampPixel(odd);
-        
-        
-        /***** Compute the vertical inverse for the right two bands *****/
-        
-        even = 0;
-        odd = 0;
-        
-        // Apply the even reconstruction filter to the lowpass band
+
+        // Right bands - top border
+        even = 0; odd = 0;
         even += 11 * lowhigh_line[0][column];
         even -=  4 * lowhigh_line[1][column];
         even +=  1 * lowhigh_line[2][column];
         even += rounding;
         even = DivideByShift(even, 3);
-        
-        // Add the highpass correction
         even += highhigh_line[column];
         even = DivideByShift(even, 1);
-        
-        // Place the even result in the even row
         even_highpass[column] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
+
         odd += 5 * lowhigh_line[0][column];
         odd += 4 * lowhigh_line[1][column];
         odd -= 1 * lowhigh_line[2][column];
         odd += rounding;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
         odd -= highhigh_line[column];
         odd = DivideByShift(odd, 1);
-        
-        // Place the odd result in the odd row
         odd_highpass[column] = ClampPixel(odd);
     }
-    
-    // Apply the inverse horizontal transform to the even and odd rows and descale the results
-    InvertHorizontalDescale16s(even_lowpass, even_highpass, even_output,
-                               input_width, output_width, descale);
-    
-    InvertHorizontalDescale16s(odd_lowpass, odd_highpass, odd_output,
-                               input_width, output_width, descale);
-    
-    // Advance to the next pair of even and odd output rows
+
+    InvertHorizontalDescale16s(even_lowpass, even_highpass, even_output, input_width, output_width, descale);
+    InvertHorizontalDescale16s(odd_lowpass,  odd_highpass,  odd_output,  input_width, output_width, descale);
+
     even_output += 2 * output_pitch;
-    odd_output += 2 * output_pitch;
-    
-    // Always advance the highpass row pointers
-    highlow += highlow_pitch;
+    odd_output  += 2 * output_pitch;
+    highlow  += highlow_pitch;
     highhigh += highhigh_pitch;
-    
-    // Advance the row index
     row++;
-    
-    // Process the middle rows using the interior reconstruction filters
+
+    // Middle rows
     for (; row < last_row; row++)
     {
-        // Dequantize one row from each of the two highpass bands
-        DequantizeBandRow16s(highlow, input_width, highlow_quantization, highlow_line);
+        DequantizeBandRow16s(highlow,  input_width, highlow_quantization,  highlow_line);
         DequantizeBandRow16s(highhigh, input_width, highhigh_quantization, highhigh_line);
-        
-        // Process the entire row
-        for (column = 0; column < input_width; column++)
+
+        column = 0;
+#if ENABLED(NEON)
         {
-            int32_t even = 0;		// Result of convolution with even filter
-            int32_t odd = 0;		// Result of convolution with odd filter
-            
-            
-            /***** Compute the vertical inverse for the left two bands *****/
-            
-            // Apply the even reconstruction filter to the lowpass band
+            const int width_m4 = (input_width / 4) * 4;
+            for (; column < width_m4; column += 4)
+            {
+                // Left bands
+                InvertVerticalMiddle4Descale_NEON(
+                    lowlow + 0 * lowlow_pitch, lowlow + 1 * lowlow_pitch, lowlow + 2 * lowlow_pitch,
+                    highlow_line, even_lowpass, odd_lowpass, column);
+                // Right bands
+                InvertVerticalMiddle4Descale_NEON(
+                    lowhigh_line[0], lowhigh_line[1], lowhigh_line[2],
+                    highhigh_line, even_highpass, odd_highpass, column);
+            }
+        }
+#endif
+        for (; column < input_width; column++)
+        {
+            int32_t even = 0, odd = 0;
+
             even += lowlow[column + 0 * lowlow_pitch];
             even -= lowlow[column + 2 * lowlow_pitch];
-            even += 4;
-            even >>= 3;
+            even += 4; even >>= 3;
             even += lowlow[column + 1 * lowlow_pitch];
-            
-            // Add the highpass correction
             even += highlow_line[column];
             even = DivideByShift(even, 1);
-            
-            // The inverse of the left two bands should be a positive number
-            //assert(0 <= even && even <= INT16_MAX);
-            
-            // Place the even result in the even row
             even_lowpass[column] = ClampPixel(even);
-            
-            // Apply the odd reconstruction filter to the lowpass band
+
             odd -= lowlow[column + 0 * lowlow_pitch];
             odd += lowlow[column + 2 * lowlow_pitch];
-            odd += 4;
-            odd >>= 3;
+            odd += 4; odd >>= 3;
             odd += lowlow[column + 1 * lowlow_pitch];
-            
-            // Subtract the highpass correction
             odd -= highlow_line[column];
             odd = DivideByShift(odd, 1);
-            
-            // The inverse of the left two bands should be a positive number
-            //assert(0 <= odd && odd <= INT16_MAX);
-            
-            // Place the odd result in the odd row
             odd_lowpass[column] = ClampPixel(odd);
-            
-            
-            /***** Compute the vertical inverse for the right two bands *****/
-            
-            even = 0;
-            odd = 0;
-            
-            // Apply the even reconstruction filter to the lowpass band
+
+            even = 0; odd = 0;
             even += lowhigh_line[0][column];
             even -= lowhigh_line[2][column];
-            even += 4;
-            even >>= 3;
+            even += 4; even >>= 3;
             even += lowhigh_line[1][column];
-            
-            // Add the highpass correction
             even += highhigh_line[column];
             even = DivideByShift(even, 1);
-            
-            // Place the even result in the even row
             even_highpass[column] = ClampPixel(even);
-            
-            // Apply the odd reconstruction filter to the lowpass band
+
             odd -= lowhigh_line[0][column];
             odd += lowhigh_line[2][column];
-            odd += 4;
-            odd >>= 3;
+            odd += 4; odd >>= 3;
             odd += lowhigh_line[1][column];
-            
-            // Subtract the highpass correction
             odd -= highhigh_line[column];
             odd = DivideByShift(odd, 1);
-            
-            // Place the odd result in the odd row
             odd_highpass[column] = ClampPixel(odd);
         }
-        
-        // Apply the inverse horizontal transform to the even and odd rows and descale the results
-        InvertHorizontalDescale16s(even_lowpass, even_highpass, even_output,
-                                   input_width, output_width, descale);
-        
-        InvertHorizontalDescale16s(odd_lowpass, odd_highpass, odd_output,
-                                   input_width, output_width, descale);
-        
-        // Advance to the next input row in each band
-        lowlow += lowlow_pitch;
-        lowhigh += lowhigh_pitch;
-        highlow += highlow_pitch;
+
+        InvertHorizontalDescale16s(even_lowpass, even_highpass, even_output, input_width, output_width, descale);
+        InvertHorizontalDescale16s(odd_lowpass,  odd_highpass,  odd_output,  input_width, output_width, descale);
+
+        lowlow   += lowlow_pitch;
+        lowhigh  += lowhigh_pitch;
+        highlow  += highlow_pitch;
         highhigh += highhigh_pitch;
-        
-        // Advance to the next pair of even and odd output rows
         even_output += 2 * output_pitch;
-        odd_output += 2 * output_pitch;
-        
+        odd_output  += 2 * output_pitch;
+
         if (row < last_row - 1)
         {
-            // Compute the address of the next row in the lowhigh band
             PIXEL *lowhigh_row_ptr = (lowhigh + 2 * lowhigh_pitch);
-            
-            // Shift the rows in the buffer of dequantized lowhigh bands
             PIXEL *temp = lowhigh_line[0];
             lowhigh_line[0] = lowhigh_line[1];
             lowhigh_line[1] = lowhigh_line[2];
             lowhigh_line[2] = temp;
-            
-            // Undo quantization for the next row in the lowhigh band
             DequantizeBandRow16s(lowhigh_row_ptr, input_width, lowhigh_quantization, lowhigh_line[2]);
         }
     }
-    
-    // Should have exited the loop at the last row
+
     assert(row == last_row);
-    
-    // Advance the lowlow pointer to the last row in the band
     lowlow += lowlow_pitch;
-    
-    // Check that the band pointers are on the last row in each wavelet band
+
     assert(lowlow == (lowlow_band + last_row * lowlow_pitch));
-    
     assert(highlow == (highlow_band + last_row * highlow_pitch));
     assert(highhigh == (highhigh_band + last_row * highhigh_pitch));
-    
-    // Undo quantization for the highlow and highhigh bands
-    DequantizeBandRow16s(highlow, input_width, highlow_quantization, highlow_line);
+
+    DequantizeBandRow16s(highlow,  input_width, highlow_quantization,  highlow_line);
     DequantizeBandRow16s(highhigh, input_width, highhigh_quantization, highhigh_line);
-    
-    // Apply the vertical border filter to the last row
-    for (column = 0; column < input_width; column++)
+
+    // Last row (bottom border)
+    column = 0;
+#if ENABLED(NEON)
     {
-        int32_t even = 0;		// Result of convolution with even filter
-        int32_t odd = 0;		// Result of convolution with odd filter
-        
-        
-        /***** Compute the vertical inverse for the left two bands *****/
-        
-        // Apply the even reconstruction filter to the lowpass band
-        even += 5 * lowlow[column + 0 * lowlow_pitch];
-        even += 4 * lowlow[column - 1 * lowlow_pitch];
-        even -= 1 * lowlow[column - 2 * lowlow_pitch];
+        const int width_m4 = (input_width / 4) * 4;
+        const int32x4_t four = vdupq_n_s32(4);
+        const int32x4_t c11 = vdupq_n_s32(11);
+        const int32x4_t c5  = vdupq_n_s32(5);
+        const int32x4_t c4  = vdupq_n_s32(4);
+
+        for (; column < width_m4; column += 4)
+        {
+            /* Left bands - bottom border (descale) */
+            int32x4_t r0  = vld1q_s32(&lowlow[column + 0 * lowlow_pitch]);
+            int32x4_t rm1 = vld1q_s32(&lowlow[column - 1 * lowlow_pitch]);
+            int32x4_t rm2 = vld1q_s32(&lowlow[column - 2 * lowlow_pitch]);
+            int32x4_t hp  = vld1q_s32(&highlow_line[column]);
+
+            int32x4_t even_v = vmulq_s32(c5, r0);
+            even_v = vmlaq_s32(even_v, c4, rm1);
+            even_v = vsubq_s32(even_v, rm2);
+            even_v = vaddq_s32(even_v, four);
+            even_v = vshrq_n_s32(even_v, 3);
+            even_v = vaddq_s32(even_v, hp);
+            even_v = vshrq_n_s32(even_v, 1);
+            vst1q_s32(&even_lowpass[column], even_v);
+
+            int32x4_t odd_v = vmulq_s32(c11, r0);
+            odd_v = vmlsq_s32(odd_v, c4, rm1);
+            odd_v = vaddq_s32(odd_v, rm2);
+            odd_v = vaddq_s32(odd_v, four);
+            odd_v = vshrq_n_s32(odd_v, 3);
+            odd_v = vsubq_s32(odd_v, hp);
+            odd_v = vshrq_n_s32(odd_v, 1);
+            vst1q_s32(&odd_lowpass[column], odd_v);
+
+            /* Right bands - bottom border (descale) */
+            r0  = vld1q_s32(&lowhigh_line[2][column]);
+            rm1 = vld1q_s32(&lowhigh_line[1][column]);
+            rm2 = vld1q_s32(&lowhigh_line[0][column]);
+            hp  = vld1q_s32(&highhigh_line[column]);
+
+            even_v = vmulq_s32(c5, r0);
+            even_v = vmlaq_s32(even_v, c4, rm1);
+            even_v = vsubq_s32(even_v, rm2);
+            even_v = vaddq_s32(even_v, four);
+            even_v = vshrq_n_s32(even_v, 3);
+            even_v = vaddq_s32(even_v, hp);
+            even_v = vshrq_n_s32(even_v, 1);
+            vst1q_s32(&even_highpass[column], even_v);
+
+            odd_v = vmulq_s32(c11, r0);
+            odd_v = vmlsq_s32(odd_v, c4, rm1);
+            odd_v = vaddq_s32(odd_v, rm2);
+            odd_v = vaddq_s32(odd_v, four);
+            odd_v = vshrq_n_s32(odd_v, 3);
+            odd_v = vsubq_s32(odd_v, hp);
+            odd_v = vshrq_n_s32(odd_v, 1);
+            vst1q_s32(&odd_highpass[column], odd_v);
+        }
+    }
+#endif
+    for (; column < input_width; column++)
+    {
+        int32_t even = 0, odd = 0;
+
+        // Left bands - bottom border
+        even += 5  * lowlow[column + 0 * lowlow_pitch];
+        even += 4  * lowlow[column - 1 * lowlow_pitch];
+        even -= 1  * lowlow[column - 2 * lowlow_pitch];
         even += rounding;
         even = DivideByShift(even, 3);
-        
-        // Add the highpass correction
         even += highlow_line[column];
         even = DivideByShift(even, 1);
-        
-        // The inverse of the left two bands should be a positive number
-        //assert(0 <= even && even <= INT16_MAX);
-        
-        // Place the even result in the even row
         even_lowpass[column] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
+
         odd += 11 * lowlow[column + 0 * lowlow_pitch];
         odd -=  4 * lowlow[column - 1 * lowlow_pitch];
         odd +=  1 * lowlow[column - 2 * lowlow_pitch];
         odd += rounding;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
         odd -= highlow_line[column];
         odd = DivideByShift(odd, 1);
-        
-        // The inverse of the left two bands should be a positive number
-        //assert(0 <= odd && odd <= INT16_MAX);
-        
-        // Place the odd result in the odd row
         odd_lowpass[column] = ClampPixel(odd);
-        
-        
-        /***** Compute the vertical inverse for the right two bands *****/
-        
-        even = 0;
-        odd = 0;
-        
-        // Apply the even reconstruction filter to the lowpass band
-        even += 5 * lowhigh_line[2][column];
-        even += 4 * lowhigh_line[1][column];
-        even -= 1 * lowhigh_line[0][column];
+
+        // Right bands - bottom border
+        even = 0; odd = 0;
+        even += 5  * lowhigh_line[2][column];
+        even += 4  * lowhigh_line[1][column];
+        even -= 1  * lowhigh_line[0][column];
         even += rounding;
         even = DivideByShift(even, 3);
-        
-        // Add the highpass correction
         even += highhigh_line[column];
         even = DivideByShift(even, 1);
-        
-        // Place the even result in the even row
         even_highpass[column] = ClampPixel(even);
-        
-        // Apply the odd reconstruction filter to the lowpass band
+
         odd += 11 * lowhigh_line[2][column];
         odd -=  4 * lowhigh_line[1][column];
         odd +=  1 * lowhigh_line[0][column];
         odd += rounding;
         odd = DivideByShift(odd, 3);
-        
-        // Subtract the highpass correction
         odd -= highhigh_line[column];
         odd = DivideByShift(odd, 1);
-        
-        // Place the odd result in the odd row
         odd_highpass[column] = ClampPixel(odd);
     }
-    
-    // Apply the inverse horizontal transform to the even and odd rows and descale the results
-    InvertHorizontalDescale16s(even_lowpass, even_highpass, even_output,
-                               input_width, output_width, descale);
-    
-    // Is the output wavelet shorter than twice the height of the input wavelet?
-    if (2 * row + 1 < output_height) {
-        InvertHorizontalDescale16s(odd_lowpass, odd_highpass, odd_output,
-                                   input_width, output_width, descale);
-    }
-    
-    // Free the scratch buffers
-    allocator->Free(even_lowpass);
-    allocator->Free(even_highpass);
-    allocator->Free(odd_lowpass);
-    allocator->Free(odd_highpass);
-    
-    allocator->Free(lowhigh_line[0]);
-    allocator->Free(lowhigh_line[1]);
-    allocator->Free(lowhigh_line[2]);
-    allocator->Free(highlow_line);
-    allocator->Free(highhigh_line);
-    
+
+    InvertHorizontalDescale16s(even_lowpass, even_highpass, even_output, input_width, output_width, descale);
+    if (2 * row + 1 < output_height)
+        InvertHorizontalDescale16s(odd_lowpass, odd_highpass, odd_output, input_width, output_width, descale);
+
+    allocator->Free(arena);
+
     return CODEC_ERROR_OKAY;
 }
-

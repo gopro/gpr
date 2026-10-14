@@ -53,5 +53,42 @@ void gpr_profile_info_set_defaults(gpr_profile_info* x)
     
     memset( x->color_matrix_1, 0, sizeof(x->color_matrix_1) );
     memset( x->color_matrix_2, 0, sizeof(x->color_matrix_2) );
+
+    memset( x->forward_matrix_1, 0, sizeof(x->forward_matrix_1) );
+    memset( x->forward_matrix_2, 0, sizeof(x->forward_matrix_2) );
+    x->has_forward_matrix = false;
+
+    x->baseline_exposure = 0.0;
+    x->analog_balance[0] = 1.0;
+    x->analog_balance[1] = 1.0;
+    x->analog_balance[2] = 1.0;
+
+    x->hue_sat_map_dims[0] = 0;
+    x->hue_sat_map_dims[1] = 0;
+    x->hue_sat_map_dims[2] = 0;
+    x->hue_sat_map_data1 = NULL;
+    x->hue_sat_map_data2 = NULL;
+    x->hue_sat_map_encoding = 0;
+
+    x->look_table_dims[0] = 0;
+    x->look_table_dims[1] = 0;
+    x->look_table_dims[2] = 0;
+    x->look_table_data = NULL;
+    x->look_table_encoding = 0;
+
+    x->tone_curve_count = 0;
+    x->tone_curve_data = NULL;
+    x->baseline_exposure_offset = 0.0;
+    x->default_black_render = 0;
+    x->has_tone_curve = false;
+    x->has_baseline_exposure_offset = false;
+    x->has_default_black_render = false;
+
+    x->baseline_noise = 1.0;
+    x->baseline_sharpness = 1.0;
+    x->bayer_green_split = 0;
+    x->has_baseline_noise = false;
+    x->has_baseline_sharpness = false;
+    x->has_bayer_green_split = false;
 }
 

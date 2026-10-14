@@ -568,7 +568,7 @@ E ## toUtf8(const ENCODING *enc, \
         *(*toP)++ = lo; \
         break; \
       } \
-      __attribute((fallthrough)); \
+      FALL_THROUGH; \
       /* fall through */ \
     case 0x1: case 0x2: case 0x3: \
     case 0x4: case 0x5: case 0x6: case 0x7: \
@@ -1540,7 +1540,7 @@ initScan(const ENCODING * const *encodingTable,
       if (INIT_ENC_INDEX(enc) == ISO_8859_1_ENC
           && state == XML_CONTENT_STATE)
         break;
-      __attribute((fallthrough));
+      FALL_THROUGH;
       /* fall through */
     case 0x00:
     case 0x3C:

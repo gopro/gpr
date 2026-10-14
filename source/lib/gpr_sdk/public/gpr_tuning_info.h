@@ -51,6 +51,24 @@
         PIXEL_FORMAT_GBRG_12 = 3,                           // GBRG 12bit pixels packed into 16bits
         
         PIXEL_FORMAT_GBRG_12P = 4,                          // GBRG 12bit pixels packed into 12bits
+
+        PIXEL_FORMAT_RGGB_16 = 5,                           // RGGB 16bit pixels packed into 16bits
+
+        PIXEL_FORMAT_GBRG_16 = 6,                           // GBRG 16bit pixels packed into 16bits
+
+        PIXEL_FORMAT_GBRG_14 = 7,                           // GBRG 14bit pixels packed into 16bits
+
+        PIXEL_FORMAT_GRBG_12 = 8,                            // GRBG 12bit pixels packed into 16bits
+
+        PIXEL_FORMAT_GRBG_14 = 9,                            // GRBG 14bit pixels packed into 16bits
+
+        PIXEL_FORMAT_GRBG_16 = 10,                           // GRBG 16bit pixels packed into 16bits
+
+        PIXEL_FORMAT_BGGR_12 = 11,                           // BGGR 12bit pixels packed into 16bits
+
+        PIXEL_FORMAT_BGGR_14 = 12,                           // BGGR 14bit pixels packed into 16bits
+
+        PIXEL_FORMAT_BGGR_16 = 13,                           // BGGR 16bit pixels packed into 16bits
         
     } GPR_PIXEL_FORMAT;
 
@@ -131,10 +149,32 @@
         
         double                  warp_red_coefficient;
         double                  warp_blue_coefficient;
+
+        bool                    fix_vignette_radial_valid;
+        double                  fix_vignette_radial_params[5];
+        double                  fix_vignette_radial_center_h;
+        double                  fix_vignette_radial_center_v;
         
         gpr_gain_map            gain_map;
-        
+
         GPR_PIXEL_FORMAT        pixel_format;
+
+        uint32_t                default_crop_origin_h;
+        uint32_t                default_crop_origin_v;
+
+        uint32_t                default_crop_size_h;
+        uint32_t                default_crop_size_v;
+
+        bool                    denoise_enabled;    // Enable noise separation for entropy reduction
+        bool                    denoise_auto;       // Auto-enable denoise when DNG NoiseProfile is present (default true)
+        double                  denoise_strength;   // Threshold multiplier 0.0-1.0 (default 1.0)
+        bool                    variance_stabilize; // Enable Anscombe variance stabilization
+        bool                    denoise_output;     // Skip noise reconstruction on decode (actual denoising)
+        bool                    noise_replace;      // Pixel-domain noise replacement
+        bool                    ans_enabled;        // Use ANS entropy coding (replaces VLC codebook)
+        bool                    embedded_mode;      // Single-thread encode, minimal memory (for ARM SoC)
+        uint32_t                noise_seed;         // PRNG seed for noise reconstruction (set by encoder)
+        double                  noise_sigma_est[4]; // Per-channel estimated noise sigma (set by encoder)
 
     } gpr_tuning_info;
 

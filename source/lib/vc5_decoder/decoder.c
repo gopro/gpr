@@ -19,6 +19,37 @@
  */
 
 #include "headers.h"
+#include <stdio.h>
+#include <math.h>
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+
+/*! @brief Apply inverse Generalized Anscombe Transform to a component array */
+/* Noise reconstruction uses shared functions from noise_model.c */
+#include "noise_model.h"
+
+static void AnscombeInverseArray(COMPONENT_VALUE *data, DIMENSION width, DIMENSION height,
+                                 size_t pitch, double alpha, double sigma_sq)
+{
+    if (alpha <= 0.0) return;
+    double half_alpha = alpha / 2.0;
+    double offset = 3.0 / 8.0 * alpha * alpha + sigma_sq;
+    int pitch_elems = (int)(pitch / sizeof(COMPONENT_VALUE));
+
+    for (int row = 0; row < (int)height; row++)
+    {
+        COMPONENT_VALUE *row_ptr = data + row * pitch_elems;
+        for (int col = 0; col < (int)width; col++)
+        {
+            double d = (double)row_ptr[col];
+            double val = half_alpha * d;
+            val = val * val;
+            val = (val - offset) / alpha;
+            row_ptr[col] = (COMPONENT_VALUE)(val + 0.5);
+        }
+    }
+}
 
 /*!
 	@brief Align the bitstream to a byte boundary
@@ -198,6 +229,39 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
         return error;
     }
 
+    // Apply inverse variance-stabilizing transform if encoding used it (Phase B)
+    if (parameters->variance_stabilize && parameters->noise_scale > 0.0)
+    {
+        for (int ch = 0; ch < unpacked_image.component_count; ch++)
+        {
+            AnscombeInverseArray(unpacked_image.component_array_list[ch].data,
+                                unpacked_image.component_array_list[ch].width,
+                                unpacked_image.component_array_list[ch].height,
+                                unpacked_image.component_array_list[ch].pitch,
+                                parameters->noise_scale,
+                                parameters->noise_offset);
+        }
+    }
+
+    // Reconstruct and add back noise for faithful original reproduction
+    if (parameters->add_noise_back && parameters->noise_seed != 0)
+    {
+        for (int ch = 0; ch < unpacked_image.component_count && ch < 4; ch++)
+        {
+            if (parameters->noise_sigma[ch] > 0.0)
+            {
+                noise_add_to_pixels(
+                    (int32_t *)unpacked_image.component_array_list[ch].data,
+                    unpacked_image.component_array_list[ch].width,
+                    unpacked_image.component_array_list[ch].height,
+                    unpacked_image.component_array_list[ch].pitch,
+                    parameters->noise_sigma[ch],
+                    parameters->noise_seed,
+                    ch);
+            }
+        }
+    }
+
     switch (parameters->rgb_resolution) {
 
         case GPR_RGB_RESOLUTION_NONE:
@@ -212,32 +276,40 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
             break;
 
         case GPR_RGB_RESOLUTION_HALF:
+        {
+            int bits = unpacked_image.component_array_list[0].bits_per_component;
             WaveletToRGB(parameters->allocator, (PIXEL*)unpacked_image.component_array_list[0].data, (PIXEL*)unpacked_image.component_array_list[1].data, (PIXEL*)unpacked_image.component_array_list[2].data,
-                         unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / 2,
-                         rgb_image, 12, parameters->rgb_bits, &parameters->rgb_gain );
+                         unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / sizeof(COMPONENT_VALUE),
+                         rgb_image, bits, parameters->rgb_bits, &parameters->rgb_gain );
             break;
+        }
             
         case GPR_RGB_RESOLUTION_QUARTER:
-            
+        {
+            int bits = decoder.channel[0].bits_per_component;
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[0]->data[0], decoder.transform[1].wavelet[0]->data[0], decoder.transform[2].wavelet[0]->data[0],
                          decoder.transform[2].wavelet[0]->width, decoder.transform[2].wavelet[0]->height, decoder.transform[2].wavelet[0]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, bits, parameters->rgb_bits, &parameters->rgb_gain );
             break;
+        }
             
         case GPR_RGB_RESOLUTION_EIGHTH:
-            
+        {
+            int bits = decoder.channel[0].bits_per_component;
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[1]->data[0], decoder.transform[1].wavelet[1]->data[0], decoder.transform[2].wavelet[1]->data[0],
                          decoder.transform[2].wavelet[1]->width, decoder.transform[2].wavelet[1]->height, decoder.transform[2].wavelet[1]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
-            
+                         rgb_image, bits, parameters->rgb_bits, &parameters->rgb_gain );
             break;
+        }
             
         case GPR_RGB_RESOLUTION_SIXTEENTH:
-
+        {
+            int bits = decoder.channel[0].bits_per_component;
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[2]->data[0], decoder.transform[1].wavelet[2]->data[0], decoder.transform[2].wavelet[2]->data[0],
                          decoder.transform[2].wavelet[2]->width, decoder.transform[2].wavelet[2]->height, decoder.transform[2].wavelet[2]->width,
-                         rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
+                         rgb_image, bits, parameters->rgb_bits, &parameters->rgb_gain );
             break;
+        }
             
         default:
             return CODEC_ERROR_UNSUPPORTED_FORMAT;
@@ -262,7 +334,10 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
 CODEC_ERROR PrepareDecoder(DECODER *decoder, const DECODER_PARAMETERS *parameters)
 {
     CODEC_ERROR error = CODEC_ERROR_OKAY;
-    
+
+    // Initialize the uncompanding LUT (fast integer replacement for double-precision cubic)
+    InitUncompandTable();
+
     // Initialize the decoder data structure
     error = InitDecoder(decoder, &parameters->allocator);
     if (error != CODEC_ERROR_OKAY) {
@@ -554,7 +629,12 @@ CODEC_ERROR SetImageChannelParameters(DECODER *decoder, int channel_number)
     }
     
     //TODO: Is the default bits per component the correct value to use?
-    decoder->channel[channel_number].bits_per_component = codec->bits_per_component;
+    PRECISION default_bits = codec->max_bits_per_component ? codec->max_bits_per_component : codec->bits_per_component;
+    if (default_bits == 0)
+    {
+        default_bits = codec->bits_per_component;
+    }
+    decoder->channel[channel_number].bits_per_component = default_bits;
     decoder->channel[channel_number].initialized = true;
     
     return CODEC_ERROR_OKAY;
@@ -864,27 +944,30 @@ CODEC_ERROR ImageRepackingProcess(const UNPACKED_IMAGE *unpacked_image,
     {
         case PIXEL_FORMAT_RAW_RGGB_12:
         case PIXEL_FORMAT_RAW_GBRG_12:
+        case PIXEL_FORMAT_RAW_GRBG_12:
+        case PIXEL_FORMAT_RAW_BGGR_12:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 12, output_format );
             
         case PIXEL_FORMAT_RAW_RGGB_14:
         case PIXEL_FORMAT_RAW_GBRG_14:
+        case PIXEL_FORMAT_RAW_GRBG_14:
+        case PIXEL_FORMAT_RAW_BGGR_14:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 14, output_format );
             break;
             
         case PIXEL_FORMAT_RAW_RGGB_16:
+        case PIXEL_FORMAT_RAW_GBRG_16:
+        case PIXEL_FORMAT_RAW_GRBG_16:
+        case PIXEL_FORMAT_RAW_BGGR_16:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 16, output_format );
             break;
             
         default:
-            assert(0);
-            break;
+            return CODEC_ERROR_UNSUPPORTED_FORMAT;
     }
-    
-    // Unsupported output image format
-    return CODEC_ERROR_UNSUPPORTED_FORMAT;
 }
 
 /*!
@@ -1001,9 +1084,9 @@ CODEC_ERROR GetSectionNumber(TAGWORD tag, int *section_number_out)
             
         default:
             assert(0);
-            break;
+            return CODEC_ERROR_BITSTREAM_SYNTAX;
     }
-    
+
     if (section_number_out != NULL) {
         *section_number_out = section_number;
     }
@@ -1174,6 +1257,15 @@ CODEC_ERROR UpdateCodecState(DECODER *decoder, BITSTREAM *stream, TAGVALUE segme
         case CODEC_TAG_Quantization:		// Quantization applied to band
             codec->band.quantization = value;
             break;
+
+        case CODEC_TAG_BandCodingMethod:	// 0 = VLC, 1 = ANS
+            codec->band.coding_method = (uint_least8_t)value;
+            break;
+
+        case CODEC_TAG_FormatVersion:	// GPR format version (0x0200 = v2.0)
+            /* Informational only — the decoder handles features individually
+               via specific tags (BandCodingMethod, etc.) */
+            break;
             
         case CODEC_TAG_LowpassPrecision:	// Number of bits per lowpass coefficient
             if (! (PRECISION_MIN <= value && value <= PRECISION_MAX)) {
@@ -1256,6 +1348,7 @@ CODEC_ERROR UpdateCodecState(DECODER *decoder, BITSTREAM *stream, TAGVALUE segme
             if (IsPartEnabled(enabled_parts, VC5_PART_IMAGE_FORMATS))
             {
                 codec->max_bits_per_component = (PRECISION)value;
+                codec->bits_per_component = (PRECISION)value;
                 codec->header = true;
             }
             else
@@ -1519,7 +1612,7 @@ CODEC_ERROR UpdateCodecState(DECODER *decoder, BITSTREAM *stream, TAGVALUE segme
         {
             // Remember the number of bits per component in this and higher numbered channel
             decoder->channel[codec->channel_number].bits_per_component = codec->bits_per_component;
-            
+
             // Found the first codeblock in the channel
             decoder->channel[channel_number].found_first_codeblock = true;
         }
@@ -1647,10 +1740,9 @@ uint16_t GetHeaderMask(TAGWORD tag)
 #endif
             
         default:
-            assert(0);
-            break;
+            return 0;
     }
-    
+
     return header_mask;
 }
 
@@ -1768,6 +1860,12 @@ CODEC_ERROR DecodeChannelSubband(DECODER *decoder, BITSTREAM *input, size_t chun
         
         // Save the quantization factor
         wavelet->quant[band] = codec->band.quantization;
+
+        // ANS mode 2/4: negate quant to skip uncompanding in DequantizeBandRow16s
+        if (codec->band.coding_method == 2 || codec->band.coding_method == 4) {
+            wavelet->quant[band] = -wavelet->quant[band];
+            codec->band.coding_method = 0;
+        }
     }
     else
     {
@@ -1908,26 +2006,90 @@ CODEC_ERROR DecodeLowpassBand(DECODER *decoder, BITSTREAM *stream, WAVELET *wave
     lowpass_precision = codec->lowpass_precision;
     
     // Decode each row in the lowpass image
-    for (row = 0; row < lowpass_band_height; row++)
+    if (lowpass_precision == 16)
     {
-        for (column = 0; column < lowpass_band_width; column++)
+        STREAM *bytestream = stream->stream;
+
+        /* Direct memory bulk read: when the bitstream buffer is empty and
+           the underlying stream is a contiguous memory buffer, read 16-bit
+           big-endian coefficients directly from the buffer pointer.
+           This eliminates all GetBits/GetBuffer/GetWord overhead for the
+           entire lowpass band (~2500 coefficients per channel). */
+        if (stream->count == 0 &&
+            bytestream != NULL &&
+            bytestream->type == STREAM_TYPE_MEMORY)
         {
-            COEFFICIENT lowpass_value = (COEFFICIENT)GetBits(stream, lowpass_precision);
-            //assert(0 <= lowpass_value && lowpass_value <= COEFFICIENT_MAX);
-            
-            //if (lowpass_value > COEFFICIENT_MAX) {
-            //	lowpass_value = COEFFICIENT_MAX;
-            //}
-            
-            lowpass_band_ptr[column] = lowpass_value;
+            int total_pixels = lowpass_band_width * lowpass_band_height;
+            size_t bytes_needed = (size_t)total_pixels * 2;
+            uint8_t *src = (uint8_t *)bytestream->location.memory.buffer + bytestream->byte_count;
+
+            if (lowpass_band_width == lowpass_band_pitch)
+            {
+                /* Contiguous destination: convert all at once */
+                for (int i = 0; i < total_pixels; i++)
+                {
+                    /* Big-endian 16-bit unsigned -> int32_t PIXEL */
+                    lowpass_band_ptr[i] = (COEFFICIENT)((uint16_t)(src[0] << 8) | src[1]);
+                    src += 2;
+                }
+            }
+            else
+            {
+                /* Padded rows: convert row by row */
+                for (row = 0; row < lowpass_band_height; row++)
+                {
+                    for (column = 0; column < lowpass_band_width; column++)
+                    {
+                        lowpass_band_ptr[column] = (COEFFICIENT)((uint16_t)(src[0] << 8) | src[1]);
+                        src += 2;
+                    }
+                    lowpass_band_ptr += lowpass_band_pitch;
+                }
+            }
+
+            bytestream->byte_count += bytes_needed;
         }
-        
-        // Advance to the next row in the lowpass image
-        lowpass_band_ptr += lowpass_band_pitch;
+        else
+        {
+            /* Bitstream-based fast path for 16-bit precision */
+            for (row = 0; row < lowpass_band_height; row++)
+            {
+                for (column = 0; column < lowpass_band_width; column++)
+                {
+                    if (stream->count < 16)
+                    {
+                        if (stream->count == 0) {
+                            CODEC_ERROR gb_error = GetBuffer(stream);
+                            if (gb_error != CODEC_ERROR_OKAY) return gb_error;
+                        } else {
+                            lowpass_band_ptr[column] = (COEFFICIENT)GetBits(stream, 16);
+                            continue;
+                        }
+                    }
+                    lowpass_band_ptr[column] = (COEFFICIENT)(stream->buffer >> 16);
+                    stream->buffer <<= 16;
+                    stream->count -= 16;
+                }
+                lowpass_band_ptr += lowpass_band_pitch;
+            }
+        }
+    }
+    else
+    {
+        // Generic path for other precisions
+        for (row = 0; row < lowpass_band_height; row++)
+        {
+            for (column = 0; column < lowpass_band_width; column++)
+            {
+                COEFFICIENT lowpass_value = (COEFFICIENT)GetBits(stream, lowpass_precision);
+                lowpass_band_ptr[column] = lowpass_value;
+            }
+            lowpass_band_ptr += lowpass_band_pitch;
+        }
     }
     // Align the bitstream to the next tag value pair
     AlignBitsSegment(stream);
-    
+
     // Return indication of lowpass decoding success
     return error;
 }
@@ -1952,8 +2114,56 @@ CODEC_ERROR DecodeHighpassBand(DECODER *decoder, BITSTREAM *stream, WAVELET *wav
     // Encoded coefficients start on a tag boundary
     AlignBitsSegment(stream);
     
-    // Decode this subband
-    error = DecodeBandRuns(stream, decoder->codebook, wavelet->data[band], width, height, wavelet->pitch);
+    // Decode this subband (VLC or ANS depending on coding method tag)
+    if (decoder->codec.band.coding_method >= 1)
+    {
+        {
+            /* All ANS modes use Joint RLV blob format.
+               Mode 1/3: companded [0,255], uncompanded by dequantizer.
+               Mode 2/4: raw magnitudes, dequantizer skips uncompanding.
+               Mode 3/4: 4-way interleaved rANS (faster decode). */
+            AlignBitsSegment(stream);
+            uint32_t jans_size = GetBits(stream, 32);
+
+            /* Try zero-copy: get a direct pointer into the stream buffer
+               to avoid malloc + memcpy + free per band (up to 36 bands). */
+            const uint8_t *jans_ptr = NULL;
+            uint8_t *jans_buf_alloc = NULL;
+            CODEC_ERROR zc_err = GetByteArrayZeroCopy(stream, jans_size, &jans_ptr);
+            if (zc_err != CODEC_ERROR_OKAY)
+            {
+                /* Fallback: allocate and copy (e.g., file-backed stream) */
+                jans_buf_alloc = (uint8_t *)decoder->allocator->Alloc(jans_size);
+                GetByteArray(stream, jans_buf_alloc, jans_size);
+                jans_ptr = jans_buf_alloc;
+            }
+
+            int rc;
+            int cm = decoder->codec.band.coding_method;
+            if (cm >= 3)
+                rc = jans_decode_band_x4(jans_ptr, jans_size,
+                                         (int32_t *)wavelet->data[band],
+                                         width, height, wavelet->pitch);
+            else
+                rc = jans_decode_band(jans_ptr, jans_size,
+                                      (int32_t *)wavelet->data[band],
+                                      width, height, wavelet->pitch);
+            error = (rc == 0) ? CODEC_ERROR_OKAY : CODEC_ERROR_DECODING_SUBBAND;
+
+            /* Free only if we allocated (zero-copy case: nothing to free) */
+            if (jans_buf_alloc)
+                decoder->allocator->Free(jans_buf_alloc);
+        }
+
+        /* Mode 2/4 need coding_method preserved for quant negation in caller.
+           Mode 1/3 (companded) can be reset immediately. */
+        if (decoder->codec.band.coding_method == 1 || decoder->codec.band.coding_method == 3)
+            decoder->codec.band.coding_method = 0;
+    }
+    else
+    {
+        error = DecodeBandRuns(stream, decoder->codebook, wavelet->data[band], width, height, wavelet->pitch);
+    }
     assert(error == CODEC_ERROR_OKAY);
     
     // Return failure if a problem was encountered while reading the band coefficients
@@ -2012,39 +2222,70 @@ CODEC_ERROR DecodeBandRuns(BITSTREAM *stream, CODEBOOK *codebook, PIXEL *data,
     
     while (data_count > 0)
     {
-        // Get the next run length and value
-        error = GetRun(stream, codebook, &run);
+        // Get the next run length and value (fast path uses prefix lookup table)
+        error = GetRunFast(stream, codebook, &run);
         if (error != CODEC_ERROR_OKAY) {
             return error;
         }
-        
+
         // Check that the run does not extend past the end of the band
         assert(run.count <= data_count);
-        
-        // Copy the value into the specified number of pixels in the band
-        while (run.count > 0)
+
+        // Check if the entire run fits in the current row (common case)
         {
-            // Reached the end of the column?
-            if (column == width)
+            int remaining_in_row = width - column;
+
+            if ((int)run.count <= remaining_in_row)
             {
-                // Need to pad the end of the row?
-                if (row_padding > 0)
+                // FAST: run stays within current row, no boundary checks needed
+                if (run.value == 0 && run.count > 1)
                 {
-                    int count;
-                    for (count = 0; (size_t)count < row_padding; count++) {
-                        data[index++] = 0;
-                    }
+                    memset(&data[index], 0, run.count * sizeof(PIXEL));
                 }
-                
-                // Advance to the next row
-                row++;
-                column = 0;
+                else
+                {
+                    // count==1 for non-zero values and single zeros
+                    data[index] = (PIXEL)run.value;
+                }
+                index += run.count;
+                column += run.count;
+                data_count -= run.count;
+                run.count = 0;
             }
-            
-            data[index++] = (PIXEL)run.value;
-            column++;
-            run.count--;
-            data_count--;
+            else
+            {
+                // SLOW: run crosses row boundary
+                while (run.count > 0)
+                {
+                    if (column == width)
+                    {
+                        if (row_padding > 0)
+                        {
+                            memset(&data[index], 0, row_padding * sizeof(PIXEL));
+                            index += (int)row_padding;
+                        }
+                        row++;
+                        column = 0;
+                    }
+
+                    remaining_in_row = width - column;
+                    int n = ((int)run.count < remaining_in_row) ? (int)run.count : remaining_in_row;
+
+                    if (run.value == 0)
+                    {
+                        memset(&data[index], 0, n * sizeof(PIXEL));
+                    }
+                    else
+                    {
+                        for (int i = 0; i < n; i++)
+                            data[index + i] = (PIXEL)run.value;
+                    }
+                    index += n;
+                    column += n;
+                    run.count -= n;
+                    data_count -= n;
+                }
+            }
         }
     }
     
@@ -2148,6 +2389,31 @@ bool IsDecodingComplete(DECODER *decoder)
     return true;
 }
 
+/*! Thread argument for parallel inverse transform */
+typedef struct {
+	gpr_allocator *allocator;
+	WAVELET *wavelet;
+	COMPONENT_VALUE *output_data;
+	DIMENSION output_width;
+	DIMENSION output_height;
+	size_t output_pitch;
+	PRESCALE prescale;
+	CODEC_ERROR error;
+} INVERSE_THREAD_ARG;
+
+static void *InverseTransformThread(void *arg)
+{
+	INVERSE_THREAD_ARG *a = (INVERSE_THREAD_ARG *)arg;
+	a->error = TransformInverseSpatialQuantArray(a->allocator,
+	                                              a->wavelet,
+	                                              a->output_data,
+	                                              a->output_width,
+	                                              a->output_height,
+	                                              a->output_pitch,
+	                                              a->prescale);
+	return NULL;
+}
+
 /*!
 	@brief Perform the final wavelet transform in each channel to compute the component arrays
 	Each channel is decoded and the lowpass and highpass bands are used to reconstruct the
@@ -2183,42 +2449,74 @@ CODEC_ERROR ReconstructUnpackedImage(DECODER *decoder, UNPACKED_IMAGE *image)
     image->component_count = 0;
     memset(image->component_array_list, 0, size);
     
+    // Phase 1: Allocate all component arrays (sequential, uses allocator)
     for (channel_number = 0; channel_number < channel_count; channel_number++)
     {
-        // Get the dimensions of this channel
         DIMENSION channel_width = decoder->channel[channel_number].width;
         DIMENSION channel_height = decoder->channel[channel_number].height;
         PRECISION bits_per_component = decoder->channel[channel_number].bits_per_component;
-        
-        // Amount of prescaling applied to the component array values before encoding
-        PRESCALE prescale = decoder->codec.prescale_table[0];
-        
-        // Allocate the component array for this channel
+
         error = AllocateComponentArray(allocator,
                                        &image->component_array_list[channel_number],
                                        channel_width,
                                        channel_height,
                                        bits_per_component);
-        
-        if (error != CODEC_ERROR_OKAY) {
-            return error;
-        }
-        
-        error = TransformInverseSpatialQuantArray(allocator,
-                                                  decoder->transform[channel_number].wavelet[0],
-                                                  image->component_array_list[channel_number].data,
-                                                  channel_width,
-                                                  channel_height,
-                                                  image->component_array_list[channel_number].pitch,
-                                                  prescale);
         if (error != CODEC_ERROR_OKAY) {
             return error;
         }
     }
+
+    // Phase 2: Run inverse transforms in parallel (one thread per channel)
+    {
+        PRESCALE prescale = decoder->codec.prescale_table[0];
+        INVERSE_THREAD_ARG thread_args[MAX_CHANNEL_COUNT];
+#ifndef _WIN32
+        pthread_t threads[MAX_CHANNEL_COUNT];
+#endif
+        int thread_created[MAX_CHANNEL_COUNT];
+
+        for (channel_number = 0; channel_number < channel_count; channel_number++)
+        {
+            thread_args[channel_number].allocator    = allocator;
+            thread_args[channel_number].wavelet      = decoder->transform[channel_number].wavelet[0];
+            thread_args[channel_number].output_data   = image->component_array_list[channel_number].data;
+            thread_args[channel_number].output_width  = decoder->channel[channel_number].width;
+            thread_args[channel_number].output_height = decoder->channel[channel_number].height;
+            thread_args[channel_number].output_pitch  = image->component_array_list[channel_number].pitch;
+            thread_args[channel_number].prescale      = prescale;
+            thread_args[channel_number].error         = CODEC_ERROR_OKAY;
+
+#ifndef _WIN32
+            thread_created[channel_number] = (pthread_create(&threads[channel_number], NULL,
+                                                              InverseTransformThread,
+                                                              &thread_args[channel_number]) == 0);
+            if (!thread_created[channel_number])
+#endif
+            {
+                // Windows or thread creation failed: run inline
+                InverseTransformThread(&thread_args[channel_number]);
+            }
+        }
+
+        // Wait for all threads to complete
+        for (channel_number = 0; channel_number < channel_count; channel_number++)
+        {
+#ifndef _WIN32
+            if (thread_created[channel_number])
+                pthread_join(threads[channel_number], NULL);
+#endif
+
+            if (thread_args[channel_number].error != CODEC_ERROR_OKAY)
+                error = thread_args[channel_number].error;
+        }
+
+        if (error != CODEC_ERROR_OKAY)
+            return error;
+    }
     
     // One component array is output by the decoding process per channel in the bitstream
     image->component_count = channel_count;
-    
+
     TIMESTAMP("[END]", 2)
     
     return error;
@@ -2306,5 +2604,3 @@ CODEC_ERROR ReconstructSampleFrame(DECODER *decoder, IMAGE image_array[], int fr
     return ComposeFields(image_array, frame_count, output_image);
 }
 #endif
-
-

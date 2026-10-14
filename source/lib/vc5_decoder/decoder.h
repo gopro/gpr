@@ -328,7 +328,17 @@ extern "C" {
 #endif
     
     CODEC_ERROR TransformInverseSpatialQuantBuffer(DECODER *decoder, void *output_buffer, DIMENSION output_width, DIMENSION output_pitch);
-    
+
+    /* Fast parallel decoder: drop-in replacement for DecodeImage */
+    CODEC_ERROR DecodeFastImage(const uint8_t *vc5_buf, size_t vc5_size,
+                                IMAGE *packed_image, RGB_IMAGE *rgb_image,
+                                DECODER_PARAMETERS *parameters);
+
+    /* Direct GPR decode: bypass DNG SDK for maximum speed */
+    int gpr_fast_decode(const uint8_t *gpr_data, size_t gpr_size,
+                        void **raw_output, size_t *raw_size,
+                        int pixel_format);
+
 #ifdef __cplusplus
 }
 #endif

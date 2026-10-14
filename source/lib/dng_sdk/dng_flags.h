@@ -193,7 +193,13 @@
 /// 1 if target platform has thread support and threadsafe libraries, 0 otherwise.
 
 #ifndef qDNGThreadSafe
+/* Adobe's default excluded Linux even though this SDK includes a pthread
+   mutex backend. Tile-read parallelism needs a real mutex for fNextTileIndex. */
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+#define qDNGThreadSafe 1
+#else
 #define qDNGThreadSafe (qMacOS || qWinOS)
+#endif
 #endif
 
 /*****************************************************************************/
