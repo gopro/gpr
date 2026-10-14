@@ -4,7 +4,7 @@ set( LIB_NAME vc5_decoder )
 # get source files
 set(SRC_FILES
   codebooks.c component.c decoder.c dequantize.c fast_decode.c fast_gpr.c
-  inverse.c parameters.c raw.c
+  fused_decode.c fused_stream_decode.c inverse.c parameters.c raw.c
   syntax.c vc5_decoder.c vlc.c wavelet.c)
 
 # get include files

@@ -3,10 +3,15 @@ set( LIB_NAME vc5_encoder )
 
 # get source files
 set(SRC_FILES
-  codebooks.c component.c denoise.c encoder.c forward.c
+  codebooks.c component.c denoise.c encoder.c forward.c fused_encode.c
   parameters.c raw.c sections.c syntax.c vc5_encoder.c vlc.c)
 # get include files
 file( GLOB INC_FILES "*.h" )
+
+# The assembly file preprocesses to an empty unit on non-ARM targets.
+list(APPEND SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/fused_encode_arm64.S")
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/fused_encode_arm64.S"
+    PROPERTIES LANGUAGE C)
 
 # add include files from other folders
 include_directories( "../vc5_common" )
