@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="420" viewBox="0 0 1180 420" role="img" aria-labelledby="title desc">
+  <title id="title">CNN and SR improvement evidence</title>
+  <desc id="desc">A chart showing 1x still/video CNN production status and Mission 1 2x SR improvement on broad holdouts.</desc>
+  <rect width="1180" height="420" fill="#fbfbfd"/>
+  <text x="48" y="58" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#111827">CNN restore and 2x raw reconstruction</text>
+  <text x="48" y="92" font-family="Inter, Arial, sans-serif" font-size="16" fill="#4b5563">The 1x still/video CNNs stay gate-passing. The 2x Mission native12 SR path is offline/review and improves broad full-frame raw metrics.</text>
+  <g transform="translate(72 128)">
+    <rect x="0" y="0" width="300" height="218" rx="8" fill="#111827"/>
+    <text x="24" y="42" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700" fill="#ffffff">1x CNN</text>
+    <text x="24" y="78" font-family="Inter, Arial, sans-serif" font-size="16" fill="#d1d5db">STILL + VIDEO_FREEZE</text>
+    <text x="24" y="128" font-family="Inter, Arial, sans-serif" font-size="46" font-weight="800" fill="#22c55e">PASS</text>
+    <text x="24" y="170" font-family="Inter, Arial, sans-serif" font-size="14" fill="#d1d5db">No retrain needed for the current gate.</text>
+  </g>
+  <g transform="translate(430 128)">
+    <text x="0" y="22" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700" fill="#111827">Mission 2x SR broad holdout</text>
+    <text x="0" y="52" font-family="Inter, Arial, sans-serif" font-size="13" fill="#6b7280">Focused hardrows candidate, 8 Mission full frames</text>
+    <line x1="0" y1="196" x2="610" y2="196" stroke="#d1d5db" stroke-width="2"/>
+    <g>
+      <rect x="0" y="78" width="517" height="34" rx="5" fill="#2563eb"/>
+      <text x="532" y="101" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">51.7% mean RMSE lift</text>
+    </g>
+    <g>
+      <rect x="0" y="126" width="363" height="34" rx="5" fill="#7c3aed"/>
+      <text x="378" y="149" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">36.3% mean MAE lift</text>
+    </g>
+    <g>
+      <rect x="0" y="174" width="182" height="34" rx="5" fill="#0f766e"/>
+      <text x="197" y="197" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">18.2% mean gradient lift</text>
+    </g>
+  </g>
+  <g transform="translate(72 372)" font-family="Inter, Arial, sans-serif" font-size="13" fill="#6b7280">
+    <text x="0" y="0">Dashboard: current_goal_cnn_1x2x_review_20260618. 2x SR is offline/review; median full-frame throughput is about 2.6 fps with write on the recorded Mac/MPS receipt.</text>
+  </g>
+</svg>
