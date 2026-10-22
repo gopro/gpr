@@ -2393,7 +2393,7 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
                 PIXEL* start = rowptr + index;
                 PIXEL* end   = rowptr + width;
                 
-                for (; *(start) == 0 && start != end; start++)
+                for (; start != end && *(start) == 0; start++)
                 {
                     
                 }
