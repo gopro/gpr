@@ -2013,7 +2013,7 @@ CODEC_ERROR DecodeBandRuns(BITSTREAM *stream, CODEBOOK *codebook, PIXEL *data,
     while (data_count > 0)
     {
         // Get the next run length and value
-        error = GetRun(stream, codebook, &run);
+        error = GetRunFast(stream, codebook, &run);
         if (error != CODEC_ERROR_OKAY) {
             return error;
         }
@@ -2021,30 +2021,59 @@ CODEC_ERROR DecodeBandRuns(BITSTREAM *stream, CODEBOOK *codebook, PIXEL *data,
         // Check that the run does not extend past the end of the band
         assert(run.count <= data_count);
         
-        // Copy the value into the specified number of pixels in the band
-        while (run.count > 0)
+        // Most runs remain within one row, so handle that without a boundary
+        // check for every coefficient.
         {
-            // Reached the end of the column?
-            if (column == width)
+            int remaining_in_row = width - column;
+
+            if ((int)run.count <= remaining_in_row)
             {
-                // Need to pad the end of the row?
-                if (row_padding > 0)
+                if (run.value == 0 && run.count > 1)
                 {
-                    int count;
-                    for (count = 0; (size_t)count < row_padding; count++) {
-                        data[index++] = 0;
-                    }
+                    memset(&data[index], 0, run.count * sizeof(PIXEL));
                 }
-                
-                // Advance to the next row
-                row++;
-                column = 0;
+                else
+                {
+                    data[index] = (PIXEL)run.value;
+                }
+                index += run.count;
+                column += run.count;
+                data_count -= run.count;
             }
-            
-            data[index++] = (PIXEL)run.value;
-            column++;
-            run.count--;
-            data_count--;
+            else
+            {
+                while (run.count > 0)
+                {
+                    if (column == width)
+                    {
+                        if (row_padding > 0)
+                        {
+                            memset(&data[index], 0, row_padding * sizeof(PIXEL));
+                            index += (int)row_padding;
+                        }
+                        row++;
+                        column = 0;
+                    }
+
+                    remaining_in_row = width - column;
+                    int count = ((int)run.count < remaining_in_row) ? (int)run.count : remaining_in_row;
+
+                    if (run.value == 0)
+                    {
+                        memset(&data[index], 0, count * sizeof(PIXEL));
+                    }
+                    else
+                    {
+                        int i;
+                        for (i = 0; i < count; i++)
+                            data[index + i] = (PIXEL)run.value;
+                    }
+                    index += count;
+                    column += count;
+                    run.count -= count;
+                    data_count -= count;
+                }
+            }
         }
     }
     
