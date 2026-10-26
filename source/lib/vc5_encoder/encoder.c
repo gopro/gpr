@@ -2299,35 +2299,6 @@ STATIC_INLINE VLE PutBitsCore(uint8_t** buffer, VLE stream_bits, uint32_t bits, 
     return stream_bits;
 }
 
-STATIC_INLINE VLE PutBitsCoreWithSign(uint8_t** buffer, VLE stream_bits, uint32_t bits, uint_fast8_t size, bool positive )
-{
-    stream_bits = PutBitsCore( buffer, stream_bits, bits, size );
-    
-    BITCOUNT unused_bit_count = bit_word_count - stream_bits.size;
-    
-    if ( unused_bit_count == 0 )
-    {
-        write_bits(buffer, stream_bits.bits);
-        *buffer += 4;
-        
-        stream_bits.size = 1;
-        
-        if( positive == false )
-            stream_bits.bits = 1 << (bit_word_count - 1);
-        else
-            stream_bits.bits = 0;
-    }
-    else
-    {
-        stream_bits.size += 1;
-        
-        if( positive == false )
-            stream_bits.bits |= (1 << (unused_bit_count - 1));
-    }
-    
-    return stream_bits;
-}
-
 /*!
 	@brief Encode the highpass band from the bitstream
 
@@ -2393,7 +2364,7 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
                 PIXEL* start = rowptr + index;
                 PIXEL* end   = rowptr + width;
                 
-                for (; *(start) == 0 && start != end; start++)
+                for (; start != end && *(start) == 0; start++)
                 {
                     
                 }
@@ -2437,7 +2408,12 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
                     
                     PIXEL abs_value = minimum( abs(value), mags_table_length_minus_1 );
                     
-                    stream_bits = PutBitsCoreWithSign(&stream_buffer, stream_bits, mags_table_entry[abs_value].bits, mags_table_entry[abs_value].size, value > 0 );
+                    VLE magnitude = mags_table_entry[abs_value];
+                    assert(magnitude.size < bit_word_count);
+                    stream_bits = PutBitsCore(&stream_buffer,
+                                              stream_bits,
+                                              (magnitude.bits << 1) | (value < 0),
+                                              magnitude.size + 1);
 				}
 			}
 

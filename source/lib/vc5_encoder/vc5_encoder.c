@@ -20,6 +20,8 @@
 
 #include "headers.h"
 
+#include <stdint.h>
+
 void vc5_encoder_parameters_set_default(vc5_encoder_parameters* encoding_parameters)
 {
     encoding_parameters->enabled_parts      = VC5_ENABLED_PARTS;
@@ -45,7 +47,21 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
     
     STREAM bitstream_file;
     
-    const int max_vc5_buffer_size = 10000000;
+    const size_t buffer_margin = 1024 * 1024;
+    size_t max_vc5_buffer_size;
+
+    if (encoding_parameters == NULL || encoding_parameters->mem_alloc == NULL ||
+        raw_buffer == NULL || raw_buffer->buffer == NULL || vc5_buffer == NULL ||
+        raw_buffer->size > SIZE_MAX - (raw_buffer->size / 2) - buffer_margin)
+    {
+        return CODEC_ERROR_BAD_ARGUMENT;
+    }
+
+    /*
+     * A fixed 10 MB buffer is too small for full-resolution camera frames.
+     * Keep enough headroom for incompressible input and container overhead.
+     */
+    max_vc5_buffer_size = raw_buffer->size + (raw_buffer->size / 2) + buffer_margin;
 
     // Initialize the data structure for passing parameters to the encoder
     InitEncoderParameters(&parameters);
@@ -134,6 +150,10 @@ CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_paramet
 #endif
     
     vc5_buffer->buffer = encoding_parameters->mem_alloc( max_vc5_buffer_size );
+    if (vc5_buffer->buffer == NULL)
+    {
+        return CODEC_ERROR_OUTOFMEMORY;
+    }
     
     // Open a stream to the output file
     error = CreateStreamBuffer(&bitstream_file, vc5_buffer->buffer, max_vc5_buffer_size );

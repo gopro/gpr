@@ -8,6 +8,32 @@ set(CMAKE_C_FLAGS "-std=c99")
 # project name
 project( gpr )
 
+# AArch64 always provides Advanced SIMD.  Enable the encoder's existing NEON
+# paths automatically on camera-class ARM64 targets while retaining an
+# explicit switch for cross builds and bit-exact comparisons.
+set(NEON_DEFAULT OFF)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$")
+  set(NEON_DEFAULT ON)
+endif()
+option(NEON "Enable ARM NEON intrinsics" ${NEON_DEFAULT})
+
+if(NEON)
+  add_definitions(-DNEON=1)
+else()
+  add_definitions(-DNEON=0)
+endif()
+
+option(GPR_ENABLE_IPO "Enable interprocedural optimization in release builds" ON)
+if(GPR_ENABLE_IPO AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug" AND
+   NOT CMAKE_VERSION VERSION_LESS 3.9)
+  cmake_policy(SET CMP0069 NEW)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT GPR_IPO_SUPPORTED OUTPUT GPR_IPO_ERROR)
+  if(GPR_IPO_SUPPORTED)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+  endif()
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
   execute_process(
     COMMAND git rev-parse --abbrev-ref HEAD
