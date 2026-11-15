@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <vector>
 
 #include "argument_parser.h"
 
@@ -53,6 +54,8 @@ public:
     int     input_height;
 
     int     input_pitch;
+    int     quality;
+    bool    no_preview;
     
     int     input_skip_rows;
     
@@ -91,6 +94,8 @@ public:
         ("DumpGprParameters,d",                             dump_gpr_parameters,                        false,                  "Dump GPR parameters to standard output")
 
         ("InputSkipRows,s",                                 input_skip_rows,                            0,                      "Input image rows to skip")
+        ("quality,q",                                       quality,                                    -1,                     "Stock GPR quality preset 0..5 (default: legacy Q3, or Q1 with fast_encoding)")
+        ("no-preview",                                      no_preview,                                 false,                  "Omit the JPEG preview and its RGB computation")
 
         ("InputFilePath,i",                                 input_file_path,                            string(""),             "Input file path.\n(files types: GPR, DNG, RAW)")
         
@@ -98,9 +103,9 @@ public:
         
         ("InputHeight,h",                                   input_height,                               3000,                   "Input image height in pixel samples [3000]")
 
-        ("InputPitch,p",                                    input_pitch,                                8000,                   "Input image pitch in bytes [8000]")
+        ("InputPitch,p",                                    input_pitch,                                -1,                     "Input row pitch in bytes (default: derive from width and format)")
         
-        ("InputPixelFormat,x",                              input_pixel_format,                         string("rggb14"),       "Input pixel format \n(rggb12, rggb12p, [rggb14], gbrg12, gbrg12p)")
+        ("InputPixelFormat,x",                              input_pixel_format,                         string("rggb14"),       "Input Bayer format: rggb/gbrg/grbg/bggr with 12,14,16; packed rggb12p/gbrg12p (default rggb14)")
         
         ("ApplyGprParameters,a",                            apply_gpr_parameters,                       string(""),             "Parameters to use for GPR or DNG file.")
         
@@ -137,13 +142,29 @@ int dng_dump(const char*  input_file_path)
     {
         gpr_parameters_print( &params, NULL );
     }
-    
-    return 0;
+    gpr_parameters_destroy(&params, allocator.Free);
+    allocator.Free(input_buffer.buffer);
+    return success ? 0 : -1;
 }
 
 int main(int argc, char *argv [])
 {
     my_argument_parser args;
+    // The legacy parser treats long options without '=' as booleans. Give
+    // this numeric option normal --quality N behavior and reject bad values.
+    char quality_flag[] = "-q";
+    std::vector<char *> normalized(argv,argv+argc);
+    for (int i=1;i<argc;++i) {
+        const char *value = NULL;
+        if (!strcmp(argv[i],"-q") || !strcmp(argv[i],"--quality")) {
+            if (i+1==argc) { fprintf(stderr,"Quality requires a preset 0..5\n"); return 1; }
+            normalized[i]=quality_flag;
+            value=argv[++i];
+        } else if (!strncmp(argv[i],"--quality=",10)) value=argv[i]+10;
+        if (value && (strlen(value)!=1 || value[0]<'0' || value[0]>'5')) {
+            fprintf(stderr,"Quality must be a stock preset 0..5\n"); return 1;
+        }
+    }
     
     
     char zerotag[MAX_STDOUT_LINE];
@@ -152,7 +173,7 @@ int main(int argc, char *argv [])
     char line[MAX_STDOUT_LINE];
     sprintf( line, "GPR Tools Version %d.%d.%d [%s @ %s] ", GPR_VERSION_MAJOR, GPR_VERSION_MINOR, GPR_VERSION_REVISION, GIT_BRANCH, GIT_COMMIT_HASH );
     
-    if( args.parse(argc, argv, line, zerotag) )
+    if( args.parse(argc, normalized.data(), line, zerotag) )
     {
         printf("\n");
         printf("-- Example Commnads (please see data/tests/run_tests.sh for more examples) --\n");
@@ -195,7 +216,7 @@ int main(int argc, char *argv [])
     {
         return dng_convert_main(args.input_file_path.c_str(), args.input_width, args.input_height, args.input_pitch, args.input_skip_rows, args.input_pixel_format.c_str(),
                                 args.output_file_path.c_str(), args.apply_gpr_parameters.c_str(), args.gpmf_file_path.c_str(), args.rgb_file_resolution.c_str(), args.rgb_file_bits,
-                                args.jpg_preview_file_path.c_str(), args.jpg_preview_file_width, args.jpg_preview_file_height );
+                                args.jpg_preview_file_path.c_str(), args.jpg_preview_file_width, args.jpg_preview_file_height, args.quality, !args.no_preview );
     }
     
     return 0;

@@ -66,7 +66,7 @@ gpr_image_writer::~gpr_image_writer()
 }
 
 
-void gpr_image_writer::EncodeVc5Image()
+bool gpr_image_writer::EncodeVc5Image(bool thumbnail)
 {
     if( _vc5_buffer->is_valid() == false )
     {
@@ -74,13 +74,16 @@ void gpr_image_writer::EncodeVc5Image()
         gpr_buffer raw_image = { _raw_buffer->get_buffer(), _raw_buffer->get_size() };
         gpr_buffer vc5_image = { _vc5_buffer->get_buffer(), _vc5_buffer->get_size() };
         
-        if( vc5_encoder_process( &vc5_encoder_params, &raw_image, &vc5_image, &_rgb_thumbnail ) != CODEC_ERROR_OKAY )
+        if( vc5_encoder_process( &vc5_encoder_params, &raw_image, &vc5_image,
+                                thumbnail ? &_rgb_thumbnail : NULL ) != CODEC_ERROR_OKAY )
         {
-            assert(0);
+            if (vc5_image.buffer) vc5_encoder_params.mem_free(vc5_image.buffer);
+            return false;
         }
         
         _vc5_buffer->set( vc5_image.buffer, vc5_image.size, true );
     }
+    return true;
 }
 
 void gpr_image_writer::WriteImage (dng_host &host,

@@ -85,8 +85,9 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
             RG -= midpoint;
             BG -= midpoint;
             
-            R = (RG << 1) + GS;
-            B = (BG << 1) + GS;
+            // Differences may be negative; signed left shift is undefined in C.
+            R = RG * 2 + GS;
+            B = BG * 2 + GS;
             G1 = GS + GD;
             G2 = GS - GD;
             
@@ -110,6 +111,7 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
             {
                 case PIXEL_FORMAT_RAW_RGGB_12:
                 case PIXEL_FORMAT_RAW_RGGB_14:
+                case PIXEL_FORMAT_RAW_RGGB_16:
                     output_row1_ptr[2 * column + 0] = (uint16_t)R;
                     output_row1_ptr[2 * column + 1] = (uint16_t)G1;
                     output_row2_ptr[2 * column + 0] = (uint16_t)G2;
@@ -118,12 +120,29 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
                     
                 case PIXEL_FORMAT_RAW_GBRG_12:
                 case PIXEL_FORMAT_RAW_GBRG_14:
+                case PIXEL_FORMAT_RAW_GBRG_16:
                     output_row1_ptr[2 * column + 0] = (uint16_t)G1;
                     output_row1_ptr[2 * column + 1] = (uint16_t)B;
                     output_row2_ptr[2 * column + 0] = (uint16_t)R;
                     output_row2_ptr[2 * column + 1] = (uint16_t)G2;
                     break;
                     
+                case PIXEL_FORMAT_RAW_GRBG_12:
+                case PIXEL_FORMAT_RAW_GRBG_14:
+                case PIXEL_FORMAT_RAW_GRBG_16:
+                    output_row1_ptr[2 * column + 0] = (uint16_t)G1;
+                    output_row1_ptr[2 * column + 1] = (uint16_t)R;
+                    output_row2_ptr[2 * column + 0] = (uint16_t)B;
+                    output_row2_ptr[2 * column + 1] = (uint16_t)G2;
+                    break;
+                case PIXEL_FORMAT_RAW_BGGR_12:
+                case PIXEL_FORMAT_RAW_BGGR_14:
+                case PIXEL_FORMAT_RAW_BGGR_16:
+                    output_row1_ptr[2 * column + 0] = (uint16_t)B;
+                    output_row1_ptr[2 * column + 1] = (uint16_t)G1;
+                    output_row2_ptr[2 * column + 0] = (uint16_t)G2;
+                    output_row2_ptr[2 * column + 1] = (uint16_t)R;
+                    break;
                 default:
                     assert(0);
                     break;

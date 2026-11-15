@@ -1,0 +1,16 @@
+Experimental stock RAW-media package: @GPR_PACKAGE_VERSION@
+Source revision hint: @GPR_SOURCE_REVISION@
+Source snapshot SHA-256: @GPR_SOURCE_DIGEST@
+Components: @GPR_PACKAGE_COMPONENTS@
+Platform: @CMAKE_SYSTEM_NAME@ @CMAKE_SYSTEM_PROCESSOR@
+C compiler: @CMAKE_C_COMPILER_ID@ @CMAKE_C_COMPILER_VERSION@
+C++ compiler: @CMAKE_CXX_COMPILER_ID@ @CMAKE_CXX_COMPILER_VERSION@
+Build type: @CMAKE_BUILD_TYPE@
+IPO requested: @GPR_ENABLE_IPO@
+IPO enabled: @CMAKE_INTERPROCEDURAL_OPTIMIZATION@
+NEON: @NEON@
+Parallel encoder channels requested: @GPR_ENABLE_PARALLEL_CHANNELS@
+Parallel encoder unpack requested: @GPR_ENABLE_PARALLEL_UNPACK@
+Optional MOV tool: @GPR_BUILD_MOV_TOOLS@ (external FFmpeg shared libraries when enabled)
+Optional RAW/ProRes renderer: @GPR_BUILD_RENDER_TOOLS@ (macOS system frameworks when enabled)
+Optional audio/timecode attachment: caller-selected ffmpeg/ffprobe executables; timecode also needs the updated gpr_mov tool

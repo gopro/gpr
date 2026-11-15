@@ -101,6 +101,9 @@ typedef struct _decoder_parameters
     int                         rgb_bits;
     
     gpr_rgb_gain                rgb_gain;
+
+    /* Internal reduced-preview mode: decode one GS/RG/BG wavelet channel. */
+    int                         wavelet_channel;
     
     gpr_allocator allocator;
     

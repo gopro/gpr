@@ -153,19 +153,22 @@ int main(int argc, char *argv[])
     { // Decode all frames
 
         gpr_buffer raw_image = { NULL, 0  };
-        gpr_rgb_buffer rgb_image = { NULL, 0, 0, 0  };
 
         StartTimer(&timer);
         
         LogPrint("%d ", i);
         
-        vc5_decoder_process( &vc5_decoder_params, &vc5_image, &raw_image, &rgb_image );
+        CODEC_ERROR decode_error = vc5_decoder_process( &vc5_decoder_params, &vc5_image, &raw_image, NULL );
         
         StopTimer(&timer);
         
         fflush(stdout);
 
-        assert( raw_image.buffer && raw_image.size > 0 );
+        if( decode_error != CODEC_ERROR_OKAY || !raw_image.buffer || !raw_image.size )
+        {
+            LogPrint("VC-5 decode failed: %d", decode_error);
+            return -1;
+        }
 
         if( write_to_file( &raw_image, args.output_file_path.c_str() ) )
         {
@@ -178,10 +181,6 @@ int main(int argc, char *argv[])
             vc5_decoder_params.mem_free(raw_image.buffer);
         }
         
-        if( rgb_image.buffer )
-        {
-            vc5_decoder_params.mem_free(rgb_image.buffer);
-        }
     }
     
     LogPrint("Decoding %.3f secs per frame", TimeSecs(&timer) / DECODER_RUN_COUNT );

@@ -164,6 +164,19 @@ CODEC_ERROR DecodeStream(STREAM *stream, UNPACKED_IMAGE *unpacked_image, const D
 	may be available to the decoder from the media container or an external
 	application.
  */
+static bool RGBWaveletsReady(const DECODER *decoder,int level)
+{
+    int channel;
+    if (decoder->codec.channel_count < 3 || level < 0 || level >= decoder->wavelet_count)
+        return false;
+    for (channel=0;channel<3;++channel) {
+        WAVELET *wavelet=decoder->transform[channel].wavelet[level];
+        if (!wavelet || !wavelet->data[0] || !wavelet->width || !wavelet->height || !wavelet->pitch ||
+            !(wavelet->valid_band_mask & 1)) return false;
+    }
+    return true;
+}
+
 CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_image, DECODER_PARAMETERS *parameters)
 {
     CODEC_ERROR error = CODEC_ERROR_OKAY;
@@ -195,47 +208,82 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
     
     if( error != CODEC_ERROR_OKAY )
     {
+        ReleaseComponentArrays(&parameters->allocator,&unpacked_image,unpacked_image.component_count);
+        ReleaseDecoder(&decoder);
+        ReleaseBitstream(&bitstream);
         return error;
     }
 
-    switch (parameters->rgb_resolution) {
+    if (parameters->wavelet_channel >= 0) {
+        int level = parameters->rgb_resolution == GPR_RGB_RESOLUTION_QUARTER ? 0 :
+            (parameters->rgb_resolution == GPR_RGB_RESOLUTION_EIGHTH ? 1 : 2);
+        WAVELET *wavelet = decoder.transform[parameters->wavelet_channel].wavelet[level];
+        if (!wavelet || !wavelet->data[0] || !(wavelet->valid_band_mask & BandValidMask(0)) ||
+            wavelet->width <= 0 || wavelet->height <= 0 ||
+            (size_t)wavelet->width > SIZE_MAX / (size_t)wavelet->height / sizeof(PIXEL)) {
+            error = CODEC_ERROR_BITSTREAM_SYNTAX;
+        } else {
+            size_t row_bytes = (size_t)wavelet->width * sizeof(PIXEL);
+            size_t size = row_bytes * (size_t)wavelet->height;
+            rgb_image->buffer = parameters->allocator.Alloc(size);
+            if (!rgb_image->buffer) {
+                error = CODEC_ERROR_OUTOFMEMORY;
+            } else {
+                rgb_image->width = wavelet->width;
+                rgb_image->height = wavelet->height;
+                rgb_image->pitch = wavelet->width;
+                rgb_image->size = size;
+                for (DIMENSION y = 0; y < wavelet->height; ++y)
+                    memcpy((uint8_t *)rgb_image->buffer + (size_t)y * row_bytes,
+                           (uint8_t *)wavelet->data[0] + (size_t)y * wavelet->pitch,
+                           row_bytes);
+            }
+        }
+    } else switch (parameters->rgb_resolution) {
 
         case GPR_RGB_RESOLUTION_NONE:
             // The dimensions and format for the output of the image packing process
             SetOutputImageFormat(&decoder, parameters, &packed_width, &packed_height, &packed_format);
 
             // Allocate the image buffer for output of the image packing process
-            AllocImage(decoder.allocator, packed_image, packed_width, packed_height, packed_format);
+            error=AllocImage(decoder.allocator, packed_image, packed_width, packed_height, packed_format);
+            if (error != CODEC_ERROR_OKAY) break;
             
             // Pack the component arrays into the output image
-            ImageRepackingProcess(&unpacked_image, packed_image, parameters);
+            error=ImageRepackingProcess(&unpacked_image, packed_image, parameters);
             break;
 
         case GPR_RGB_RESOLUTION_HALF:
+            if (!unpacked_image.component_array_list || unpacked_image.component_count < 3) {
+                error=CODEC_ERROR_BITSTREAM_SYNTAX;break;
+            }
             WaveletToRGB(parameters->allocator, (PIXEL*)unpacked_image.component_array_list[0].data, (PIXEL*)unpacked_image.component_array_list[1].data, (PIXEL*)unpacked_image.component_array_list[2].data,
                          unpacked_image.component_array_list[2].width, unpacked_image.component_array_list[2].height, unpacked_image.component_array_list[2].pitch / 2,
                          rgb_image, 12, parameters->rgb_bits, &parameters->rgb_gain );
             break;
             
         case GPR_RGB_RESOLUTION_QUARTER:
+            if (!RGBWaveletsReady(&decoder,0)) {error=CODEC_ERROR_BITSTREAM_SYNTAX;break;}
             
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[0]->data[0], decoder.transform[1].wavelet[0]->data[0], decoder.transform[2].wavelet[0]->data[0],
-                         decoder.transform[2].wavelet[0]->width, decoder.transform[2].wavelet[0]->height, decoder.transform[2].wavelet[0]->width,
+                         decoder.transform[2].wavelet[0]->width, decoder.transform[2].wavelet[0]->height, decoder.transform[2].wavelet[0]->pitch / sizeof(PIXEL),
                          rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
             break;
             
         case GPR_RGB_RESOLUTION_EIGHTH:
+            if (!RGBWaveletsReady(&decoder,1)) {error=CODEC_ERROR_BITSTREAM_SYNTAX;break;}
             
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[1]->data[0], decoder.transform[1].wavelet[1]->data[0], decoder.transform[2].wavelet[1]->data[0],
-                         decoder.transform[2].wavelet[1]->width, decoder.transform[2].wavelet[1]->height, decoder.transform[2].wavelet[1]->width,
+                         decoder.transform[2].wavelet[1]->width, decoder.transform[2].wavelet[1]->height, decoder.transform[2].wavelet[1]->pitch / sizeof(PIXEL),
                          rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
             
             break;
             
         case GPR_RGB_RESOLUTION_SIXTEENTH:
+            if (!RGBWaveletsReady(&decoder,2)) {error=CODEC_ERROR_BITSTREAM_SYNTAX;break;}
 
             WaveletToRGB(parameters->allocator, decoder.transform[0].wavelet[2]->data[0], decoder.transform[1].wavelet[2]->data[0], decoder.transform[2].wavelet[2]->data[0],
-                         decoder.transform[2].wavelet[2]->width, decoder.transform[2].wavelet[2]->height, decoder.transform[2].wavelet[2]->width,
+                         decoder.transform[2].wavelet[2]->width, decoder.transform[2].wavelet[2]->height, decoder.transform[2].wavelet[2]->pitch / sizeof(PIXEL),
                          rgb_image, 14, parameters->rgb_bits, &parameters->rgb_gain );
             break;
             
@@ -243,6 +291,8 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
             return CODEC_ERROR_UNSUPPORTED_FORMAT;
             break;
     }
+    if (error == CODEC_ERROR_OKAY && parameters->rgb_resolution != GPR_RGB_RESOLUTION_NONE && !rgb_image->buffer)
+        error=CODEC_ERROR_OUTOFMEMORY;
     
     ReleaseComponentArrays( &parameters->allocator, &unpacked_image, unpacked_image.component_count );
     
@@ -252,7 +302,7 @@ CODEC_ERROR DecodeImage(STREAM *stream, IMAGE *packed_image, RGB_IMAGE *rgb_imag
     // Release any resources allocated by the bitstream
     ReleaseBitstream(&bitstream);
     
-    return CODEC_ERROR_OKAY;
+    return error;
 }
 
 /*!
@@ -302,6 +352,7 @@ CODEC_ERROR PrepareDecoder(DECODER *decoder, const DECODER_PARAMETERS *parameter
 #endif
     
     decoder->subbands_to_decode = MAX_SUBBAND_COUNT;
+    decoder->wavelet_channel = parameters->wavelet_channel;
     
     return error;
 }
@@ -323,6 +374,9 @@ CODEC_ERROR DecodingProcess(DECODER *decoder, BITSTREAM *stream, UNPACKED_IMAGE 
     
     // Initialize the decoder with a default allocator
     PrepareDecoder(decoder, parameters);
+    decoder->rgb_channels_only = parameters->rgb_resolution == GPR_RGB_RESOLUTION_QUARTER ||
+        parameters->rgb_resolution == GPR_RGB_RESOLUTION_EIGHTH ||
+        parameters->rgb_resolution == GPR_RGB_RESOLUTION_SIXTEENTH;
     
     // Get the bitstream start marker
     segment = GetSegment(stream);
@@ -582,6 +636,7 @@ CODEC_ERROR AllocDecoderTransforms(DECODER *decoder)
     int wavelet_index;
     
     int channel_count;
+    int first_channel = 0;
     int wavelet_count;
     
     assert(decoder != NULL);
@@ -590,9 +645,15 @@ CODEC_ERROR AllocDecoderTransforms(DECODER *decoder)
     }
     
     channel_count = decoder->codec.channel_count;
+    if (decoder->rgb_channels_only && channel_count == 4 && decoder->codec.image_format == IMAGE_FORMAT_RAW)
+        channel_count = 3;
+    if (decoder->wavelet_channel >= 0) {
+        first_channel = decoder->wavelet_channel;
+        channel_count = first_channel + 1;
+    }
     wavelet_count = decoder->wavelet_count;
     
-    for (channel_number = 0; channel_number < channel_count; channel_number++)
+    for (channel_number = first_channel; channel_number < channel_count; channel_number++)
     {
         DIMENSION wavelet_width;
         DIMENSION wavelet_height;
@@ -601,7 +662,6 @@ CODEC_ERROR AllocDecoderTransforms(DECODER *decoder)
         result = SetImageChannelParameters(decoder, channel_number);
         if( result != CODEC_ERROR_OKAY )
         {
-            assert(0);
             return result;
         }
         
@@ -634,6 +694,7 @@ CODEC_ERROR AllocDecoderTransforms(DECODER *decoder)
             wavelet_height /= 2;
             
             wavelet = CreateWavelet(allocator, wavelet_width, wavelet_height);
+            if (wavelet == NULL) return CODEC_ERROR_OUTOFMEMORY;
             decoder->transform[channel_number].wavelet[wavelet_index] = wavelet;
         }
     }
@@ -657,7 +718,10 @@ CODEC_ERROR ReleaseDecoderTransforms(DECODER *decoder)
         for (wavelet_index = 0; wavelet_index < decoder->wavelet_count; wavelet_index++)
         {
             WAVELET *wavelet = decoder->transform[channel_index].wavelet[wavelet_index];
-            DeleteWavelet(decoder->allocator, wavelet);
+            if (wavelet != NULL) {
+                DeleteWavelet(decoder->allocator, wavelet);
+                decoder->transform[channel_index].wavelet[wavelet_index] = NULL;
+            }
         }
     }
     
@@ -737,13 +801,14 @@ CODEC_ERROR AllocateChannelWavelets(DECODER *decoder, int channel_number)
                 DeleteWavelet(allocator, wavelet);
                 
                 wavelet = NULL;
+                decoder->transform[channel_number].wavelet[wavelet_index] = NULL;
             }
         }
         
         if (wavelet == NULL)
         {
             wavelet = CreateWavelet(allocator, wavelet_width, wavelet_height);
-            assert(wavelet != NULL);
+            if (wavelet == NULL) return CODEC_ERROR_OUTOFMEMORY;
             
             decoder->transform[channel_number].wavelet[wavelet_index] = wavelet;
         }
@@ -818,8 +883,13 @@ CODEC_ERROR PrepareDecoderTransforms(DECODER *decoder)
 {
     int channel_count = decoder->codec.channel_count;
     int channel_index;
+    int first_channel = 0;
+    if (decoder->wavelet_channel >= 0) {
+        first_channel = decoder->wavelet_channel;
+        channel_count = first_channel + 1;
+    }
     
-    for (channel_index = 0; channel_index < channel_count; channel_index++)
+    for (channel_index = first_channel; channel_index < channel_count; channel_index++)
     {
         int wavelet_count = decoder->wavelet_count;
         int wavelet_index;
@@ -827,7 +897,7 @@ CODEC_ERROR PrepareDecoderTransforms(DECODER *decoder)
         for (wavelet_index = 0; wavelet_index < wavelet_count; wavelet_index++)
         {
             WAVELET *wavelet = decoder->transform[channel_index].wavelet[wavelet_index];
-            wavelet->valid_band_mask = 0;
+            if (wavelet != NULL) wavelet->valid_band_mask = 0;
         }
     }
     
@@ -864,16 +934,23 @@ CODEC_ERROR ImageRepackingProcess(const UNPACKED_IMAGE *unpacked_image,
     {
         case PIXEL_FORMAT_RAW_RGGB_12:
         case PIXEL_FORMAT_RAW_GBRG_12:
+        case PIXEL_FORMAT_RAW_GRBG_12:
+        case PIXEL_FORMAT_RAW_BGGR_12:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 12, output_format );
             
         case PIXEL_FORMAT_RAW_RGGB_14:
         case PIXEL_FORMAT_RAW_GBRG_14:
+        case PIXEL_FORMAT_RAW_GRBG_14:
+        case PIXEL_FORMAT_RAW_BGGR_14:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 14, output_format );
             break;
             
         case PIXEL_FORMAT_RAW_RGGB_16:
+        case PIXEL_FORMAT_RAW_GBRG_16:
+        case PIXEL_FORMAT_RAW_GRBG_16:
+        case PIXEL_FORMAT_RAW_BGGR_16:
             return PackComponentsToRAW(unpacked_image, output_buffer, output_pitch,
                                         output_width, output_height, enabled_parts, 16, output_format );
             break;
@@ -1146,7 +1223,7 @@ CODEC_ERROR UpdateCodecState(DECODER *decoder, BITSTREAM *stream, TAGVALUE segme
     switch (tag)
     {
         case CODEC_TAG_ChannelCount:		// Number of channels in the transform
-            assert(0 < value && value <= MAX_CHANNEL_COUNT);
+            if (value <= 0 || value > MAX_CHANNEL_COUNT) return CODEC_ERROR_BAD_PARAMETER;
             codec->channel_count = (uint_least8_t)value;
             codec->header = true;
             break;
@@ -1411,7 +1488,6 @@ CODEC_ERROR UpdateCodecState(DECODER *decoder, BITSTREAM *stream, TAGVALUE segme
                     chunk_size = 0;
                 }
                 
-                assert(optional);
                 if (!optional)
                 {
                     error = CODEC_ERROR_BITSTREAM_SYNTAX;
@@ -1483,7 +1559,8 @@ CODEC_ERROR UpdateCodecState(DECODER *decoder, BITSTREAM *stream, TAGVALUE segme
         !decoder->memory_allocated)
     {
         // Allocate space for the wavelet transforms
-        AllocDecoderTransforms(decoder);
+        error=AllocDecoderTransforms(decoder);
+        if (error != CODEC_ERROR_OKAY) return error;
         
         // Allocate all buffers required for decoding
         AllocDecoderBuffers(decoder);
@@ -1500,6 +1577,9 @@ CODEC_ERROR UpdateCodecState(DECODER *decoder, BITSTREAM *stream, TAGVALUE segme
     if (codec->codeblock)
     {
         const int channel_number = codec->channel_number;
+        if (channel_number < 0 || channel_number >= MAX_CHANNEL_COUNT ||
+            codec->subband_number < 0 || codec->subband_number >= MAX_SUBBAND_COUNT)
+            return CODEC_ERROR_INVALID_BAND;
         
         // Have the channel dimensions been initialized?
         if (!decoder->channel[channel_number].initialized)
@@ -1529,7 +1609,11 @@ CODEC_ERROR UpdateCodecState(DECODER *decoder, BITSTREAM *stream, TAGVALUE segme
             
             const int subband_number = codec->subband_number;
             
-            if( subband_number <  decoder->subbands_to_decode )
+            if (decoder->wavelet_channel >= 0 && channel_number != decoder->wavelet_channel)
+            {
+                error = SkipPayload(stream, chunk_size);
+            }
+            else if( subband_number <  decoder->subbands_to_decode )
             {
                 // Decode the subband into its wavelet band
                 error = DecodeChannelSubband(decoder, stream, chunk_size);
@@ -1732,6 +1816,9 @@ CODEC_ERROR DecodeChannelSubband(DECODER *decoder, BITSTREAM *input, size_t chun
     
     const int channel_number = codec->channel_number;
     const int subband_number = codec->subband_number;
+    if (channel_number < 0 || channel_number >= MAX_CHANNEL_COUNT ||
+        subband_number < 0 || subband_number >= MAX_SUBBAND_COUNT)
+        return CODEC_ERROR_INVALID_BAND;
     
     // Get the index to the wavelet corresponding to this subband
     const int index = SubbandWaveletIndex(subband_number);
@@ -1746,7 +1833,8 @@ CODEC_ERROR DecodeChannelSubband(DECODER *decoder, BITSTREAM *input, size_t chun
     (void)chunk_size;
     
     // Allocate the wavelets for this channel if not already allocated
-    AllocateChannelWavelets(decoder, channel_number);
+    error=AllocateChannelWavelets(decoder, channel_number);
+    if (error != CODEC_ERROR_OKAY) return error;
     
     // Is this a highpass band?
     if (subband_number > 0)
@@ -1857,7 +1945,8 @@ CODEC_ERROR ReconstructWaveletBand(DECODER *decoder, int channel, WAVELET *wavel
         assert(BandsAllValid(wavelet));
         
         // Decode the lowpass band in the wavelet one lower level than the input wavelet
-        TransformInverseSpatialQuantLowpass(decoder->allocator, wavelet, lowpass, prescale);
+        CODEC_ERROR error=TransformInverseSpatialQuantLowpass(decoder->allocator, wavelet, lowpass, prescale);
+        if (error != CODEC_ERROR_OKAY) return error;
         
         // Update the band valid flags
         UpdateWaveletValidBandMask(lowpass, 0);
@@ -1947,15 +2036,13 @@ CODEC_ERROR DecodeHighpassBand(DECODER *decoder, BITSTREAM *stream, WAVELET *wav
     DIMENSION height = wavelet->height;	//codec->band.height;
     
     // Check that the band index is in range
-    assert(0 <= band && band < wavelet->band_count);
+    if (band < 0 || band >= wavelet->band_count) return CODEC_ERROR_INVALID_BAND;
     
     // Encoded coefficients start on a tag boundary
     AlignBitsSegment(stream);
     
     // Decode this subband
     error = DecodeBandRuns(stream, decoder->codebook, wavelet->data[band], width, height, wavelet->pitch);
-    assert(error == CODEC_ERROR_OKAY);
-    
     // Return failure if a problem was encountered while reading the band coefficients
     if (error != CODEC_ERROR_OKAY) {
         return error;
@@ -1968,7 +2055,6 @@ CODEC_ERROR DecodeHighpassBand(DECODER *decoder, BITSTREAM *stream, WAVELET *wav
     // Decode the band trailer
     error = DecodeBandTrailer(stream);
     decoder->error = error;
-    assert(error == CODEC_ERROR_OKAY);
     return error;
 }
 
@@ -2013,38 +2099,70 @@ CODEC_ERROR DecodeBandRuns(BITSTREAM *stream, CODEBOOK *codebook, PIXEL *data,
     while (data_count > 0)
     {
         // Get the next run length and value
-        error = GetRun(stream, codebook, &run);
+        error = GetRunFast(stream, codebook, &run);
         if (error != CODEC_ERROR_OKAY) {
             return error;
         }
         
         // Check that the run does not extend past the end of the band
-        assert(run.count <= data_count);
+        if (run.count == 0 || run.count > data_count) {
+            return CODEC_ERROR_BAND_END_MARKER;
+        }
         
-        // Copy the value into the specified number of pixels in the band
-        while (run.count > 0)
+        // Most runs remain within one row, so handle that without a boundary
+        // check for every coefficient.
         {
-            // Reached the end of the column?
-            if (column == width)
+            int remaining_in_row = width - column;
+
+            if ((int)run.count <= remaining_in_row)
             {
-                // Need to pad the end of the row?
-                if (row_padding > 0)
+                if (run.value == 0 && run.count > 1)
                 {
-                    int count;
-                    for (count = 0; (size_t)count < row_padding; count++) {
-                        data[index++] = 0;
-                    }
+                    memset(&data[index], 0, run.count * sizeof(PIXEL));
                 }
-                
-                // Advance to the next row
-                row++;
-                column = 0;
+                else
+                {
+                    data[index] = (PIXEL)run.value;
+                }
+                index += run.count;
+                column += run.count;
+                data_count -= run.count;
+                run.count = 0;
             }
-            
-            data[index++] = (PIXEL)run.value;
-            column++;
-            run.count--;
-            data_count--;
+            else
+            {
+                while (run.count > 0)
+                {
+                    if (column == width)
+                    {
+                        if (row_padding > 0)
+                        {
+                            memset(&data[index], 0, row_padding * sizeof(PIXEL));
+                            index += (int)row_padding;
+                        }
+                        row++;
+                        column = 0;
+                    }
+
+                    remaining_in_row = width - column;
+                    int count = ((int)run.count < remaining_in_row) ? (int)run.count : remaining_in_row;
+
+                    if (run.value == 0)
+                    {
+                        memset(&data[index], 0, count * sizeof(PIXEL));
+                    }
+                    else
+                    {
+                        int i;
+                        for (i = 0; i < count; i++)
+                            data[index + i] = (PIXEL)run.value;
+                    }
+                    index += count;
+                    column += count;
+                    run.count -= count;
+                    data_count -= count;
+                }
+            }
         }
     }
     
@@ -2054,7 +2172,7 @@ CODEC_ERROR DecodeBandRuns(BITSTREAM *stream, CODEBOOK *codebook, PIXEL *data,
     // Check for the special codeword that marks the end of the highpass band
     error = GetRlv(stream, codebook, &run);
     if (error == CODEC_ERROR_OKAY) {
-        if (! (run.count == 0 || run.value == SPECIAL_MARKER_BAND_END)) {
+        if (! (run.count == 0 && run.value == SPECIAL_MARKER_BAND_END)) {
             error = CODEC_ERROR_BAND_END_MARKER;
         }
     }
@@ -2131,9 +2249,18 @@ bool IsHeaderComplete(DECODER *decoder)
 bool IsDecodingComplete(DECODER *decoder)
 {
     int channel_count = decoder->codec.channel_count;
+    /* WaveletToRGB reads GS, RG and BG only. RAW/half/full reconstruction
+     * retains all four channels, including green difference. */
+    if (decoder->rgb_channels_only && channel_count == 4 && decoder->codec.image_format == IMAGE_FORMAT_RAW)
+        channel_count = 3;
     int channel_index;
+    int first_channel = 0;
+    if (decoder->wavelet_channel >= 0) {
+        first_channel = decoder->wavelet_channel;
+        channel_count = first_channel + 1;
+    }
     
-    for (channel_index = 0; channel_index < channel_count; channel_index++)
+    for (channel_index = first_channel; channel_index < channel_count; channel_index++)
     {
         WAVELET *wavelet = decoder->transform[channel_index].wavelet[0];
         
@@ -2203,6 +2330,7 @@ CODEC_ERROR ReconstructUnpackedImage(DECODER *decoder, UNPACKED_IMAGE *image)
         if (error != CODEC_ERROR_OKAY) {
             return error;
         }
+        image->component_count=channel_number+1;
         
         error = TransformInverseSpatialQuantArray(allocator,
                                                   decoder->transform[channel_number].wavelet[0],

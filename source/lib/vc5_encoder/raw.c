@@ -18,8 +18,60 @@
 
 #include "headers.h"
 
+/* Additional input layouts retain the historical 4096-entry log curve and
+ * 12-bit component transform. This accepts 16-bit containers, not a new
+ * high-precision VC-5 profile. G1/G2 match the earlier feature PR's phases.
+ * Keep the assembly/NEON RGGB14 path independent of this scalar fallback. */
+void UnpackImage_WordBayer(const PACKED_IMAGE *input, UNPACKED_IMAGE *output)
+{
+    unsigned bits = 12;
+    unsigned r = 0, g1 = 1, g2 = 2, b = 3;
+    switch (input->format) {
+        case PIXEL_FORMAT_RAW_RGGB_16: bits = 16; break;
+        case PIXEL_FORMAT_RAW_GBRG_14: bits = 14; r=2; g1=0; g2=3; b=1; break;
+        case PIXEL_FORMAT_RAW_GBRG_16: bits = 16; r=2; g1=0; g2=3; b=1; break;
+        case PIXEL_FORMAT_RAW_GRBG_12: r=1; g1=0; g2=3; b=2; break;
+        case PIXEL_FORMAT_RAW_GRBG_14: bits=14; r=1; g1=0; g2=3; b=2; break;
+        case PIXEL_FORMAT_RAW_GRBG_16: bits=16; r=1; g1=0; g2=3; b=2; break;
+        case PIXEL_FORMAT_RAW_BGGR_12: r=3; g1=1; g2=2; b=0; break;
+        case PIXEL_FORMAT_RAW_BGGR_14: bits=14; r=3; g1=1; g2=2; b=0; break;
+        case PIXEL_FORMAT_RAW_BGGR_16: bits=16; r=3; g1=1; g2=2; b=0; break;
+        default: assert(0); return;
+    }
+    for (unsigned y=0; y<input->height/2; ++y) {
+        const uint8_t *top = (const uint8_t *)input->buffer + input->offset + 2*y*input->pitch;
+        const uint8_t *bottom = top + input->pitch;
+        PIXEL *dst[4];
+        for (unsigned ch=0; ch<4; ++ch)
+            dst[ch] = (PIXEL *)((uint8_t *)output->component_array_list[ch].data +
+                y*output->component_array_list[ch].pitch);
+        for (unsigned x=0; x<input->width/2; ++x) {
+            uint16_t q[4];
+            /* memcpy also permits unaligned input and odd byte pitches. */
+            memcpy(q, top+4*x, 4);
+            memcpy(q+2, bottom+4*x, 4);
+            int R = EncoderLogCurve[clamp_uint(q[r] >> (bits-12), 12)];
+            int G1 = EncoderLogCurve[clamp_uint(q[g1] >> (bits-12), 12)];
+            int G2 = EncoderLogCurve[clamp_uint(q[g2] >> (bits-12), 12)];
+            int B = EncoderLogCurve[clamp_uint(q[b] >> (bits-12), 12)];
+            int GS = (G1+G2)/2;
+            dst[0][x] = (PIXEL)GS;
+            dst[1][x] = (PIXEL)((R-GS+4096)/2);
+            dst[2][x] = (PIXEL)((B-GS+4096)/2);
+            dst[3][x] = (PIXEL)((G1-G2+4096)/2);
+        }
+    }
+}
+
 #if ENABLED(NEON)
 #include <arm_neon.h>
+#endif
+
+#if GPR_STOCK_UNPACK_ASM
+extern void gpr_stock_unpack14_row(const uint16_t *, const uint16_t *,
+    const uint16_t *, PIXEL *, PIXEL *, PIXEL *, PIXEL *, unsigned, int);
+extern void gpr_stock_unpack14_channel(const uint16_t *, const uint16_t *,
+    const uint16_t *, PIXEL *, unsigned, unsigned);
 #endif
 
 /** ------------------- **/
@@ -186,10 +238,17 @@ void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_P
         int column = 0;
         
         // Unpack the row of Bayer components from the BYR4 pattern elements
+#if GPR_STOCK_UNPACK_ASM
+        gpr_stock_unpack14_row(input_row_ptr, input_row2_ptr, EncoderLogCurve,
+            output_row_ptr_array[0], output_row_ptr_array[1],
+            output_row_ptr_array[2], output_row_ptr_array[3], input_width_m8, rggb);
+        column = input_width_m8;
+#else
         for (; column < input_width_m8; column+= 8)
         {
             UnpackPixel_14_8x(input_row_ptr, input_row2_ptr, column, output_row_ptr_array, rggb );
         }
+#endif
         
         // Unpack the row of Bayer components from the BYR4 pattern elements
         for (; column < input_width; column++)
@@ -209,6 +268,56 @@ void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_P
 /** ------------------- **/
 /** 12 BIT INPUT FORMAT **/
 /** ------------------- **/
+
+#if ENABLED(NEON)
+static inline uint16x4_t GatherChannel4(const uint16_t *row)
+{
+    uint64_t packed = (uint64_t)EncoderLogCurve[row[0] >> 2] |
+        ((uint64_t)EncoderLogCurve[row[2] >> 2] << 16) |
+        ((uint64_t)EncoderLogCurve[row[4] >> 2] << 32) |
+        ((uint64_t)EncoderLogCurve[row[6] >> 2] << 48);
+    return vcreate_u16(packed);
+}
+
+static inline void UnpackChannel14Impl(const uint16_t *row1, const uint16_t *row2,
+    PIXEL *output, int width, int channel)
+{
+    const int16x4_t midpoint = vdup_n_s16(4096);
+    for (int x = 0; x < width; x += 4) {
+        int16x4_t g1 = vreinterpret_s16_u16(GatherChannel4(row1 + 2*x + 1));
+        int16x4_t g2 = vreinterpret_s16_u16(GatherChannel4(row2 + 2*x));
+        int16x4_t gs = vhadd_s16(g1, g2);
+        int16x4_t value;
+        if (channel == 0) value = gs;
+        else if (channel == 3) value = vhadd_s16(vsub_s16(g1, g2), midpoint);
+        else {
+            int16x4_t color = vreinterpret_s16_u16(GatherChannel4(
+                channel == 1 ? row1 + 2*x : row2 + 2*x + 1));
+            value = vhadd_s16(color, vsub_s16(midpoint, gs));
+        }
+        vst1_s16(output + x, value);
+    }
+}
+
+void UnpackChannelRow14(const PACKED_IMAGE *input, int row, int channel, PIXEL *output)
+{
+    const uint16_t *row1 = (const uint16_t *)((const uint8_t *)input->buffer + input->offset +
+        (size_t)row * 2 * input->pitch);
+    const uint16_t *row2 = (const uint16_t *)((const uint8_t *)row1 + input->pitch);
+#if GPR_STOCK_UNPACK_ASM
+    if (getenv("GPR_CHANNEL_ASM")) {
+        gpr_stock_unpack14_channel(row1,row2,EncoderLogCurve,output,input->width/2,channel);
+        return;
+    }
+#endif
+    switch (channel) {
+        case 0: UnpackChannel14Impl(row1, row2, output, input->width/2, 0); break;
+        case 1: UnpackChannel14Impl(row1, row2, output, input->width/2, 1); break;
+        case 2: UnpackChannel14Impl(row1, row2, output, input->width/2, 2); break;
+        case 3: UnpackChannel14Impl(row1, row2, output, input->width/2, 3); break;
+    }
+}
+#endif
 
 static void UnpackPixel_12(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, int column, PIXEL *output_buffer[], bool rggb )
 {

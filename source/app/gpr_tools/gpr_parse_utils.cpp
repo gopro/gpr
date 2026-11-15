@@ -25,8 +25,6 @@
 #include "dng_misc_opcodes.h"
 #include "dng_gain_map.h"
 
-#define MAX_BUF_SIZE 16000
-
 void parse_gps_info( cJSON* pGpsInfo, gpr_gps_info& exif_info )
 {
     exif_info.gps_info_valid = false;
@@ -397,11 +395,13 @@ void parse_tuning_info( cJSON* pTuningInfo, gpr_tuning_info& tuning_info )
             int bytes = child->valueint;
             child = child->next;
             
-            char gain_map_buffer[MAX_BUF_SIZE];
+            // Camera gain maps can exceed 16 KB (65x65 needs 16,988 bytes).
+            // The stream and backing storage must have the same capacity.
+            std::vector<char> gain_map_buffer(buffer_size);
             
             tuning_info.gain_map.buffers[channel_index] = (char*)malloc( buffer_size );
             
-            dng_stream gain_map_stream ( gain_map_buffer, buffer_size );
+            dng_stream gain_map_stream ( gain_map_buffer.data(), buffer_size );
             
             gain_map_stream.Put_uint32( version );
             gain_map_stream.Put_uint32( flags );
@@ -481,7 +481,7 @@ void parse_tuning_info( cJSON* pTuningInfo, gpr_tuning_info& tuning_info )
 
             gain_map.PutStream( gain_map_stream );
             
-            memcpy( tuning_info.gain_map.buffers[channel_index], gain_map_buffer, buffer_size );
+            memcpy( tuning_info.gain_map.buffers[channel_index], gain_map_buffer.data(), buffer_size );
             
             channel = channel->next;
             
@@ -504,13 +504,16 @@ int gpr_parameters_parse( gpr_parameters* parameters, const char* input_file_pat
     }
     
     const char* return_parse_end;
-    
-    cJSON* pRoot = cJSON_ParseWithOpts( (const char*)buffer.buffer, &return_parse_end, 0 );
+
+    // read_from_file returns exactly the file bytes; cJSON requires a C string.
+    const std::string json_text( (const char*)buffer.buffer, buffer.size );
+    cJSON* pRoot = cJSON_ParseWithOpts( json_text.c_str(), &return_parse_end, 0 );
     
     if( pRoot == NULL )
     {
         printf( "Error parsing %s \n", input_file_path );
         printf( "Error: %s", return_parse_end );
+        free( buffer.buffer );
         return -1;
     }
     
@@ -538,6 +541,8 @@ int gpr_parameters_parse( gpr_parameters* parameters, const char* input_file_pat
     pJSON = pJSON->next;
     
     parse_tuning_info( pJSON, parameters->tuning_info );
+
+    cJSON_Delete( pRoot );
     
     free( buffer.buffer );
     

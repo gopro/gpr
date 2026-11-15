@@ -38,23 +38,31 @@
 #ifdef __cplusplus
     extern "C" {
 #endif
+
+    /* DNG uses UINT32_MAX for absent EXIF values. These enums are storage for
+     * parsed tags as well as named presets, so retain that sentinel and all
+     * intervening TIFF SHORT values instead of creating invalid enum objects.
+     * The supported SDK ABIs retain their existing 32-bit field layout. */
       
     typedef enum
     {
         gpr_sensing_method_chip_color_area = 2,
 
+        gpr_sensing_method_unspecified = 0xFFFFFFFFu,
     } gpr_sensing_method;
 
     typedef enum
     {
         gpr_file_source_digital_still = 3,
 
+        gpr_file_source_unspecified = 0xFFFFFFFFu,
     } gpr_file_source;
 
     typedef enum
     {
         gpr_scene_type_directly_photographed = 1,
 
+        gpr_scene_type_unspecified = 0xFFFFFFFFu,
     } gpr_scene_type;
 
     typedef enum
@@ -63,6 +71,7 @@
 
         gpr_white_balance_manual = 1,
 
+        gpr_white_balance_unspecified = 0xFFFFFFFFu,
     } gpr_white_balance;
 
     typedef enum
@@ -73,6 +82,7 @@
 
         gpr_exposure_mode_auto_bracket = 2,
 
+        gpr_exposure_mode_unspecified = 0xFFFFFFFFu,
     } gpr_exposure_mode;
 
     typedef enum
@@ -85,24 +95,28 @@
 
         gpr_scene_capture_type_night = 3,
 
+        gpr_scene_capture_type_unspecified = 0xFFFFFFFFu,
     } gpr_scene_capture_type;
 
     typedef enum
     {
         gpr_contrast_normal = 0,
 
+        gpr_contrast_unspecified = 0xFFFFFFFFu,
     } gpr_contrast;
 
     typedef enum
     {
         gpr_gain_control_normal = 0,
 
+        gpr_gain_control_unspecified = 0xFFFFFFFFu,
     } gpr_gain_control;
 
     typedef enum
     {
         gpr_saturation_normal = 0,
 
+        gpr_saturation_unspecified = 0xFFFFFFFFu,
     } gpr_saturation;
 
     typedef enum
@@ -113,6 +127,7 @@
 
         gpr_sharpness_hard = 2,
 
+        gpr_sharpness_unspecified = 0xFFFFFFFFu,
     } gpr_sharpness;
 
     typedef enum
@@ -123,6 +138,7 @@
 
         gpr_flash_not_supported = 32,
 
+        gpr_flash_unspecified = 0xFFFFFFFFu,
     } gpr_flash;
 
     typedef enum
@@ -143,6 +159,7 @@
 
         gpr_exposure_program_landscape_mode = 8,
 
+        gpr_exposure_program_unspecified = 0xFFFFFFFFu,
     } gpr_exposure_program;
 
     typedef enum
@@ -157,6 +174,7 @@
 
         gpr_metering_mode_multi_segment = 5,
 
+        gpr_metering_mode_unspecified = 0xFFFFFFFFu,
     } gpr_metering_mode;
 
     typedef enum
@@ -169,6 +187,7 @@
 
         gpr_light_source_tungsten = 3,
 
+        gpr_light_source_unspecified = 0xFFFFFFFFu,
     } gpr_light_source; // See this link for more info: http://www.awaresystems.be/imaging/tiff/tifftags/privateifd/exif/lightsource.html
 
     /*****************************************************************************/

@@ -29,7 +29,7 @@ BITWORD BitMask(int n)
     {
         BITWORD mask = 0;
         if (n > 0) {
-            mask = ((1 << n) - 1);
+            mask = (((BITWORD)1 << n) - 1);
         }
         return mask;
     }
@@ -205,7 +205,7 @@ CODEC_ERROR PutBits(BITSTREAM *stream, BITWORD bits, BITCOUNT count)
     }
     
     // Check that the unused portion of the input bits is empty
-    assert((bits & (BitMask(bit_word_count - count) << count)) == 0);
+    assert((bits & ~BitMask(count)) == 0);
     
     // Check that the number of input bits is valid
     //assert(0 <= count && count <= bit_word_count);

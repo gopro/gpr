@@ -68,7 +68,7 @@ CODEC_ERROR TransformInverseSpatialQuantLowpass(gpr_allocator *allocator, WAVELE
 		assert(prescale == 2);
 
 		// Apply the inverse spatial transform for a lowpass band that is not prescaled
-		InvertSpatialQuantDescale16s(allocator,
+		return InvertSpatialQuantDescale16s(allocator,
 									 (PIXEL *)input->data[0], input->pitch,
 									 (PIXEL *)input->data[1], input->pitch,
 									 (PIXEL *)input->data[2], input->pitch,
@@ -84,7 +84,7 @@ CODEC_ERROR TransformInverseSpatialQuantLowpass(gpr_allocator *allocator, WAVELE
 		assert(prescale == 0);
 
 		// Apply the inverse spatial transform for a lowpass band that is not prescaled
-		InvertSpatialQuant16s(allocator,
+		return InvertSpatialQuant16s(allocator,
 							  (PIXEL *)input->data[0], input->pitch,
 							  (PIXEL *)input->data[1], input->pitch,
 							  (PIXEL *)input->data[2], input->pitch,
@@ -142,7 +142,7 @@ CODEC_ERROR TransformInverseSpatialQuantArray(gpr_allocator *allocator,
 		assert(prescale == 2);
 
 		// Apply the inverse spatial transform for a lowpass band that is not prescaled
-		InvertSpatialQuantDescale16s(allocator,
+		return InvertSpatialQuantDescale16s(allocator,
 									 (PIXEL *)input->data[0], input->pitch,
 									 (PIXEL *)input->data[1], input->pitch,
 									 (PIXEL *)input->data[2], input->pitch,
@@ -158,7 +158,7 @@ CODEC_ERROR TransformInverseSpatialQuantArray(gpr_allocator *allocator,
 		assert(prescale == 0);
 
 		// Apply the inverse spatial transform for a lowpass band that is not prescaled
-		InvertSpatialQuant16s(allocator,
+		return InvertSpatialQuant16s(allocator,
 							  (PIXEL *)input->data[0], input->pitch,
 							  (PIXEL *)input->data[1], input->pitch,
 							  (PIXEL *)input->data[2], input->pitch,

@@ -50,7 +50,7 @@
 
             unsigned int        input_height;                  /* Height of input source in pixels (only applies to raw input) */
             
-            unsigned int        input_pitch;                   /* Pitch of input source in pixels (only applies to raw input) */
+            unsigned int        input_pitch;                   /* Row pitch of raw input in bytes */
 
             bool                fast_encoding;
             
@@ -72,8 +72,17 @@
         
         void gpr_parameters_set_defaults(gpr_parameters* x);
         
+        /* Construct into an uninitialized/empty destination; source and target
+         * must be distinct. Deep-copies owned GPMF/GainMap bytes. The caller's
+         * JPEG preview remains borrowed, as in the source. This legacy entry
+         * uses malloc/free; on failure the destination contains defaults.
+         * Use the allocator variant to observe failure or use a custom heap. */
         void gpr_parameters_construct_copy(const gpr_parameters* y, gpr_parameters* x);
+        bool gpr_parameters_construct_copy_with_allocator(const gpr_allocator* allocator,
+                                                          const gpr_parameters* y, gpr_parameters* x);
         
+        /* Releases/clears owned GPMF/GainMap storage; borrowed JPEG is untouched.
+         * Pair with the original allocator's Free. Repeated cleanup is safe. */
         void gpr_parameters_destroy(gpr_parameters* x, gpr_free mem_free);
         
         //!< Parse Metadata of DNG File and return in gpr_parameters struct
@@ -81,7 +90,10 @@
                                       gpr_buffer*               inp_dng_buffer,
                                       gpr_parameters*   parameters);
         
-        //!< CHECK IF DNG IS VC5 COMPRESSED
+        /* True when a valid DNG container declares VC-5 compression. Metadata
+         * only: does not decode or validate the compressed image payload.
+         * False for other/malformed inputs or missing allocation callbacks.
+         * Input is borrowed for this call and limited to UINT32_MAX bytes. */
         bool gpr_check_vc5( gpr_buffer* inp_dng_buffer, gpr_malloc mem_alloc, gpr_free mem_free );
         
         //!< CONVERSION FUNCTIONS
@@ -115,6 +127,20 @@
                                           gpr_buffer*       out_vc5_buffer);
         
 #if GPR_WRITING
+
+        /* Explicit stock presets 0..5 (LOW, MEDIUM, HIGH, FS1, FSX, FS2).
+         * These override fast_encoding. Invalid values return false without
+         * allocating output. Existing entry points keep their Q1/Q3 defaults. */
+        bool gpr_convert_raw_to_gpr_with_quality(const gpr_allocator* allocator,
+                                                const gpr_parameters* parameters,
+                                                unsigned int quality,
+                                                gpr_buffer* input,
+                                                gpr_buffer* output);
+        bool gpr_convert_dng_to_gpr_with_quality(const gpr_allocator* allocator,
+                                                const gpr_parameters* parameters,
+                                                unsigned int quality,
+                                                gpr_buffer* input,
+                                                gpr_buffer* output);
 
         //!< raw to gpr conversion
         bool gpr_convert_raw_to_gpr(const gpr_allocator*    allocator,

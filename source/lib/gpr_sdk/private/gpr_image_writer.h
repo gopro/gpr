@@ -44,7 +44,7 @@ private:
     
 public:
     
-    void EncodeVc5Image();
+    bool EncodeVc5Image(bool thumbnail);
     
     const gpr_rgb_buffer& get_rgb_thumbnail() { return _rgb_thumbnail; }
     

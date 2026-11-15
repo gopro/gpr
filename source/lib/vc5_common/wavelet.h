@@ -90,6 +90,7 @@ extern "C" {
     CODEC_ERROR AllocWavelet(gpr_allocator *allocator, WAVELET *wavelet, DIMENSION width, DIMENSION height);
     CODEC_ERROR ReleaseWavelet(gpr_allocator *allocator, WAVELET *wavelet);
 
+    CODEC_ERROR InitWavelet(WAVELET *wavelet, DIMENSION width, DIMENSION height);
     WAVELET *CreateWavelet(gpr_allocator *allocator, DIMENSION width, DIMENSION height);
     CODEC_ERROR DeleteWavelet(gpr_allocator *allocator, WAVELET *wavelet);
 

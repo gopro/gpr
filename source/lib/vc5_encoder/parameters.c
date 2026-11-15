@@ -29,7 +29,7 @@
 #include "headers.h"
 
 //! Current version number of the parameters data structure
-#define PARAMETERS_VERSION		1
+#define PARAMETERS_VERSION		2
 
 /*!
 	@brief Initialize the parameters data structure

@@ -125,6 +125,8 @@ typedef struct _decoder
     int wavelet_count;			//!< Number of wavelets in each channel
     
     int subbands_to_decode;
+    int rgb_channels_only; /* Wavelet preview does not consume green difference. */
+    int wavelet_channel;   /* -1 for ordinary decode, otherwise one GS/RG/BG channel. */
     
     //! Wavelet tree for each channel
     TRANSFORM transform[MAX_CHANNEL_COUNT];

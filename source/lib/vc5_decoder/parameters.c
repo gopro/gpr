@@ -40,6 +40,7 @@ CODEC_ERROR InitDecoderParameters(DECODER_PARAMETERS *parameters)
     parameters->output.format = PIXEL_FORMAT_RAW_DEFAULT;
     
     parameters->rgb_resolution = GPR_RGB_RESOLUTION_NONE;
+    parameters->wavelet_channel = -1;
     
     gpr_rgb_gain_set_defaults(&parameters->rgb_gain);
     

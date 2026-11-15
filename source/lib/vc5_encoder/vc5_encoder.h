@@ -24,6 +24,7 @@
 #include "gpr_buffer.h"
 #include "gpr_rgb_buffer.h"
 #include "vc5_common.h"
+#include "vc5_preview.h"
 
 #ifdef __cplusplus
     extern "C" {
@@ -44,6 +45,17 @@
         
         VC5_ENCODER_PIXEL_FORMAT_GBRG_12P = 4,          // GBRG 12bit pixels packed into 12bits
         
+        /* Appended values preserve the historical ABI and the earlier feature PR. */
+        VC5_ENCODER_PIXEL_FORMAT_RGGB_16 = 5,
+        VC5_ENCODER_PIXEL_FORMAT_GBRG_16 = 6,
+        VC5_ENCODER_PIXEL_FORMAT_GBRG_14 = 7,
+        VC5_ENCODER_PIXEL_FORMAT_GRBG_12 = 8,
+        VC5_ENCODER_PIXEL_FORMAT_GRBG_14 = 9,
+        VC5_ENCODER_PIXEL_FORMAT_GRBG_16 = 10,
+        VC5_ENCODER_PIXEL_FORMAT_BGGR_12 = 11,
+        VC5_ENCODER_PIXEL_FORMAT_BGGR_14 = 12,
+        VC5_ENCODER_PIXEL_FORMAT_BGGR_16 = 13,
+
         VC5_ENCODER_PIXEL_FORMAT_DEFAULT = VC5_ENCODER_PIXEL_FORMAT_RGGB_14,
         
     } VC5_ENCODER_PIXEL_FORMAT;
@@ -77,7 +89,7 @@
         
         unsigned int                input_width;            // Image Width in Components (Default: 4000)
         unsigned int                input_height;           // Image Height in Components (Default: 3000)
-        int                         input_pitch;            // Image Buffer Stride in Components (Default: 4000)
+        int                         input_pitch;            // Row stride in bytes (Default: 8000)
         
         VC5_ENCODER_PIXEL_FORMAT    pixel_format;         // Bayer Ordering Pattern (Default: VC5_ENCODER_BAYER_ORDERING_RGGB)
         
@@ -91,10 +103,38 @@
 
     void vc5_encoder_parameters_set_default(vc5_encoder_parameters* encoding_parameters);
 
+    /* Even sensor dimensions >=48, <=UINT16_MAX, with width*height*2 <=INT_MAX.
+     * Input capacity must cover every active row through the last pixel;
+     * trailing row padding is optional. Stride is positive bytes. Unaligned
+     * historical word/packed-12 layouts use an aligned scratch copy; ordinary
+     * aligned inputs retain the existing fast path. Invalid geometry/span,
+     * formats, quality or callbacks are rejected before codec allocation. */
     CODEC_ERROR vc5_encoder_process(const vc5_encoder_parameters*   encoding_parameters,    /* vc5 encoding parameters */
                                     const gpr_buffer*               raw_buffer,             /* raw input buffer. */
                                           gpr_buffer*               vc5_buffer,
                                           gpr_rgb_buffer*           rgb_buffer);            /* vc5 output buffer. */
+
+    /* Same encoding/validation and payload as process. Optional preview callback
+     * borrows retained upper bands after encoding and before codec cleanup.
+     * Callback runs synchronously under the codec's global encoder lock: do not
+     * reenter any encoder/SDK encoding call or let exceptions cross C frames.
+     * Copy/reconstruct coefficients before return. NULL keeps ordinary memory
+     * behavior. Extra band storage is allocated through the supplied allocator.
+     * Callback return does not establish payload durability or recording. */
+    CODEC_ERROR vc5_encoder_process_with_preview(const vc5_encoder_parameters *parameters,
+        const gpr_buffer *raw,gpr_buffer *vc5,gpr_rgb_buffer *rgb,
+        vc5_encoder_preview_fn preview,void *user);
+
+    /* Same validation/normalization and payload as process. Rows are borrowed
+     * until callback return. Different channels may call concurrently; each
+     * channel's levels are delivered serially in forward-pipeline order.
+     * Runs under the encoder lock: no reentrant encoding or exceptions across C.
+     * No callback occurs after return. On encoding failure discard any partial
+     * preview; observation does not imply payload recording or durability.
+     * NULL preserves ordinary encoding behavior and memory requirements. */
+    CODEC_ERROR vc5_encoder_process_with_preview_rows(const vc5_encoder_parameters *parameters,
+        const gpr_buffer *raw,gpr_buffer *vc5,gpr_rgb_buffer *rgb,
+        vc5_encoder_preview_row_fn rows,void *user);
 
 #ifdef __cplusplus
     }

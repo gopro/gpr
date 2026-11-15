@@ -63,6 +63,13 @@ typedef enum
     PIXEL_FORMAT_RAW_GBRG_12  = 109,
     PIXEL_FORMAT_RAW_GBRG_12P = 110,
     PIXEL_FORMAT_RAW_GBRG_14  = 111,
+    PIXEL_FORMAT_RAW_GBRG_16  = 112,
+    PIXEL_FORMAT_RAW_GRBG_12  = 113,
+    PIXEL_FORMAT_RAW_GRBG_14  = 114,
+    PIXEL_FORMAT_RAW_GRBG_16  = 115,
+    PIXEL_FORMAT_RAW_BGGR_12  = 116,
+    PIXEL_FORMAT_RAW_BGGR_14  = 117,
+    PIXEL_FORMAT_RAW_BGGR_16  = 118,
     
     PIXEL_FORMAT_RAW_DEFAULT = PIXEL_FORMAT_RAW_RGGB_14,
     
@@ -81,9 +88,6 @@ extern "C" {
 */
 STATIC_INLINE PIXEL ClampPixel(int32_t value)
 {
-	// Check for values that are outside the range (for debugging)
-	assert(PIXEL_MIN <= value && value <= PIXEL_MAX);
-
 	if (value < PIXEL_MIN)
 		value = PIXEL_MIN;
 	else

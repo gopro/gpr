@@ -13,19 +13,19 @@ include_directories( "../common/TinyJPEG" )
 include_directories( "../../lib/common/public" )
 include_directories( "../../lib/vc5_common" )
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+if(TARGET vc5_decoder)
   include_directories( "../../lib/vc5_decoder" )
   add_definitions("-DGPR_READING=1")
-else(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+else()
   add_definitions("-DGPR_READING=0")
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+if(TARGET vc5_encoder)
   include_directories( "../../lib/vc5_encoder" )
   add_definitions("-DGPR_WRITING=1")
-else(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+else()
   add_definitions("-DGPR_WRITING=0")
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+endif()
 
 include_directories( "../../lib/md5_lib" )
 include_directories( "../../lib/dng_sdk" )
@@ -50,13 +50,13 @@ endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/tiny_jpeg")
 
 target_link_libraries( ${EXE_NAME} dng_sdk xmp_core )
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+if(TARGET vc5_decoder)
   target_link_libraries( ${EXE_NAME} vc5_decoder )
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_decoder")
+endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+if(TARGET vc5_encoder)
   target_link_libraries( ${EXE_NAME} vc5_encoder )
-endif(EXISTS "${CMAKE_SOURCE_DIR}/source/lib/vc5_encoder")
+endif()
 
 target_link_libraries( ${EXE_NAME} vc5_common common md5_lib expat_lib cJSON argument_parser )
 

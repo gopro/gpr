@@ -26,7 +26,11 @@ target_compile_definitions( ${LIB_NAME} PUBLIC XML_STATIC=1 )
 
 SET(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LIBRARY "libstdc++")
 
-target_link_libraries( ${LIB_NAME} )
+target_link_libraries(${LIB_NAME} PRIVATE md5_lib expat_lib)
+if(NOT WIN32)
+  find_package(Threads REQUIRED)
+  target_link_libraries(${LIB_NAME} PUBLIC Threads::Threads)
+endif()
 
 # set the folder where to place the projects
 set_target_properties( ${LIB_NAME} PROPERTIES FOLDER lib )

@@ -26,6 +26,7 @@
 #include "dng_bottlenecks.h"
 
 #include "gpr_utils.h"
+#include "gpr_bayer.h"
 
 #if GPR_READING
 
@@ -48,13 +49,13 @@ static bool DecodeVC5(dng_image &image, gpr_buffer_auto& vc5_buffer, VC5_DECODER
     
     if( vc5_decoder_process( &vc5_decoder_params, &vc5_image, &raw_image, NULL ) != CODEC_ERROR_OKAY )
     {
-        assert(0);
         return false;
     }
     
     raw_buffer.set( raw_image.buffer, raw_image.size, true );
     
     dng_point size = image.Bounds().Size();
+    if (raw_buffer.get_size() != size_t(size.h)*size_t(size.v)*sizeof(uint16_t)) return false;
     
     CopyBufferToRawImage( raw_buffer, size.h, image );
 
@@ -90,23 +91,16 @@ void gpr_read_image::ReadTile (dng_host &host,
             
             if( GetDecodeVC5() == true )
             {
-                bool rggb_raw = (ifd.fCFAPattern[0][0] == 0) && (ifd.fCFAPattern[0][1] == 1) && (ifd.fCFAPattern[1][0] == 1) && (ifd.fCFAPattern[1][1] == 2);
-                
+                GPR_PIXEL_FORMAT format;
                 VC5_DECODER_PIXEL_FORMAT pixel_format;
-                
-                if( rggb_raw )
-                {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_RGGB_14;
-                }
-                else
-                {
-                    pixel_format = VC5_DECODER_PIXEL_FORMAT_GBRG_12;
-                }
+                if (!gpr_bayer_from_ifd(ifd, format) || !gpr_get_decoder_format(format, pixel_format))
+                    ThrowBadFormat();
                 
                 if( DecodeVC5( image, *_vc5_buffer, pixel_format ) )
                 {
                     return;
                 }
+                ThrowBadFormat();
             }
         }
     }

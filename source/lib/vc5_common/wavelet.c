@@ -65,11 +65,11 @@ CODEC_ERROR AllocWavelet(gpr_allocator *allocator, WAVELET *wavelet, DIMENSION w
 		int band;
 
 		//TODO: Align the pitch?
-		DIMENSION pitch = width * sizeof(PIXEL);
+		DIMENSION pitch = ((width * sizeof(PIXEL) + 63) & ~(size_t)63) + 64;
 
 		size_t band_data_size = height * pitch;
         
-        PIXEL* data_all_bands = (PIXEL *)allocator->Alloc(band_data_size * MAX_BAND_COUNT);
+        PIXEL* data_all_bands = (PIXEL *)gpr_aligned_alloc(allocator, band_data_size * MAX_BAND_COUNT);
 
         if ( data_all_bands == NULL )
         {
@@ -80,7 +80,7 @@ CODEC_ERROR AllocWavelet(gpr_allocator *allocator, WAVELET *wavelet, DIMENSION w
 		// Allocate the wavelet bands
 		for (band = 0; band < MAX_BAND_COUNT; band++)
 		{
-			wavelet->data[band] = data_all_bands + band * height * width;
+			wavelet->data[band] = (PIXEL *)((uint8_t *)data_all_bands + band * band_data_size);
 		}
 
 		wavelet->pitch = pitch;
@@ -100,7 +100,7 @@ CODEC_ERROR ReleaseWavelet(gpr_allocator *allocator, WAVELET *wavelet)
 
     PIXEL* data_all_bands = wavelet->data[0];
     
-    allocator->Free(data_all_bands);
+    gpr_aligned_free(allocator, data_all_bands);
 
     for (band = 0; band < MAX_BAND_COUNT; band++) {
 		wavelet->data[band] = NULL;
@@ -120,7 +120,6 @@ WAVELET *CreateWavelet(gpr_allocator *allocator, DIMENSION width, DIMENSION heig
 	{
 		// Allocate the image data structure for the wavelet
 		WAVELET *wavelet = (WAVELET *)allocator->Alloc(sizeof(WAVELET));
-		assert(wavelet != NULL);
 		if (! (wavelet != NULL)) {
 			return NULL;
 		}
@@ -457,6 +456,7 @@ void WaveletToRGB( gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL*
     dst_image->pitch    = src_width * 3;
     dst_image->size     = size;
     dst_image->buffer   = allocator.Alloc( size );
+    if (dst_image->buffer == NULL) return;
     
     const int32_t midpoint  = (1 << (input_precision_bits - 1));
     const int32_t shift     = input_precision_bits - 12;
@@ -490,13 +490,9 @@ void WaveletToRGB( gpr_allocator allocator, PIXEL* GS_src, PIXEL* RG_src, PIXEL*
                 B *= rgb_gain->b_gain_num;
                 B >>= rgb_gain->b_gain_pow2_den;
                 
-                R = sqrtf((float)R);
-                G = sqrtf((float)G);
-                B = sqrtf((float)B);
-                
-                R = clamp_uint8( R );
-                G = clamp_uint8( G );
-                B = clamp_uint8( B );
+                R = R <= 0 ? 0 : (R >= 65025 ? 255 : DecoderGamma8Curve[R]);
+                G = G <= 0 ? 0 : (G >= 65025 ? 255 : DecoderGamma8Curve[G]);
+                B = B <= 0 ? 0 : (B >= 65025 ? 255 : DecoderGamma8Curve[B]);
                 
                 RGB_dst_8bits[3 * (x) + 0 + y * dst_image->pitch] = R;
                 RGB_dst_8bits[3 * (x) + 1 + y * dst_image->pitch] = G;

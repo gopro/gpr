@@ -22,6 +22,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+    /* Stock 12-bit log-domain transform for additional word-packed input formats. */
+    void UnpackImage_WordBayer(const PACKED_IMAGE *input, UNPACKED_IMAGE *output);
     
     void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
 
