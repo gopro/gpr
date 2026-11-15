@@ -27,10 +27,14 @@ static const int32_t rounding = 4;
 
 STATIC_INLINE PIXEL QuantizeValue(int16_t value, int32_t midpoint, int32_t multiplier )
 {
+    if (multiplier == 0) return 0;
+
     int less_than_zero = 0;
     int negate_less_than_zero = 0;
     
-    int16_t x = abs(value) + midpoint;
+    int32_t mag = abs(value) + midpoint;
+    if (mag <= 0) return 0;
+    int16_t x = (int16_t)mag;
     
     if( value < 0 )
     {
@@ -184,9 +188,13 @@ void HorizontalFilter_Prescale0_4x_NEON_(PIXEL *input, PIXEL* lowpass, PIXEL* hi
 
 static inline __attribute__((always_inline)) int16x8_t QuantizeVector_8x_NEON_(int16x8_t __wavelet_band, int16_t midpoint, int32_t multiplier)
 {
+    if (multiplier == 0) return vdupq_n_s16(0);
     if (multiplier == 65536 && midpoint == 0) return __wavelet_band;
 
-    int16x8_t __wavelet_band_abs = vaddq_s16( vabsq_s16(__wavelet_band), vdupq_n_s16( midpoint ) );
+    int16x8_t __abs = vabsq_s16(__wavelet_band);
+    int16x8_t __wavelet_band_abs = midpoint >= 0
+        ? vaddq_s16(__abs, vdupq_n_s16(midpoint))
+        : vmaxq_s16(vsubq_s16(__abs, vdupq_n_s16((int16_t)(-midpoint))), vdupq_n_s16(0));
 
     int32x4_t __value_high, __value_low;
     if (multiplier <= 32767) {
@@ -257,16 +265,41 @@ static inline __attribute__((always_inline)) void FilterVerticalMiddle_Core_8x_N
 #define FilterVerticalMiddle_8x FilterVerticalMiddle_8x_NEON_
 static inline __attribute__((always_inline)) void FilterVerticalMiddle_8x_NEON_(PIXEL *lowpass[], PIXEL *highpass[], int column, int32_t* midpoints, int32_t* multipliers, PIXEL *result[])
 {
-    int16_t LOW[8];
-    int16_t HIGH[8];
-        
-    FilterVerticalMiddle_Core_8x_NEON_( highpass, column, HIGH, LOW);
-    QuantizeBand_8x_NEON_( LOW, midpoints[LH_BAND], multipliers[LH_BAND], result[LH_BAND] + column );
-    QuantizeBand_8x_NEON_( HIGH, midpoints[HH_BAND], multipliers[HH_BAND], result[HH_BAND] + column );
+    int16_t LOW_LL[8];
+    int16_t HIGH_HL[8];
+    FilterVerticalMiddle_Core_8x_NEON_( lowpass, column, HIGH_HL, LOW_LL);
+    int16x8_t v_ll = vld1q_s16(LOW_LL);
+    vst1q_s16(result[LL_BAND] + column, QuantizeVector_8x_NEON_(v_ll, (int16_t)midpoints[LL_BAND], multipliers[LL_BAND]));
 
-    FilterVerticalMiddle_Core_8x_NEON_( lowpass, column, HIGH, LOW);
-    QuantizeBand_8x_NEON_( LOW, midpoints[LL_BAND], multipliers[LL_BAND], result[LL_BAND] + column );
-    QuantizeBand_8x_NEON_( HIGH, midpoints[HL_BAND], multipliers[HL_BAND], result[HL_BAND] + column );    
+    if (__builtin_expect(multipliers[LH_BAND] == 0 && multipliers[HL_BAND] == 0 && multipliers[HH_BAND] == 0, 0)) {
+        return;
+    }
+
+    int16_t LOW_LH[8];
+    int16_t HIGH_HH[8];
+    FilterVerticalMiddle_Core_8x_NEON_( highpass, column, HIGH_HH, LOW_LH);
+
+    int16x8_t v_hl = vld1q_s16(HIGH_HL);
+    int16x8_t v_lh = vld1q_s16(LOW_LH);
+    int16x8_t v_hh = vld1q_s16(HIGH_HH);
+
+    if (midpoints[LH_BAND] < 0 && midpoints[LL_BAND] == 0) {
+        /* Sparse-8K illuminance gate: when the 12 MP LL1 base (LOW_LL, in 2*12-bit
+         * companded units [0..8190]) falls in the photon-starved shadow regime (< 256),
+         * add extra deadzone suppression so dark regions reconstruct purely from the
+         * high-SNR 2x2-binned 12 MP wavelet base. */
+        uint16x8_t shadow_mask = vcltq_s16(v_ll, vdupq_n_s16(256));
+        int16x8_t v_hl_sh = vshrq_n_s16(v_hl, 1);
+        int16x8_t v_lh_sh = vshrq_n_s16(v_lh, 1);
+        int16x8_t v_hh_sh = vshrq_n_s16(v_hh, 1);
+        v_hl = vbslq_s16(shadow_mask, v_hl_sh, v_hl);
+        v_lh = vbslq_s16(shadow_mask, v_lh_sh, v_lh);
+        v_hh = vbslq_s16(shadow_mask, v_hh_sh, v_hh);
+    }
+
+    vst1q_s16(result[LH_BAND] + column, QuantizeVector_8x_NEON_(v_lh, (int16_t)midpoints[LH_BAND], multipliers[LH_BAND]));
+    vst1q_s16(result[HH_BAND] + column, QuantizeVector_8x_NEON_(v_hh, (int16_t)midpoints[HH_BAND], multipliers[HH_BAND]));
+    vst1q_s16(result[HL_BAND] + column, QuantizeVector_8x_NEON_(v_hl, (int16_t)midpoints[HL_BAND], multipliers[HL_BAND]));
 }
 
 #define FilterVerticalTopBottom_8x FilterVerticalTopBottom_8x_NEON_
@@ -275,13 +308,16 @@ void FilterVerticalTopBottom_8x_NEON_(PIXEL *lowpass[], PIXEL *highpass[], int c
     int16_t LOW[8];
     int16_t HIGH[8];
 
+    FilterVerticalTopBottom_Core_8x_C_( lowpass, column, HIGH, LOW, top );
+    QuantizeBand_8x_NEON_( LOW, midpoints[LL_BAND], multipliers[LL_BAND], result[LL_BAND] + column );
+    if (__builtin_expect(multipliers[LH_BAND] == 0 && multipliers[HL_BAND] == 0 && multipliers[HH_BAND] == 0, 0)) {
+        return;
+    }
+    QuantizeBand_8x_NEON_( HIGH, midpoints[HL_BAND], multipliers[HL_BAND], result[HL_BAND] + column );
+
     FilterVerticalTopBottom_Core_8x_C_( highpass, column, HIGH, LOW, top );
     QuantizeBand_8x_NEON_( LOW, midpoints[LH_BAND], multipliers[LH_BAND], result[LH_BAND] + column );
     QuantizeBand_8x_NEON_( HIGH, midpoints[HH_BAND], multipliers[HH_BAND], result[HH_BAND] + column );
-
-    FilterVerticalTopBottom_Core_8x_C_( lowpass, column, HIGH, LOW, top );
-    QuantizeBand_8x_NEON_( LOW, midpoints[LL_BAND], multipliers[LL_BAND], result[LL_BAND] + column );
-    QuantizeBand_8x_NEON_( HIGH, midpoints[HL_BAND], multipliers[HL_BAND], result[HL_BAND] + column );
 }
 
 #else
@@ -714,18 +750,20 @@ CODEC_ERROR FilterHorizontalRow(PIXEL *input, PIXEL *lowpass, PIXEL *highpass, i
 
 static void FilterVerticalMiddle_1x(PIXEL *lowpass[], PIXEL *highpass[], int column, int32_t* midpoints, int32_t* multipliers, PIXEL *result[])
 {
+    int16_t ll_val;
+    int32_t sum_hl;
     {
         const PIXEL coefficients_01 = lowpass[0][column] + lowpass[1][column];
         const PIXEL coefficients_2  = lowpass[2][column];
         const PIXEL coefficients_3  = lowpass[3][column];
         const PIXEL coefficients_45 = lowpass[4][column] + lowpass[5][column];
         
-        int32_t sum =  coefficients_45 - coefficients_01;
-        sum +=  8 * (coefficients_2 - coefficients_3);
-        sum = DivideByShift(sum + rounding, 3);
+        sum_hl =  coefficients_45 - coefficients_01;
+        sum_hl +=  8 * (coefficients_2 - coefficients_3);
+        sum_hl = DivideByShift(sum_hl + rounding, 3);
+        ll_val = coefficients_2 + coefficients_3;
         
-        result[LL_BAND][column] = QuantizeValue( coefficients_2 + coefficients_3, midpoints[LL_BAND], multipliers[LL_BAND] );
-        result[HL_BAND][column] = QuantizeValue( sum, midpoints[HL_BAND], multipliers[HL_BAND] );
+        result[LL_BAND][column] = QuantizeValue( ll_val, midpoints[LL_BAND], multipliers[LL_BAND] );
     }
     
     {
@@ -734,12 +772,20 @@ static void FilterVerticalMiddle_1x(PIXEL *lowpass[], PIXEL *highpass[], int col
         const PIXEL coefficients_3  = highpass[3][column];
         const PIXEL coefficients_45 = highpass[4][column] + highpass[5][column];
         
-        int32_t sum =  coefficients_45 - coefficients_01;
-        sum +=  8 * (coefficients_2 - coefficients_3);
-        sum = DivideByShift(sum + rounding, 3);
+        int32_t sum_hh =  coefficients_45 - coefficients_01;
+        sum_hh +=  8 * (coefficients_2 - coefficients_3);
+        sum_hh = DivideByShift(sum_hh + rounding, 3);
+        int32_t lh_val = coefficients_2 + coefficients_3;
+
+        if (midpoints[LH_BAND] < 0 && midpoints[LL_BAND] == 0 && ll_val < 256) {
+            sum_hl >>= 1;
+            lh_val >>= 1;
+            sum_hh >>= 1;
+        }
         
-        result[LH_BAND][column] = QuantizeValue( coefficients_2 + coefficients_3, midpoints[LH_BAND], multipliers[LH_BAND] );
-        result[HH_BAND][column] = QuantizeValue( sum, midpoints[HH_BAND], multipliers[HH_BAND] );
+        result[HL_BAND][column] = QuantizeValue( sum_hl, midpoints[HL_BAND], multipliers[HL_BAND] );
+        result[LH_BAND][column] = QuantizeValue( lh_val, midpoints[LH_BAND], multipliers[LH_BAND] );
+        result[HH_BAND][column] = QuantizeValue( sum_hh, midpoints[HH_BAND], multipliers[HH_BAND] );
     }
 }
 

@@ -149,7 +149,15 @@ int main(int argc, char *argv[])
     TIMER timer; // Performance timer
     InitTimer(&timer);
 
-    for (i = 0; i < DECODER_RUN_COUNT; i++)
+    int decoder_run_count = DECODER_RUN_COUNT;
+    if (const char *runs_env = getenv("GPR_BENCH_RUNS")) {
+        int parsed = atoi(runs_env);
+        if (parsed > 0 && parsed <= 1000) {
+            decoder_run_count = parsed;
+        }
+    }
+
+    for (i = 0; i < decoder_run_count; i++)
     { // Decode all frames
 
         gpr_buffer raw_image = { NULL, 0  };
@@ -170,7 +178,7 @@ int main(int argc, char *argv[])
             return -1;
         }
 
-        if( write_to_file( &raw_image, args.output_file_path.c_str() ) )
+        if( i + 1 == decoder_run_count && write_to_file( &raw_image, args.output_file_path.c_str() ) )
         {
             LogPrint("Error writing bitstream to location %s", args.output_file_path.c_str() );
             return -1;
@@ -183,7 +191,7 @@ int main(int argc, char *argv[])
         
     }
     
-    LogPrint("Decoding %.3f secs per frame", TimeSecs(&timer) / DECODER_RUN_COUNT );
+    LogPrint("Decoding %.3f secs per frame", TimeSecs(&timer) / decoder_run_count );
     
     if( args.log_curve_file_path != "" )
     {

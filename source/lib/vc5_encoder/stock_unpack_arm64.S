@@ -12,6 +12,10 @@
 SYM(gpr_stock_unpack14_row):
     ldr w8, [sp]
     cbz w7, 3f
+    ubfx w17, w8, #8, #8
+    and w8, w8, #1
+    dup v16.8h, w17
+    neg v17.8h, v16.8h
     movi v7.8h, #0x10, lsl #8
 1:
     /* Each group makes eight unrelated lookups available to the scheduler.
@@ -60,6 +64,9 @@ SYM(gpr_stock_unpack14_row):
 2:
     shadd v4.8h, v1.8h, v2.8h
     sub v5.8h, v1.8h, v2.8h
+    smax v18.8h, v5.8h, v17.8h
+    smin v18.8h, v18.8h, v16.8h
+    sub v5.8h, v5.8h, v18.8h
     shadd v5.8h, v5.8h, v7.8h
     sub v6.8h, v7.8h, v4.8h
     shadd v0.8h, v0.8h, v6.8h
@@ -80,6 +87,10 @@ SYM(gpr_stock_unpack14_row):
 .globl SYM(gpr_stock_unpack14_channel)
 SYM(gpr_stock_unpack14_channel):
     cbz w4, 9f
+    ubfx w17, w5, #8, #8
+    and w5, w5, #3
+    dup v16.4h, w17
+    neg v17.4h, v16.4h
     movi v3.4h, #0x10, lsl #8
     cmp w5, #1
     b.eq 6f
@@ -136,6 +147,9 @@ SYM(gpr_stock_unpack14_channel):
     ins v1.s[1],w12
     .if \kind == 3
     sub v0.4h,v0.4h,v1.4h
+    smax v18.4h,v0.4h,v17.4h
+    smin v18.4h,v18.4h,v16.4h
+    sub v0.4h,v0.4h,v18.4h
     shadd v0.4h,v0.4h,v3.4h
     .else
     shadd v0.4h,v0.4h,v1.4h

@@ -74,6 +74,41 @@ extern void gpr_stock_unpack14_channel(const uint16_t *, const uint16_t *,
     const uint16_t *, PIXEL *, unsigned, unsigned);
 #endif
 
+int gpr_optical_coring_tau(void)
+{
+    const char *env = getenv("GPR_OPTICAL_CORING");
+    if (!env || !env[0] || (env[0] == '0' && !env[1])) return 0;
+    int val = atoi(env);
+    if (val <= 0) return 0;
+    /* GPR_OPTICAL_CORING=1 (Tier-1 C_G coring) and GPR_OPTICAL_CORING=2
+     * (Tier-1+2 C_G + Stage-0 OLPF deadzone) both use calibrated tau=6 in
+     * 12-bit companded log-difference units (+/-3 in C_G=(G1-G2+4096)>>1).
+     * Explicit values >2 set tau directly (clamped to [1, 127]). */
+    if (val == 1 || val == 2) return 6;
+    return val > 127 ? 127 : val;
+}
+
+int gpr_sparse_8k_tau(void)
+{
+    const char *env = getenv("GPR_SPARSE_8K");
+    if (!env || !env[0] || (env[0] == '0' && !env[1])) return 0;
+    int val = atoi(env);
+    if (val <= 0) return 0;
+    /* GPR_SPARSE_8K=1 uses the calibrated Stage-0 sparse deadzone tau=4 (in
+     * pre-quantized Stage-0 highpass units, before divisor=8).
+     * GPR_SPARSE_8K=2 uses an aggressive sparse deadzone tau=12 for ultra-compact 8K.
+     * Explicit values >2 set tau directly (clamped to [1, 127]). */
+    if (val == 1) return 4;
+    if (val == 2) return 12;
+    return val > 127 ? 127 : val;
+}
+
+static inline int32_t soft_core_s32(int32_t d, int32_t tau)
+{
+    int32_t clamped = d < -tau ? -tau : (d > tau ? tau : d);
+    return d - clamped;
+}
+
 /** ------------------- **/
 /** 14 BIT INPUT FORMAT **/
 /** ------------------- **/
@@ -82,6 +117,7 @@ static void UnpackPixel_14(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, i
 {
     uint16_t R1, G1, G2, B1;
     uint16_t GS, GD, RG, BG;
+    const int coring_tau = gpr_optical_coring_tau();
     
     uint16_t *GS_output_row_ptr = (uint16_t *)output_buffer[0];
     uint16_t *GD_output_row_ptr = (uint16_t *)output_buffer[3];
@@ -114,7 +150,7 @@ static void UnpackPixel_14(uint16_t *input_row1_ptr, uint16_t *input_row2_ptr, i
     
     // Difference the green components and subtract green from the red and blue components
     GS = (G1 + G2) >> 1;
-    GD = (G1 - G2 + 2 * midpoint) >> 1;
+    GD = (soft_core_s32((int32_t)G1 - (int32_t)G2, coring_tau) + 2 * midpoint) >> 1;
     RG = (R1 - GS + 2 * midpoint) >> 1;
     BG = (B1 - GS + 2 * midpoint) >> 1;
     
@@ -134,6 +170,7 @@ static void UnpackPixel_14_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_ro
 
     const int internal_precision = 12;
     const int32_t midpoint = (1 << (internal_precision - 1));
+    const int coring_tau = gpr_optical_coring_tau();
     
     // Apply protune log curve
     {
@@ -174,8 +211,11 @@ static void UnpackPixel_14_8x_NEON_(uint16_t *input_row1_ptr, uint16_t *input_ro
     
     {
         const int16x8_t __midpoint_x2   = vdupq_n_s16(midpoint * 2);
+        const int16x8_t __tau_pos       = vdupq_n_s16((int16_t)coring_tau);
+        const int16x8_t __tau_neg       = vnegq_s16(__tau_pos);
 
         GD = vsubq_s16(G1, G2);
+        GD = vsubq_s16(GD, vminq_s16(vmaxq_s16(GD, __tau_neg), __tau_pos));
         GD = vhaddq_s16(GD, __midpoint_x2);
         vst1q_s16( output_buffer[3] + column, GD );
         
@@ -206,6 +246,7 @@ static void UnpackPixel_14_8x_C_(uint16_t *input_row1_ptr, uint16_t *input_row2_
 void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb )
 {
     uint8_t *input_buffer = (uint8_t *)input->buffer + input->offset;
+    const int coring_tau = gpr_optical_coring_tau();
     
     const DIMENSION input_width     = input->width / 2;
     const DIMENSION input_width_m8  = (input_width / 8) * 8;
@@ -241,7 +282,8 @@ void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_P
 #if GPR_STOCK_UNPACK_ASM
         gpr_stock_unpack14_row(input_row_ptr, input_row2_ptr, EncoderLogCurve,
             output_row_ptr_array[0], output_row_ptr_array[1],
-            output_row_ptr_array[2], output_row_ptr_array[3], input_width_m8, rggb);
+            output_row_ptr_array[2], output_row_ptr_array[3], input_width_m8,
+            (rggb ? 1 : 0) | (coring_tau << 8));
         column = input_width_m8;
 #else
         for (; column < input_width_m8; column+= 8)
@@ -280,16 +322,22 @@ static inline uint16x4_t GatherChannel4(const uint16_t *row)
 }
 
 static inline void UnpackChannel14Impl(const uint16_t *row1, const uint16_t *row2,
-    PIXEL *output, int width, int channel)
+    PIXEL *output, int width, int channel, int coring_tau)
 {
     const int16x4_t midpoint = vdup_n_s16(4096);
+    const int16x4_t tau_pos = vdup_n_s16((int16_t)coring_tau);
+    const int16x4_t tau_neg = vneg_s16(tau_pos);
     for (int x = 0; x < width; x += 4) {
         int16x4_t g1 = vreinterpret_s16_u16(GatherChannel4(row1 + 2*x + 1));
         int16x4_t g2 = vreinterpret_s16_u16(GatherChannel4(row2 + 2*x));
         int16x4_t gs = vhadd_s16(g1, g2);
         int16x4_t value;
         if (channel == 0) value = gs;
-        else if (channel == 3) value = vhadd_s16(vsub_s16(g1, g2), midpoint);
+        else if (channel == 3) {
+            int16x4_t dg = vsub_s16(g1, g2);
+            dg = vsub_s16(dg, vmin_s16(vmax_s16(dg, tau_neg), tau_pos));
+            value = vhadd_s16(dg, midpoint);
+        }
         else {
             int16x4_t color = vreinterpret_s16_u16(GatherChannel4(
                 channel == 1 ? row1 + 2*x : row2 + 2*x + 1));
@@ -304,17 +352,18 @@ void UnpackChannelRow14(const PACKED_IMAGE *input, int row, int channel, PIXEL *
     const uint16_t *row1 = (const uint16_t *)((const uint8_t *)input->buffer + input->offset +
         (size_t)row * 2 * input->pitch);
     const uint16_t *row2 = (const uint16_t *)((const uint8_t *)row1 + input->pitch);
+    const int coring_tau = (channel == 3) ? gpr_optical_coring_tau() : 0;
 #if GPR_STOCK_UNPACK_ASM
     if (getenv("GPR_CHANNEL_ASM")) {
-        gpr_stock_unpack14_channel(row1,row2,EncoderLogCurve,output,input->width/2,channel);
+        gpr_stock_unpack14_channel(row1,row2,EncoderLogCurve,output,input->width/2,(unsigned)channel | ((unsigned)coring_tau << 8));
         return;
     }
 #endif
     switch (channel) {
-        case 0: UnpackChannel14Impl(row1, row2, output, input->width/2, 0); break;
-        case 1: UnpackChannel14Impl(row1, row2, output, input->width/2, 1); break;
-        case 2: UnpackChannel14Impl(row1, row2, output, input->width/2, 2); break;
-        case 3: UnpackChannel14Impl(row1, row2, output, input->width/2, 3); break;
+        case 0: UnpackChannel14Impl(row1, row2, output, input->width/2, 0, 0); break;
+        case 1: UnpackChannel14Impl(row1, row2, output, input->width/2, 1, 0); break;
+        case 2: UnpackChannel14Impl(row1, row2, output, input->width/2, 2, 0); break;
+        case 3: UnpackChannel14Impl(row1, row2, output, input->width/2, 3, coring_tau); break;
     }
 }
 #endif

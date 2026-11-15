@@ -1349,6 +1349,10 @@ static void TransformVertical(RECURSIVE_TRANSFORM_DATA *data, int row, int mode)
         FilterVerticalDirect(data->lowpass_buffer, data->highpass_buffer, output,
             data->output_width, data->midpoints, data->multipliers, mode);
         for (int band=1; band<MAX_BAND_COUNT; band++) {
+            if (__builtin_expect(data->multipliers[band] == 0, 0)) {
+                encoder->row_pending[stage][band] += data->output_width;
+                continue;
+            }
             CODEC_ERROR error = EncodeHighpassIncremental(encoder->row_stream[stage][band],
                 encoder->codeset, output[band], data->output_width, 1,
                 data->output_pitch, &encoder->row_pending[stage][band], false);
@@ -1599,6 +1603,47 @@ static void ForwardWaveletTransform(TRANSFORM *transform, const COMPONENT_ARRAY 
     SetRecursiveTransformData( &transform_data[0], transform, input_image_component, midpoints[0], multipliers[0], lowpass_buffer, highpass_buffer, midpoint_prequant, 0 );
     SetRecursiveTransformData( &transform_data[1], transform, input_image_component, midpoints[1], multipliers[1], lowpass_buffer, highpass_buffer, midpoint_prequant, 1 );
     SetRecursiveTransformData( &transform_data[2], transform, input_image_component, midpoints[2], multipliers[2], lowpass_buffer, highpass_buffer, midpoint_prequant, 2 );
+    if (gpr_optical_coring_tau() > 0) {
+        const char *coring_env = getenv("GPR_OPTICAL_CORING");
+        const int coring_mode = coring_env ? atoi(coring_env) : 0;
+        /* Tier 1 (GPR_OPTICAL_CORING>=1): C_G (channel 3) green-phase difference
+         * deadzone across wavelet stages.
+         * Tier 2 (GPR_OPTICAL_CORING>=2): Also apply Stage-0 ([0.25, 0.50] cyc/px
+         * OLPF-attenuated highpass) deadzone across all channels. */
+        for (int band = 1; band < MAX_BAND_COUNT; band++) {
+            if (channel == 3) {
+                midpoints[0][band] = 0;
+                midpoints[1][band] = 0;
+                midpoints[2][band] = 0;
+            } else if (coring_mode >= 2) {
+                midpoints[0][band] = 0;
+            }
+        }
+    }
+    const int sparse_8k_tau = gpr_sparse_8k_tau();
+    if (sparse_8k_tau > 0) {
+        /* Sparse-8K Wavelet Hierarchy Mode (GPR_SPARSE_8K):
+         * Stage 1 and Stage 2 (LL1: the 12 MP 4096x3072 Bayer hierarchy with +6.02 dB
+         * shot-noise SNR gain and +1..2 stops DR) are preserved at full stock fidelity.
+         * Stage 0 ([0.25, 0.50] cyc/px 8K spatial innovation):
+         *   - Channel 3 (C_G = G1 - G2): Stage-0 highpass bands are zeroed (multiplier=0),
+         *     encoding only 12 MP C_G calibration while eliminating 8K diagonal shot noise.
+         *   - Channels 0, 1, 2 (Y_G, C_R, C_B): Stage-0 highpass bands use a negative
+         *     deadzone midpoint (-sparse_8k_tau) plus shadow illuminance gating in
+         *     FilterVerticalMiddle_8x_NEON_, so only bright, high-gradient 8K optical edges
+         *     emit non-zero wavelet symbols. */
+        for (int band = 1; band < MAX_BAND_COUNT; band++) {
+            if (channel == 3) {
+                multipliers[0][band] = 0;
+                midpoints[0][band] = 0;
+                midpoints[1][band] = 0;
+                midpoints[2][band] = 0;
+            } else {
+                const int band_tau = (band == HH_BAND) ? (sparse_8k_tau + (sparse_8k_tau >> 1)) : sparse_8k_tau;
+                midpoints[0][band] = -band_tau;
+            }
+        }
+    }
     
     if ((encoder->preview_row_observer || getenv("GPR_PIPELINE_WAVELETS")) && transform_data[2].input_height>=6)
         ForwardWaveletPipelined(transform_data);
@@ -3056,7 +3101,13 @@ static CODEC_ERROR EncodeHighpassIncremental(BITSTREAM *stream, ENCODER_CODESET 
             {
                 PIXEL* start = rowptr + index;
                 PIXEL* end   = rowptr + width;
-                
+#if ENABLED(NEON)
+                while (start + 8 <= end) {
+                    uint16x8_t v = vld1q_u16((const uint16_t *)start);
+                    if (vmaxvq_u16(v) != 0) break;
+                    start += 8;
+                }
+#endif
                 for (; start != end && *(start) == 0; start++)
                 {
                     

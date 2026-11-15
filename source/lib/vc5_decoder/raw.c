@@ -68,6 +68,28 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
         
         output_row1_ptr = (uint16_t *)output_row_ptr;
         output_row2_ptr = (uint16_t *)(output_row_ptr + output_half_pitch);
+
+        if (output_format == PIXEL_FORMAT_RAW_RGGB_14 && output_bit_depth == 14)
+        {
+            for (column = 0; column < width; column++)
+            {
+                int32_t GS = GS_input_row_ptr[column];
+                int32_t RG = RG_input_row_ptr[column] - midpoint;
+                int32_t BG = BG_input_row_ptr[column] - midpoint;
+                int32_t GD = GD_input_row_ptr[column] - midpoint;
+
+                int32_t R  = clamp_uint(RG * 2 + GS, 12);
+                int32_t B  = clamp_uint(BG * 2 + GS, 12);
+                int32_t G1 = clamp_uint(GS + GD,     12);
+                int32_t G2 = clamp_uint(GS - GD,     12);
+
+                output_row1_ptr[2 * column + 0] = (uint16_t)(DecoderLogCurve[R]  >> 2);
+                output_row1_ptr[2 * column + 1] = (uint16_t)(DecoderLogCurve[G1] >> 2);
+                output_row2_ptr[2 * column + 0] = (uint16_t)(DecoderLogCurve[G2] >> 2);
+                output_row2_ptr[2 * column + 1] = (uint16_t)(DecoderLogCurve[B]  >> 2);
+            }
+            continue;
+        }
         
         // Pack the rows of Bayer components into the BYR4 pattern
         for (column = 0; column < width; column++)

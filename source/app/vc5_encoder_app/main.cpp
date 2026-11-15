@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
         
         assert( vc5_image.buffer && vc5_image.size > 0 );
 
-        if( write_to_file( &vc5_image, args.output_file_path.c_str() ) )
+        if( (encoder_run + 1 == encoder_run_count) && write_to_file( &vc5_image, args.output_file_path.c_str() ) )
         {
             LogPrint("Error writing bitstream to location %s", args.output_file_path.c_str() );
             return -1;

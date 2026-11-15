@@ -164,6 +164,30 @@ CODEC_ERROR DecodeStream(STREAM *stream, UNPACKED_IMAGE *unpacked_image, const D
 	may be available to the decoder from the media container or an external
 	application.
  */
+static bool gpr_raw_decode_half_enabled(void)
+{
+    const char *env = getenv("GPR_RAW_DECODE_HALF");
+    return (env != NULL && env[0] == '1');
+}
+
+static WAVELET *CreateLowpassOnlyWavelet(gpr_allocator *allocator, DIMENSION width, DIMENSION height)
+{
+    if (width <= 0 || height <= 0) return NULL;
+    WAVELET *wavelet = (WAVELET *)allocator->Alloc(sizeof(WAVELET));
+    if (wavelet == NULL) return NULL;
+    InitWavelet(wavelet, width, height);
+    DIMENSION pitch = ((width * sizeof(PIXEL) + 63) & ~(size_t)63) + 64;
+    size_t band_data_size = (size_t)height * pitch;
+    PIXEL *data_band0 = (PIXEL *)gpr_aligned_alloc(allocator, band_data_size);
+    if (data_band0 == NULL) {
+        allocator->Free(wavelet);
+        return NULL;
+    }
+    wavelet->data[0] = data_band0;
+    wavelet->pitch = pitch;
+    return wavelet;
+}
+
 static bool RGBWaveletsReady(const DECODER *decoder,int level)
 {
     int channel;
@@ -395,6 +419,12 @@ CODEC_ERROR DecodingProcess(DECODER *decoder, BITSTREAM *stream, UNPACKED_IMAGE 
         decoder->subbands_to_decode = 4;
     }
     else if( parameters->rgb_resolution == GPR_RGB_RESOLUTION_QUARTER )
+    {
+        decoder->subbands_to_decode = 7;
+    }
+    else if( parameters->rgb_resolution == GPR_RGB_RESOLUTION_NONE &&
+             parameters->wavelet_channel < 0 &&
+             gpr_raw_decode_half_enabled() )
     {
         decoder->subbands_to_decode = 7;
     }
@@ -693,7 +723,9 @@ CODEC_ERROR AllocDecoderTransforms(DECODER *decoder)
             wavelet_width /= 2;
             wavelet_height /= 2;
             
-            wavelet = CreateWavelet(allocator, wavelet_width, wavelet_height);
+            wavelet = (wavelet_index == 0 && decoder->subbands_to_decode <= 7)
+                ? CreateLowpassOnlyWavelet(allocator, wavelet_width, wavelet_height)
+                : CreateWavelet(allocator, wavelet_width, wavelet_height);
             if (wavelet == NULL) return CODEC_ERROR_OUTOFMEMORY;
             decoder->transform[channel_number].wavelet[wavelet_index] = wavelet;
         }
@@ -807,7 +839,9 @@ CODEC_ERROR AllocateChannelWavelets(DECODER *decoder, int channel_number)
         
         if (wavelet == NULL)
         {
-            wavelet = CreateWavelet(allocator, wavelet_width, wavelet_height);
+            wavelet = (wavelet_index == 0 && decoder->subbands_to_decode <= 7)
+                ? CreateLowpassOnlyWavelet(allocator, wavelet_width, wavelet_height)
+                : CreateWavelet(allocator, wavelet_width, wavelet_height);
             if (wavelet == NULL) return CODEC_ERROR_OUTOFMEMORY;
             
             decoder->transform[channel_number].wavelet[wavelet_index] = wavelet;
@@ -976,6 +1010,16 @@ CODEC_ERROR SetOutputImageFormat(DECODER *decoder,
     // The image dimensions are in units of samples
     DIMENSION output_width = decoder->codec.image_width;
     DIMENSION output_height = decoder->codec.image_height;
+
+    if (decoder->subbands_to_decode == 7 &&
+        !decoder->rgb_channels_only &&
+        decoder->wavelet_channel < 0 &&
+        gpr_raw_decode_half_enabled() &&
+        decoder->transform[0].wavelet[0] != NULL)
+    {
+        output_width = decoder->transform[0].wavelet[0]->width * 2;
+        output_height = decoder->transform[0].wavelet[0]->height * 2;
+    }
     
     PIXEL_FORMAT output_format = PIXEL_FORMAT_UNKNOWN;
     
@@ -2310,8 +2354,46 @@ CODEC_ERROR ReconstructUnpackedImage(DECODER *decoder, UNPACKED_IMAGE *image)
     image->component_count = 0;
     memset(image->component_array_list, 0, size);
     
+    const bool raw_half_mode = (decoder->subbands_to_decode == 7 &&
+                                !decoder->rgb_channels_only &&
+                                decoder->wavelet_channel < 0 &&
+                                gpr_raw_decode_half_enabled());
+
     for (channel_number = 0; channel_number < channel_count; channel_number++)
     {
+        if (raw_half_mode)
+        {
+            WAVELET *w0 = decoder->transform[channel_number].wavelet[0];
+            if (w0 == NULL || w0->data[0] == NULL) {
+                return CODEC_ERROR_UNEXPECTED;
+            }
+            DIMENSION half_width = w0->width;
+            DIMENSION half_height = w0->height;
+            PRECISION bits_per_component = decoder->channel[channel_number].bits_per_component;
+
+            const size_t pitch_px = w0->pitch / sizeof(PIXEL);
+            PIXEL *base = w0->data[0];
+
+            for (DIMENSION y = 0; y < half_height; y++)
+            {
+                PIXEL *row = base + (size_t)y * pitch_px;
+                for (DIMENSION x = 0; x < half_width; x++)
+                {
+                    int32_t v = ((int32_t)row[x] + 2) >> 2;
+                    row[x] = (PIXEL)clamp_uint(v, 12);
+                }
+            }
+
+            image->component_array_list[channel_number].width = half_width;
+            image->component_array_list[channel_number].height = half_height;
+            image->component_array_list[channel_number].pitch = w0->pitch;
+            image->component_array_list[channel_number].data = (COMPONENT_VALUE *)w0->data[0];
+            image->component_array_list[channel_number].bits_per_component = bits_per_component;
+            w0->data[0] = NULL;
+            image->component_count = channel_number + 1;
+            continue;
+        }
+
         // Get the dimensions of this channel
         DIMENSION channel_width = decoder->channel[channel_number].width;
         DIMENSION channel_height = decoder->channel[channel_number].height;
