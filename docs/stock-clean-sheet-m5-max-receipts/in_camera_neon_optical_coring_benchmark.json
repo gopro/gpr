@@ -1,0 +1,280 @@
+{
+  "schema": "gpr.optical_coring_in_camera_benchmark.v1",
+  "sdk_binary": "/tmp/gpr-native-build/source/app/gpr_tools/gpr_tools",
+  "default_identity_verified": true,
+  "cases": [
+    {
+      "case": "GP011728_12MP",
+      "shape": [
+        3072,
+        4096
+      ],
+      "megapixels": 12.58,
+      "default_bit_exact_identity": true,
+      "baseline_gpr_sha256": "7513aa735400e729e2d81c96a3cbda05c5b35b50bbb4be597409e5a02146c8c3",
+      "baseline_size_bytes": 3724276,
+      "baseline_encode_ms": 30.21,
+      "baseline_decoded_psnr_db": 62.7352,
+      "baseline_cleanup_1x_psnr_db": 63.2331,
+      "sweeps": [
+        {
+          "mode": "stock_default (tau=0)",
+          "env": {
+            "GPR_OPTICAL_CORING": "0",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 3724276,
+          "byte_delta": 0,
+          "size_reduction_pct": -0.0,
+          "encode_median_ms": 33.18,
+          "encode_min_ms": 32.41,
+          "encode_time_reduction_pct": -9.82,
+          "decoded_psnr_db": 62.7352,
+          "cleanup_1x_psnr_db": 63.2331
+        },
+        {
+          "mode": "tier1_cg_only (GPR_OPTICAL_CORING=1, tau=6)",
+          "env": {
+            "GPR_OPTICAL_CORING": "1",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 3341996,
+          "byte_delta": -382280,
+          "size_reduction_pct": 10.26,
+          "encode_median_ms": 34.65,
+          "encode_min_ms": 33.77,
+          "encode_time_reduction_pct": -14.71,
+          "decoded_psnr_db": 60.8057,
+          "cleanup_1x_psnr_db": 61.0866
+        },
+        {
+          "mode": "tier1_2_full_stackup (GPR_OPTICAL_CORING=2, tau=6)",
+          "env": {
+            "GPR_OPTICAL_CORING": "2",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 2611460,
+          "byte_delta": -1112816,
+          "size_reduction_pct": 29.88,
+          "encode_median_ms": 31.42,
+          "encode_min_ms": 28.11,
+          "encode_time_reduction_pct": -4.01,
+          "decoded_psnr_db": 58.8668,
+          "cleanup_1x_psnr_db": 58.9291
+        },
+        {
+          "mode": "tier1_2_tau4 (GPR_OPTICAL_CORING=4)",
+          "env": {
+            "GPR_OPTICAL_CORING": "4",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 2627184,
+          "byte_delta": -1097092,
+          "size_reduction_pct": 29.46,
+          "encode_median_ms": 30.4,
+          "encode_min_ms": 29.72,
+          "encode_time_reduction_pct": -0.63,
+          "decoded_psnr_db": 58.8901,
+          "cleanup_1x_psnr_db": 58.9527
+        },
+        {
+          "mode": "tier1_2_tau8 (GPR_OPTICAL_CORING=8)",
+          "env": {
+            "GPR_OPTICAL_CORING": "8",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 2602840,
+          "byte_delta": -1121436,
+          "size_reduction_pct": 30.11,
+          "encode_median_ms": 31.52,
+          "encode_min_ms": 30.76,
+          "encode_time_reduction_pct": -4.35,
+          "decoded_psnr_db": 58.8561,
+          "cleanup_1x_psnr_db": 58.9185
+        }
+      ]
+    },
+    {
+      "case": "GPAB1094_12MP",
+      "shape": [
+        3072,
+        4096
+      ],
+      "megapixels": 12.58,
+      "default_bit_exact_identity": true,
+      "baseline_gpr_sha256": "8aed207e47c1c77bf3c158cb32eb42c16af77a310a6bdf71c0573ff50415b0f4",
+      "baseline_size_bytes": 3234648,
+      "baseline_encode_ms": 32.0,
+      "baseline_decoded_psnr_db": 69.9513,
+      "baseline_cleanup_1x_psnr_db": 70.4999,
+      "sweeps": [
+        {
+          "mode": "stock_default (tau=0)",
+          "env": {
+            "GPR_OPTICAL_CORING": "0",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 3234648,
+          "byte_delta": 0,
+          "size_reduction_pct": -0.0,
+          "encode_median_ms": 33.91,
+          "encode_min_ms": 31.3,
+          "encode_time_reduction_pct": -5.97,
+          "decoded_psnr_db": 69.9513,
+          "cleanup_1x_psnr_db": 70.4999
+        },
+        {
+          "mode": "tier1_cg_only (GPR_OPTICAL_CORING=1, tau=6)",
+          "env": {
+            "GPR_OPTICAL_CORING": "1",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 2877816,
+          "byte_delta": -356832,
+          "size_reduction_pct": 11.03,
+          "encode_median_ms": 33.63,
+          "encode_min_ms": 33.54,
+          "encode_time_reduction_pct": -5.09,
+          "decoded_psnr_db": 68.7164,
+          "cleanup_1x_psnr_db": 69.1174
+        },
+        {
+          "mode": "tier1_2_full_stackup (GPR_OPTICAL_CORING=2, tau=6)",
+          "env": {
+            "GPR_OPTICAL_CORING": "2",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 2170092,
+          "byte_delta": -1064556,
+          "size_reduction_pct": 32.91,
+          "encode_median_ms": 30.97,
+          "encode_min_ms": 29.17,
+          "encode_time_reduction_pct": 3.21,
+          "decoded_psnr_db": 67.6943,
+          "cleanup_1x_psnr_db": 67.896
+        },
+        {
+          "mode": "tier1_2_tau4 (GPR_OPTICAL_CORING=4)",
+          "env": {
+            "GPR_OPTICAL_CORING": "4",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 2190552,
+          "byte_delta": -1044096,
+          "size_reduction_pct": 32.28,
+          "encode_median_ms": 30.12,
+          "encode_min_ms": 27.59,
+          "encode_time_reduction_pct": 5.89,
+          "decoded_psnr_db": 67.7504,
+          "cleanup_1x_psnr_db": 67.9548
+        },
+        {
+          "mode": "tier1_2_tau8 (GPR_OPTICAL_CORING=8)",
+          "env": {
+            "GPR_OPTICAL_CORING": "8",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 2154180,
+          "byte_delta": -1080468,
+          "size_reduction_pct": 33.4,
+          "encode_median_ms": 29.68,
+          "encode_min_ms": 27.56,
+          "encode_time_reduction_pct": 7.27,
+          "decoded_psnr_db": 67.6565,
+          "cleanup_1x_psnr_db": 67.8565
+        }
+      ]
+    },
+    {
+      "case": "GP011689_50MP",
+      "shape": [
+        6144,
+        8192
+      ],
+      "megapixels": 50.33,
+      "default_bit_exact_identity": true,
+      "baseline_gpr_sha256": "866c26715bd5faeaed889956654dd1e9269c3899e5dcab09960a9482ff598924",
+      "baseline_size_bytes": 7011076,
+      "baseline_encode_ms": 76.12,
+      "baseline_decoded_psnr_db": 64.9047,
+      "baseline_cleanup_1x_psnr_db": null,
+      "sweeps": [
+        {
+          "mode": "stock_default (tau=0)",
+          "env": {
+            "GPR_OPTICAL_CORING": "0",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 7011076,
+          "byte_delta": 0,
+          "size_reduction_pct": -0.0,
+          "encode_median_ms": 88.49,
+          "encode_min_ms": 88.03,
+          "encode_time_reduction_pct": -16.26,
+          "decoded_psnr_db": 64.9047,
+          "cleanup_1x_psnr_db": null
+        },
+        {
+          "mode": "tier1_cg_only (GPR_OPTICAL_CORING=1, tau=6)",
+          "env": {
+            "GPR_OPTICAL_CORING": "1",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 6129160,
+          "byte_delta": -881916,
+          "size_reduction_pct": 12.58,
+          "encode_median_ms": 86.43,
+          "encode_min_ms": 85.64,
+          "encode_time_reduction_pct": -13.55,
+          "decoded_psnr_db": 63.7373,
+          "cleanup_1x_psnr_db": null
+        },
+        {
+          "mode": "tier1_2_full_stackup (GPR_OPTICAL_CORING=2, tau=6)",
+          "env": {
+            "GPR_OPTICAL_CORING": "2",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 5280268,
+          "byte_delta": -1730808,
+          "size_reduction_pct": 24.69,
+          "encode_median_ms": 84.4,
+          "encode_min_ms": 83.55,
+          "encode_time_reduction_pct": -10.88,
+          "decoded_psnr_db": 62.3906,
+          "cleanup_1x_psnr_db": null
+        },
+        {
+          "mode": "tier1_2_tau4 (GPR_OPTICAL_CORING=4)",
+          "env": {
+            "GPR_OPTICAL_CORING": "4",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 5308076,
+          "byte_delta": -1703000,
+          "size_reduction_pct": 24.29,
+          "encode_median_ms": 83.49,
+          "encode_min_ms": 82.27,
+          "encode_time_reduction_pct": -9.68,
+          "decoded_psnr_db": 62.3934,
+          "cleanup_1x_psnr_db": null
+        },
+        {
+          "mode": "tier1_2_tau8 (GPR_OPTICAL_CORING=8)",
+          "env": {
+            "GPR_OPTICAL_CORING": "8",
+            "GPR_CHANNEL_ASM": "1"
+          },
+          "gpr_size_bytes": 5264300,
+          "byte_delta": -1746776,
+          "size_reduction_pct": 24.91,
+          "encode_median_ms": 85.51,
+          "encode_min_ms": 83.81,
+          "encode_time_reduction_pct": -12.34,
+          "decoded_psnr_db": 62.383,
+          "cleanup_1x_psnr_db": null
+        }
+      ]
+    }
+  ]
+}

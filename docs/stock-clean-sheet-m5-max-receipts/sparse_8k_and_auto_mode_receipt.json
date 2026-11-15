@@ -1,0 +1,395 @@
+{
+  "auto_mode_14_scenes": [
+    {
+      "stem": "GP011689",
+      "selected_mode": "50MP_SPARSE_8K",
+      "target_resolution": [
+        8192,
+        6144
+      ],
+      "is_dark": false,
+      "is_high_contrast": false,
+      "p50_counts": 372.25,
+      "contrast_stops_p99_p10": 3.9901540304897303,
+      "contrast_stops_p95_p5": 3.706058593837633,
+      "expected_binning_snr_gain_db": 6.112295138845257,
+      "analysis_latency_ms": 5.5548748932778835,
+      "reasons": [
+        "BRIGHT_LOW_CONTRAST_SCENE (median=372.2 >= 300, C_99/10=3.99 <= 5.80 stops; encode 12 MP LL1 base + sparse Stage-0 8K innovation)"
+      ]
+    },
+    {
+      "stem": "GP010114",
+      "selected_mode": "50MP_SPARSE_8K",
+      "target_resolution": [
+        8192,
+        6144
+      ],
+      "is_dark": false,
+      "is_high_contrast": false,
+      "p50_counts": 1074.125,
+      "contrast_stops_p99_p10": 5.072344464834054,
+      "contrast_stops_p95_p5": 4.953300080060419,
+      "expected_binning_snr_gain_db": 6.052746457573475,
+      "analysis_latency_ms": 1.339958980679512,
+      "reasons": [
+        "BRIGHT_LOW_CONTRAST_SCENE (median=1074.1 >= 300, C_99/10=5.07 <= 5.80 stops; encode 12 MP LL1 base + sparse Stage-0 8K innovation)"
+      ]
+    },
+    {
+      "stem": "GP010130",
+      "selected_mode": "12MP_HIGH_SNR_DR",
+      "target_resolution": [
+        4096,
+        3072
+      ],
+      "is_dark": false,
+      "is_high_contrast": true,
+      "p50_counts": 668.0,
+      "contrast_stops_p99_p10": 5.752310299086282,
+      "contrast_stops_p95_p5": 5.973982594789788,
+      "expected_binning_snr_gain_db": 6.072097886087937,
+      "analysis_latency_ms": 1.495125237852335,
+      "reasons": [
+        "HIGH_CONTRAST_SCENE (C_99/10=5.75 stops > 5.80 stops; 12 MP maximizes shadow DR)"
+      ]
+    },
+    {
+      "stem": "GP010136",
+      "selected_mode": "12MP_HIGH_SNR_DR",
+      "target_resolution": [
+        4096,
+        3072
+      ],
+      "is_dark": false,
+      "is_high_contrast": true,
+      "p50_counts": 303.25,
+      "contrast_stops_p99_p10": 6.90829399025108,
+      "contrast_stops_p95_p5": 6.182146019633214,
+      "expected_binning_snr_gain_db": 6.132712270272433,
+      "analysis_latency_ms": 1.3680420815944672,
+      "reasons": [
+        "HIGH_CONTRAST_SCENE (C_99/10=6.91 stops > 5.80 stops; 12 MP maximizes shadow DR)"
+      ]
+    },
+    {
+      "stem": "GP017346",
+      "selected_mode": "12MP_HIGH_SNR_DR",
+      "target_resolution": [
+        4096,
+        3072
+      ],
+      "is_dark": true,
+      "is_high_contrast": false,
+      "p50_counts": 182.75,
+      "contrast_stops_p99_p10": 4.235564709223324,
+      "contrast_stops_p95_p5": 3.919295616499299,
+      "expected_binning_snr_gain_db": 6.2040511646692975,
+      "analysis_latency_ms": 1.4277910813689232,
+      "reasons": [
+        "DARK_SCENE (median=182.8 < 300 counts; 2x2 binning yields +6.20 dB SNR)"
+      ]
+    },
+    {
+      "stem": "GP017349",
+      "selected_mode": "50MP_SPARSE_8K",
+      "target_resolution": [
+        8192,
+        6144
+      ],
+      "is_dark": false,
+      "is_high_contrast": false,
+      "p50_counts": 492.5,
+      "contrast_stops_p99_p10": 3.626786442344766,
+      "contrast_stops_p95_p5": 3.5705521818560286,
+      "expected_binning_snr_gain_db": 6.09020452547396,
+      "analysis_latency_ms": 1.5402911230921745,
+      "reasons": [
+        "BRIGHT_LOW_CONTRAST_SCENE (median=492.5 >= 300, C_99/10=3.63 <= 5.80 stops; encode 12 MP LL1 base + sparse Stage-0 8K innovation)"
+      ]
+    },
+    {
+      "stem": "GP017352",
+      "selected_mode": "12MP_HIGH_SNR_DR",
+      "target_resolution": [
+        4096,
+        3072
+      ],
+      "is_dark": true,
+      "is_high_contrast": false,
+      "p50_counts": 192.25,
+      "contrast_stops_p99_p10": 4.50902488338679,
+      "contrast_stops_p95_p5": 4.582630683434969,
+      "expected_binning_snr_gain_db": 6.195287350694625,
+      "analysis_latency_ms": 1.9569997675716877,
+      "reasons": [
+        "DARK_SCENE (median=192.2 < 300 counts; 2x2 binning yields +6.20 dB SNR)"
+      ]
+    },
+    {
+      "stem": "GP017389",
+      "selected_mode": "50MP_SPARSE_8K",
+      "target_resolution": [
+        8192,
+        6144
+      ],
+      "is_dark": false,
+      "is_high_contrast": false,
+      "p50_counts": 341.75,
+      "contrast_stops_p99_p10": 2.8957924537020654,
+      "contrast_stops_p95_p5": 2.9026151953392993,
+      "expected_binning_snr_gain_db": 6.120322711931546,
+      "analysis_latency_ms": 1.2895828112959862,
+      "reasons": [
+        "BRIGHT_LOW_CONTRAST_SCENE (median=341.8 >= 300, C_99/10=2.90 <= 5.80 stops; encode 12 MP LL1 base + sparse Stage-0 8K innovation)"
+      ]
+    },
+    {
+      "stem": "GP017396",
+      "selected_mode": "12MP_HIGH_SNR_DR",
+      "target_resolution": [
+        4096,
+        3072
+      ],
+      "is_dark": false,
+      "is_high_contrast": true,
+      "p50_counts": 344.75,
+      "contrast_stops_p99_p10": 6.534859000547414,
+      "contrast_stops_p95_p5": 5.266714976665972,
+      "expected_binning_snr_gain_db": 6.119471317052069,
+      "analysis_latency_ms": 1.420208252966404,
+      "reasons": [
+        "HIGH_CONTRAST_SCENE (C_99/10=6.53 stops > 5.80 stops; 12 MP maximizes shadow DR)"
+      ]
+    },
+    {
+      "stem": "GP017451",
+      "selected_mode": "12MP_HIGH_SNR_DR",
+      "target_resolution": [
+        4096,
+        3072
+      ],
+      "is_dark": false,
+      "is_high_contrast": true,
+      "p50_counts": 574.75,
+      "contrast_stops_p99_p10": 5.304779641750073,
+      "contrast_stops_p95_p5": 5.269446940038629,
+      "expected_binning_snr_gain_db": 6.080357585716709,
+      "analysis_latency_ms": 1.1669998057186604,
+      "reasons": [
+        "HIGH_CONTRAST_SCENE (C_99/10=5.30 stops > 5.80 stops; 12 MP maximizes shadow DR)"
+      ]
+    },
+    {
+      "stem": "GP017497",
+      "selected_mode": "12MP_HIGH_SNR_DR",
+      "target_resolution": [
+        4096,
+        3072
+      ],
+      "is_dark": true,
+      "is_high_contrast": false,
+      "p50_counts": 231.0,
+      "contrast_stops_p99_p10": 5.7675013349947095,
+      "contrast_stops_p95_p5": 4.3729389604672875,
+      "expected_binning_snr_gain_db": 6.166799799322974,
+      "analysis_latency_ms": 1.4324169605970383,
+      "reasons": [
+        "DARK_SCENE (median=231.0 < 300 counts; 2x2 binning yields +6.17 dB SNR)"
+      ]
+    },
+    {
+      "stem": "GP017503",
+      "selected_mode": "50MP_SPARSE_8K",
+      "target_resolution": [
+        8192,
+        6144
+      ],
+      "is_dark": false,
+      "is_high_contrast": false,
+      "p50_counts": 372.25,
+      "contrast_stops_p99_p10": 5.434740596506016,
+      "contrast_stops_p95_p5": 4.423800188583384,
+      "expected_binning_snr_gain_db": 6.112295138845257,
+      "analysis_latency_ms": 1.4230418018996716,
+      "reasons": [
+        "BRIGHT_LOW_CONTRAST_SCENE (median=372.2 >= 300, C_99/10=5.43 <= 5.80 stops; encode 12 MP LL1 base + sparse Stage-0 8K innovation)"
+      ]
+    },
+    {
+      "stem": "GP017508",
+      "selected_mode": "12MP_HIGH_SNR_DR",
+      "target_resolution": [
+        4096,
+        3072
+      ],
+      "is_dark": true,
+      "is_high_contrast": false,
+      "p50_counts": 209.625,
+      "contrast_stops_p99_p10": 5.58865986689878,
+      "contrast_stops_p95_p5": 4.958654331912672,
+      "expected_binning_snr_gain_db": 6.181251133906286,
+      "analysis_latency_ms": 1.2044589966535568,
+      "reasons": [
+        "DARK_SCENE (median=209.6 < 300 counts; 2x2 binning yields +6.18 dB SNR)"
+      ]
+    },
+    {
+      "stem": "GP017604",
+      "selected_mode": "50MP_SPARSE_8K",
+      "target_resolution": [
+        8192,
+        6144
+      ],
+      "is_dark": false,
+      "is_high_contrast": false,
+      "p50_counts": 1151.375,
+      "contrast_stops_p99_p10": 5.155254870176874,
+      "contrast_stops_p95_p5": 5.038918989292302,
+      "expected_binning_snr_gain_db": 6.050602026093683,
+      "analysis_latency_ms": 0.9874589741230011,
+      "reasons": [
+        "BRIGHT_LOW_CONTRAST_SCENE (median=1151.4 >= 300, C_99/10=5.16 <= 5.80 stops; encode 12 MP LL1 base + sparse Stage-0 8K innovation)"
+      ]
+    }
+  ],
+  "gp011728_12mp_rate_distortion": [
+    {
+      "stem": "GP011728",
+      "quality": 5,
+      "optical_coring": 0,
+      "gpr_size_bytes": 5473268,
+      "bayer_psnr_db": 76.23146486568606,
+      "green_sum_structural_psnr_db": 76.61030086167212
+    },
+    {
+      "stem": "GP011728",
+      "quality": 5,
+      "optical_coring": 2,
+      "gpr_size_bytes": 4643708,
+      "bayer_psnr_db": 64.30846031402254,
+      "green_sum_structural_psnr_db": 68.27335130537591
+    },
+    {
+      "stem": "GP011728",
+      "quality": 4,
+      "optical_coring": 0,
+      "gpr_size_bytes": 4243624,
+      "bayer_psnr_db": 63.980130122175716,
+      "green_sum_structural_psnr_db": 67.1297083229786
+    },
+    {
+      "stem": "GP011728",
+      "quality": 4,
+      "optical_coring": 2,
+      "gpr_size_bytes": 3273560,
+      "bayer_psnr_db": 61.128399964698595,
+      "green_sum_structural_psnr_db": 64.52566558090155
+    },
+    {
+      "stem": "GP011728",
+      "quality": 3,
+      "optical_coring": 0,
+      "gpr_size_bytes": 3656192,
+      "bayer_psnr_db": 62.73521442397956,
+      "green_sum_structural_psnr_db": 66.10352472778835
+    },
+    {
+      "stem": "GP011728",
+      "quality": 3,
+      "optical_coring": 2,
+      "gpr_size_bytes": 2543376,
+      "bayer_psnr_db": 58.866811984493566,
+      "green_sum_structural_psnr_db": 61.71788209661575
+    },
+    {
+      "stem": "GP011728",
+      "quality": 2,
+      "optical_coring": 0,
+      "gpr_size_bytes": 3088916,
+      "bayer_psnr_db": 59.841882019589654,
+      "green_sum_structural_psnr_db": 63.07977954474851
+    },
+    {
+      "stem": "GP011728",
+      "quality": 2,
+      "optical_coring": 2,
+      "gpr_size_bytes": 1928252,
+      "bayer_psnr_db": 57.935786990851845,
+      "green_sum_structural_psnr_db": 60.54025646085627
+    },
+    {
+      "stem": "GP011728",
+      "quality": 1,
+      "optical_coring": 0,
+      "gpr_size_bytes": 1834868,
+      "bayer_psnr_db": 57.01301793948237,
+      "green_sum_structural_psnr_db": 59.74562658326208
+    },
+    {
+      "stem": "GP011728",
+      "quality": 1,
+      "optical_coring": 2,
+      "gpr_size_bytes": 1246708,
+      "bayer_psnr_db": 55.867129126168884,
+      "green_sum_structural_psnr_db": 57.99980192029096
+    }
+  ],
+  "dual_raw_12mp_extraction": {
+    "env": {
+      "GPR_RAW_DECODE_HALF": "1"
+    },
+    "output_dimensions": [
+      4096,
+      3072
+    ],
+    "output_bytes": 25165824,
+    "memory_saved_bytes_vs_full_50mp": 179306496,
+    "m5_max_benchmarks": {
+      "GP011689": {
+        "vc5_mb": 5.38,
+        "full_50mp_decode_ms": 157.0,
+        "dual_raw_12mp_decode_ms": 81.0,
+        "speedup_x": 1.94,
+        "psnr_vs_2x2_bin_db": 69.27
+      },
+      "GP010114": {
+        "vc5_mb": 8.69,
+        "full_50mp_decode_ms": 196.0,
+        "dual_raw_12mp_decode_ms": 92.0,
+        "speedup_x": 2.13,
+        "psnr_vs_2x2_bin_db": 62.3
+      },
+      "GP010130": {
+        "vc5_mb": 9.55,
+        "full_50mp_decode_ms": 209.0,
+        "dual_raw_12mp_decode_ms": 100.0,
+        "speedup_x": 2.09,
+        "psnr_vs_2x2_bin_db": 59.29
+      },
+      "GP010136": {
+        "vc5_mb": 6.75,
+        "full_50mp_decode_ms": 167.0,
+        "dual_raw_12mp_decode_ms": 81.0,
+        "speedup_x": 2.06,
+        "psnr_vs_2x2_bin_db": 70.52
+      }
+    },
+    "pi5_standin_benchmarks": {
+      "GP011689": {
+        "vc5_mb": 5.38,
+        "full_50mp_decode_ms": 649.0,
+        "dual_raw_12mp_decode_ms": 282.0,
+        "speedup_x": 2.3,
+        "psnr_vs_2x2_bin_db": 69.27
+      }
+    }
+  },
+  "hindsight_raw_ring_buffer": {
+    "default_ram_budget_mb": 128,
+    "default_pre_roll_seconds": 2.0,
+    "capacity_12mp_q1_coring_frames": 114,
+    "capacity_50mp_sparse8k_frames": 23,
+    "flush_container": "GVID v3 (GVID header + VC-5 payloads + GVDX O(1) CRC32 index trailer)"
+  }
+}
