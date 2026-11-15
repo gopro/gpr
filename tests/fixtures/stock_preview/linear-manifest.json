@@ -1,0 +1,37 @@
+{
+  "source_revision": "6b22975dcf4e65ab9445852cd7b2220ae3faa3af",
+  "probe_source_sha256": "d136a1343e52618ea8324284bca7e970ddbaf2f4fadecd786c164c27ee80511a",
+  "probe_binary_sha256": "25579f79ea542a94dcfe2b633be83acbfc80bf456f3f82b5f828de1567a04ac2",
+  "fixtures": [
+    {
+      "path": "128x96-q3-s4.rgb16be",
+      "sha256": "ceb943f820af61082bf04df90e1acd89e7578e2f954b02489407db5d59e1bc25",
+      "bytes": 4608
+    },
+    {
+      "path": "128x96-q3-s8.rgb16be",
+      "sha256": "bc47300c735cb0ddc24696394fbdda48c94d42bef3fd9cebc3f9f931a10f9bc2",
+      "bytes": 1152
+    },
+    {
+      "path": "128x96-q3-s16.rgb16be",
+      "sha256": "7b84503557abcd3677e83f3f3c5264dfb64319ca8eca74c633b628868d5d402f",
+      "bytes": 288
+    },
+    {
+      "path": "72x96-q3-s4.rgb16be",
+      "sha256": "5d722ea85f1a4f281b676c14c1cddab66f21ddee84f00ef864e168d9ac892913",
+      "bytes": 2592
+    },
+    {
+      "path": "72x96-q3-s8.rgb16be",
+      "sha256": "0cce13c8ebacb08913980797cf190cfd07d726d9495665a8f6ae7b966a88b540",
+      "bytes": 648
+    },
+    {
+      "path": "72x96-q3-s16.rgb16be",
+      "sha256": "eb98887d3965e05837e017557c3d109adf3f0d5a9e1c15bade43b48b393671bb",
+      "bytes": 180
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "reference_commit": "6b22975dcf4e65ab9445852cd7b2220ae3faa3af",
+  "reference_probe_sha256": "7a659d6f7e4549b5578b7ade82f27604d501f5c4fc4aed5d1a7d4df12b6efb35",
+  "input_format": "RGGB14, unpacked little-endian u16",
+  "input_formula": "(x*123+y*97+x*y*29+(x^y)*37)&16383",
+  "quality": 3,
+  "fixtures": [
+    {
+      "name": "128x96-q3",
+      "width": 128,
+      "height": 96,
+      "input_sha256": "e0866c7495a22319da13f717944b49281a4f0ba1d158752e4dbdc67162863d7e",
+      "payload_sha256": "86c101b6ecc079669ab5c8551471ee4e978dc5a110cf03d327c179a193d029de",
+      "outputs": [
+        {
+          "downsample": 4,
+          "width": 32,
+          "height": 24,
+          "bytes": 2304,
+          "sha256": "c0339c9b04b072b911165ff2b24c88396626265ed764bbd37056eda8ad57dfa4"
+        },
+        {
+          "downsample": 8,
+          "width": 16,
+          "height": 12,
+          "bytes": 576,
+          "sha256": "a494b67ce41a750dc5457c471fcb6375d10c0463a2509e8c749f34cdf9b0e849"
+        },
+        {
+          "downsample": 16,
+          "width": 8,
+          "height": 6,
+          "bytes": 144,
+          "sha256": "d640e26c4c20644e7b214decb3b6fcb2a58ba440ebfd93f7d9efe15e43eb5259"
+        }
+      ]
+    },
+    {
+      "name": "72x96-q3",
+      "width": 72,
+      "height": 96,
+      "input_sha256": "bb6f52eeea323619cccb2004518ada01b874f73db0598736c217cde186d159d7",
+      "payload_sha256": "d637fef7cb4a22c7f63c12b24ded14d5852cbfa5a2a52f897e86f061408c312c",
+      "outputs": [
+        {
+          "downsample": 4,
+          "width": 18,
+          "height": 24,
+          "bytes": 1296,
+          "sha256": "5a6f8c69c911b0a341b2c8008897dd451a2fda1d118b2c8b31b36fda366be573"
+        },
+        {
+          "downsample": 8,
+          "width": 9,
+          "height": 12,
+          "bytes": 324,
+          "sha256": "a95f0c806e26c341a936e6387316d8e5b19538b7a2a9315a90c437d26208e892"
+        },
+        {
+          "downsample": 16,
+          "width": 5,
+          "height": 6,
+          "bytes": 90,
+          "sha256": "6d7c628977ca9764bb5dc1c04db580e5eb7aef4face9c8fff5cf2aa3aafe21e5"
+        }
+      ]
+    }
+  ]
+}
