@@ -1,0 +1,305 @@
+{
+  "capture": {
+    "complete": true,
+    "driver_sha256": "e1e10cee4709760258eb1c7643242d555a1534d128c0ea5c3ec09ee148e95ec7",
+    "scope": "Saved protocol/source/event/deadline audit. Full clip bytes/calibration/attemptPTS/CRC/pixels/END3 verified by bound producer before deletion, not re-read from deleted clips.",
+    "protocols": [
+      {
+        "protocol": "native-abba",
+        "frames_verified_before_deletion": 2389,
+        "strict_combined_floor_passed": false,
+        "runs": [
+          {
+            "index": 0,
+            "mode": "baseline",
+            "frames": 589,
+            "durable_fps": 19.5531,
+            "encode_median_ms": 36.8913,
+            "late_writes": 589,
+            "late_previews": 589,
+            "workspace_bytes": 97936896,
+            "preview_sample_buffer_bytes": 4843522,
+            "peak_rss_bytes": 570507264,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 589,
+              "deadline_ms": 50.0
+            },
+            "per_source_encode_median_ms": {
+              "0": 37.9675,
+              "1": 35.449
+            }
+          },
+          {
+            "index": 1,
+            "mode": "streamed",
+            "frames": 600,
+            "durable_fps": 19.9989,
+            "encode_median_ms": 33.5153,
+            "late_writes": 37,
+            "late_previews": 36,
+            "workspace_bytes": 97936896,
+            "preview_sample_buffer_bytes": 4917214,
+            "peak_rss_bytes": 570490880,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 36,
+              "deadline_ms": 50.0
+            },
+            "per_source_encode_median_ms": {
+              "0": 33.6108,
+              "1": 33.10225
+            }
+          },
+          {
+            "index": 2,
+            "mode": "streamed",
+            "frames": 600,
+            "durable_fps": 19.9985,
+            "encode_median_ms": 32.2595,
+            "late_writes": 14,
+            "late_previews": 13,
+            "workspace_bytes": 97936896,
+            "preview_sample_buffer_bytes": 4917214,
+            "peak_rss_bytes": 570507264,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 13,
+              "deadline_ms": 50.0
+            },
+            "per_source_encode_median_ms": {
+              "0": 32.4105,
+              "1": 30.773850000000003
+            }
+          },
+          {
+            "index": 3,
+            "mode": "baseline",
+            "frames": 600,
+            "durable_fps": 19.9936,
+            "encode_median_ms": 33.4489,
+            "late_writes": 21,
+            "late_previews": 18,
+            "workspace_bytes": 97936896,
+            "preview_sample_buffer_bytes": 4843522,
+            "peak_rss_bytes": 570507264,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 18,
+              "deadline_ms": 50.0
+            },
+            "per_source_encode_median_ms": {
+              "0": 33.64065,
+              "1": 32.07065
+            }
+          }
+        ]
+      },
+      {
+        "protocol": "native-final",
+        "frames_verified_before_deletion": 1200,
+        "strict_combined_floor_passed": false,
+        "runs": [
+          {
+            "index": 0,
+            "mode": "streamed",
+            "frames": 600,
+            "durable_fps": 19.9964,
+            "encode_median_ms": 32.3323,
+            "late_writes": 1,
+            "late_previews": 3,
+            "workspace_bytes": 97936896,
+            "preview_sample_buffer_bytes": 4917214,
+            "peak_rss_bytes": 570507264,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 3,
+              "deadline_ms": 50.0
+            },
+            "per_source_encode_median_ms": {
+              "0": 32.86855,
+              "1": 31.25945
+            }
+          },
+          {
+            "index": 1,
+            "mode": "streamed",
+            "frames": 600,
+            "durable_fps": 19.9987,
+            "encode_median_ms": 32.4122,
+            "late_writes": 22,
+            "late_previews": 20,
+            "workspace_bytes": 97936896,
+            "preview_sample_buffer_bytes": 4917214,
+            "peak_rss_bytes": 570490880,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 20,
+              "deadline_ms": 50.0
+            },
+            "per_source_encode_median_ms": {
+              "0": 32.5563,
+              "1": 31.7947
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "same_binary_final": {
+    "complete": true,
+    "driver_sha256": "2400cc5863e474490a564b1f58f6fbe44edb214d3a93b32e24a22e5909e45bef",
+    "protocol_sha256": "3a27327f9274f6dcadb3b54de8f655ce39a69273913b2e0066cb16510a7a52de",
+    "all_256_payloads_and_independently_decoded_planes_exact": true,
+    "measurements_per_mode_source_after_exclusion": 60,
+    "sources": [
+      {
+        "source": 0,
+        "baseline_median_ms": 40.9509625,
+        "candidate_median_ms": 39.174132,
+        "reduction_percent": 4.33892243680476,
+        "every_candidate_block_faster": true,
+        "blocks": [
+          {
+            "block": 0,
+            "candidate": false,
+            "median_ms": 41.042805
+          },
+          {
+            "block": 1,
+            "candidate": true,
+            "median_ms": 39.158706
+          },
+          {
+            "block": 2,
+            "candidate": true,
+            "median_ms": 39.338244
+          },
+          {
+            "block": 3,
+            "candidate": false,
+            "median_ms": 40.997712
+          },
+          {
+            "block": 4,
+            "candidate": true,
+            "median_ms": 39.088429
+          },
+          {
+            "block": 5,
+            "candidate": false,
+            "median_ms": 40.885916
+          },
+          {
+            "block": 6,
+            "candidate": false,
+            "median_ms": 40.837305
+          },
+          {
+            "block": 7,
+            "candidate": true,
+            "median_ms": 38.966928
+          }
+        ]
+      },
+      {
+        "source": 1,
+        "baseline_median_ms": 34.969757,
+        "candidate_median_ms": 33.702975,
+        "reduction_percent": 3.622507299664679,
+        "every_candidate_block_faster": true,
+        "blocks": [
+          {
+            "block": 0,
+            "candidate": false,
+            "median_ms": 35.077711
+          },
+          {
+            "block": 1,
+            "candidate": true,
+            "median_ms": 33.727614
+          },
+          {
+            "block": 2,
+            "candidate": true,
+            "median_ms": 33.701725
+          },
+          {
+            "block": 3,
+            "candidate": false,
+            "median_ms": 34.994914
+          },
+          {
+            "block": 4,
+            "candidate": true,
+            "median_ms": 33.768744
+          },
+          {
+            "block": 5,
+            "candidate": false,
+            "median_ms": 34.839599
+          },
+          {
+            "block": 6,
+            "candidate": false,
+            "median_ms": 34.996008
+          },
+          {
+            "block": 7,
+            "candidate": true,
+            "median_ms": 33.64241
+          }
+        ]
+      }
+    ],
+    "scope": "Unpaced encoder plus production stream inverse, same process; no rendering/capture/storage/finalfsync or sustained-rate approval."
+  },
+  "packages": {
+    "schema": "gpr.build_profiles.v1",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "profiles": [
+      {
+        "profile": "capture",
+        "sdk_sources_present": false,
+        "encoder": true,
+        "decoder": false,
+        "producer_removed_before_consumer": true,
+        "archive_sha256": "2ee928fda8c7f6a9a3e179f6d08e01a8698b235e5c4345f7a6dfc1f6b55f1efc",
+        "source_digest": "1f83999dfeb49e074f40997d566020e31255c4316bb7ca767eb1cf05bdc8cd4b",
+        "seconds": 6.720184125
+      },
+      {
+        "profile": "preview",
+        "sdk_sources_present": false,
+        "encoder": false,
+        "decoder": true,
+        "producer_removed_before_consumer": true,
+        "archive_sha256": "4e0459156bd00587de0de333907d7db8d757c548f57e3c4a880dd2d585f75f6a",
+        "source_digest": "bb76ee2976e044d0c26bee9fcccd3a8854d37ca3c0c5b0ba1b0b9712470a2204",
+        "seconds": 6.708093958000001
+      },
+      {
+        "profile": "camera",
+        "sdk_sources_present": false,
+        "encoder": true,
+        "decoder": true,
+        "producer_removed_before_consumer": true,
+        "archive_sha256": "bce333841f5d9f55ad315be24f73bc447d8d295c84056bb0cfe7bef77a09c034",
+        "source_digest": "0e9d8b29d761c47f6f8536e9aa56143d18d9d5156e66911fc0ff98e75460147e",
+        "seconds": 12.357659958
+      },
+      {
+        "profile": "full",
+        "relocated_sdk_consumer": true,
+        "source_digest": "e7110047c9d61c6b1a52ef8c9778784a03741807d86d7e44feb21af65772cf58",
+        "archive_sha256": "0d3305b30d2b63ad793c6726cbe56e67e23a9d0e5b557f28ffbc9446f5f51fa2"
+      }
+    ]
+  }
+}

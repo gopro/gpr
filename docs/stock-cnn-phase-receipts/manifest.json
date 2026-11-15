@@ -1,0 +1,91 @@
+{
+  "schema": "gpr.stock_cnn_phase_receipts.v1",
+  "archive": "evidence.tar.gz",
+  "archive_sha256": "67c0957fbc13444c45c1c7c219fb030f9f2b8fbfb2768794a313ed265c44139e",
+  "members": {
+    "audit.json": {
+      "bytes": 8356,
+      "sha256": "aa2cb2264b3284e15e170391e615b541c83cfc1c83672eacfaad9ebd8bc3967e"
+    },
+    "audit_stock_cnn_phase.py": {
+      "bytes": 5088,
+      "sha256": "4911d6ed47c0d478ef414166cddc468e6da3e9cb084a76d6b2440720cd1cdb5e"
+    },
+    "audit_stock_cnn_phase_energy.py": {
+      "bytes": 2389,
+      "sha256": "7c3b1ddde16e5d6bd13891aba6ff2b83e1d0e13090b08745d813f3065118d641"
+    },
+    "baseline.json": {
+      "bytes": 4358,
+      "sha256": "648e64e2c156292d854887743d167042263b8d7881877f76e6994c9ec0d91a26"
+    },
+    "logs/stock_cnn_phase_audit.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/stock_cnn_phase_audit.stdout": {
+      "bytes": 120,
+      "sha256": "38ba05f5c3bcd250ce9124810b146ca373e0a3677ca79e56bbbdfa8f8b57d169"
+    },
+    "logs/stock_cnn_phase_energy.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/stock_cnn_phase_energy.stdout": {
+      "bytes": 1648,
+      "sha256": "b003c032fb85e3b2f17e34c4611943c56b960b63c1170b16ec189066fe25a728"
+    },
+    "logs/stock_cnn_phase_energy_audit.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/stock_cnn_phase_energy_audit.stdout": {
+      "bytes": 59,
+      "sha256": "9bdb3bfe3c6da51dc5a18e23f42c494306c71d1901b7eb3f295ea55bb27d8108"
+    },
+    "logs/stock_cnn_phase_training.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/stock_cnn_phase_training.stdout": {
+      "bytes": 8675,
+      "sha256": "24eb1bc82b1796f5cac7a8afcd77ef3cde5bca0325f235a925fd60381c8c6988"
+    },
+    "measure_stock_cnn_phase_energy.py": {
+      "bytes": 3768,
+      "sha256": "9d97ac741545f41d4a62a37220d7ce90bd2a19b9746540ad821017f8e29e5f7a"
+    },
+    "protocol.json": {
+      "bytes": 18350,
+      "sha256": "06623739b81db30fbfb4fa608a494922b2f4375609021ef8ea2c8bed3747b4ad"
+    },
+    "residual-energy/audit.json": {
+      "bytes": 1795,
+      "sha256": "57b388a5a0d4be83cf50c2b80fa18d8c689468fa4900b1d13ab8fdfe6cd6b3b3"
+    },
+    "residual-energy/protocol.json": {
+      "bytes": 1716,
+      "sha256": "8464bddc8112f5d29e3977bf102453798092bf9f76c258e3e28ed407d632e95f"
+    },
+    "residual-energy/results.json": {
+      "bytes": 10919,
+      "sha256": "c0184ae04a7bd3842c9fab6d39d2784522c181d17cee2f489fa291584767d0db"
+    },
+    "results.json": {
+      "bytes": 32073,
+      "sha256": "d1f4600d3d78b6d13b819d4155bd0929938297de64f617b349c6831d683bb51a"
+    },
+    "stock_cnn_phase_training_data.py": {
+      "bytes": 4101,
+      "sha256": "4b77424d2909877e03fd64a5ea39f548f68d2204fd4fdb09e73cb450579f1925"
+    },
+    "stock_cnn_phase_validation.py": {
+      "bytes": 4919,
+      "sha256": "fce0f491e43600cd2a00ab61761ab2dc70924bdc96d53c49f8512f08d136f73f"
+    },
+    "train_stock_cnn_phase.py": {
+      "bytes": 10691,
+      "sha256": "171d8e0b2a03e1f83eb2587962cf1f20c597575ab0e256fb5039509a63b4ebfd"
+    }
+  }
+}

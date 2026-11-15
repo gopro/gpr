@@ -1,0 +1,231 @@
+name: Stock capture
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: stock-capture-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ffmpeg-stock:
+    name: FFmpegStockDecoder
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm pkg-config zlib1g-dev libavformat-dev libavcodec-dev libavutil-dev
+          python -m pip install numpy tifffile
+      - name: Build and install stock capture, decoder and MOV bridge
+        run: |
+          cmake -S . -B build-ffmpeg -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DGPR_ENABLE_IPO=OFF \
+            -DGPR_BUILD_SDK=OFF -DGPR_BUILD_STILL_APPS=OFF -DGPR_BUILD_LEGACY_CLI=OFF \
+            -DGPR_ENABLE_VIDEO=ON -DGPR_BUILD_CAPTURE_APP=ON -DGPR_BUILD_PREVIEW_TOOLS=ON \
+            -DGPR_BUILD_STOCK_VIDEO_EXPERIMENT=ON -DGPR_BUILD_MOV_TOOLS=ON -DGPR_BUILD_PACKAGE=ON
+          cmake --build build-ffmpeg --parallel 4
+          cmake --install build-ffmpeg --prefix "$RUNNER_TEMP/gpr-stock-prefix"
+      - name: Build pinned FFmpeg adapter and verify exact Bayer output
+        run: |
+          git clone --depth 1 --branch n8.0 https://github.com/FFmpeg/FFmpeg.git "$RUNNER_TEMP/stock-ffmpeg-source"
+          python tools/ffmpeg_stock/build.py build --ffmpeg-source "$RUNNER_TEMP/stock-ffmpeg-source" \
+            --gpr-prefix "$RUNNER_TEMP/gpr-stock-prefix" --jobs 4
+          python tests/stock_ffmpeg_test.py --ffmpeg "$RUNNER_TEMP/stock-ffmpeg-source/ffmpeg" \
+            --ffprobe "$RUNNER_TEMP/stock-ffmpeg-source/ffprobe" --bridge build-ffmpeg/gpr_mov \
+            --capture build-ffmpeg/gpr_capture_app --decoder build-ffmpeg/source/app/stock_video/stock_video \
+            --receipt stock-ffmpeg-receipt.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stock-ffmpeg-receipt
+          path: stock-ffmpeg-receipt.json
+          if-no-files-found: warn
+  mov:
+    name: MOV-${{ matrix.type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {type: Release, flags: ''}
+          - {type: Debug, flags: '-fsanitize=address,undefined -fno-omit-frame-pointer'}
+    env:
+      UBSAN_OPTIONS: halt_on_error=1
+      ASAN_OPTIONS: detect_leaks=1
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Optional FFmpeg transport dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev pkg-config libavformat-dev libavcodec-dev libavutil-dev ffmpeg
+      - name: Remove unused SDK and image codecs
+        run: rm -rf source/lib/gpr_sdk source/lib/dng_sdk source/lib/xmp_core source/lib/expat_lib source/lib/md5_lib source/lib/tiny_jpeg source/lib/vc5_encoder source/lib/vc5_decoder
+      - name: Configure standalone MOV transport
+        run: |
+          cmake -S . -B build-mov -DCMAKE_BUILD_TYPE=${{ matrix.type }} \
+            -DGPR_BUILD_SDK=OFF -DGPR_BUILD_STILL_APPS=OFF -DGPR_BUILD_LEGACY_CLI=OFF \
+            -DGPR_BUILD_ENCODER=OFF -DGPR_BUILD_DECODER=OFF -DGPR_BUILD_MOV_TOOLS=ON \
+            -DGPR_BUILD_MOV_TESTS=ON -DGPR_BUILD_PACKAGE=ON \
+            -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
+      - name: Build and verify opaque transport
+        run: |
+          cmake --build build-mov --parallel 4
+          ctest --test-dir build-mov --output-on-failure
+  native:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: LinuxRelease, os: ubuntu-latest, type: Release, flags: ''}
+          - {name: LinuxSanitizers, os: ubuntu-latest, type: Debug, flags: '-fsanitize=address,undefined -fno-omit-frame-pointer'}
+          - {name: MacRelease, os: macos-latest, type: Release, flags: ''}
+    env:
+      UBSAN_OPTIONS: halt_on_error=1
+      ASAN_OPTIONS: detect_leaks=1
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Independent RAW metadata test dependencies
+        run: python -m pip install numpy tifffile
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev
+      - name: Configure native capture and preview
+        run: |
+          cmake -S . -B build-runtime -DCMAKE_BUILD_TYPE=${{ matrix.type }} \
+            -DGPR_ENABLE_VIDEO=ON -DGPR_BUILD_VIDEO_TESTS=ON -DGPR_BUILD_CAPTURE_APP=ON \
+            -DGPR_BUILD_PREVIEW_TOOLS=ON -DGPR_BUILD_PREVIEW_TESTS=ON \
+            -DGPR_BUILD_STOCK_VIDEO_EXPERIMENT=ON -DGPR_BUILD_MEDIA_TESTS=ON \
+            -DGPR_BUILD_PACKAGE=ON -DGPR_BUILD_CODEC_TESTS=ON \
+            -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
+      - name: Build
+        run: cmake --build build-runtime --target capture_lifecycle_test capture_c_api_test sdk_c_api_test encoder_bounds_test decoder_bounds_test encoder_preview_probe wavelet_pipeline_contract preview_inverse_row_contract preview_dequant_contract wavelet_stream_inverse_contract capture_stream_contract gpr_capture_app preview_contract_test preview_wavelet_queue_test preview_queue_test gpr_preview_app gpr_preview_profile stock_video gpr_tools bayer_formats_test sdk_bayer_probe --parallel 4
+      - name: Test
+        run: ctest --test-dir build-runtime --output-on-failure
+      - name: Optional portable CNN contracts and stock recording reconstruction
+        if: matrix.name == 'LinuxRelease'
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python tests/stock_cnn_test.py --sdk build-runtime/source/app/gpr_tools/gpr_tools \
+            --capture build-runtime/gpr_capture_app --decoder build-runtime/source/app/stock_video/stock_video
+          sudo apt-get install -y pkg-config libavformat-dev libavcodec-dev libavutil-dev ffmpeg
+          cmake -S . -B build-runtime -DGPR_BUILD_MOV_TOOLS=ON
+          cmake --build build-runtime --target gpr_mov --parallel 4
+          python tests/stock_sequence_test.py --sdk build-runtime/source/app/gpr_tools/gpr_tools --bridge build-runtime/gpr_mov
+          python tests/stock_upres_test.py --sdk build-runtime/source/app/gpr_tools/gpr_tools --bridge build-runtime/gpr_mov
+      - name: Serial encoder with fast-path requests and sanitizers
+        if: matrix.name == 'LinuxSanitizers'
+        run: |
+          cmake -S . -B build-serial -DCMAKE_BUILD_TYPE=Debug \
+            -DGPR_BUILD_SDK=OFF -DGPR_BUILD_STILL_APPS=OFF -DGPR_BUILD_LEGACY_CLI=OFF \
+            -DGPR_BUILD_DECODER=OFF -DGPR_ENABLE_VIDEO=ON -DGPR_BUILD_VIDEO_TESTS=ON \
+            -DGPR_ENABLE_PARALLEL_CHANNELS=OFF -DGPR_ENABLE_PARALLEL_UNPACK=OFF -DNEON=OFF \
+            -DCMAKE_C_FLAGS="${{ matrix.flags }}" -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
+          cmake --build build-serial --parallel 4
+          ctest --test-dir build-serial --output-on-failure
+      - name: Optional calibrated RAW and deep ProRes rendering
+        if: matrix.name == 'MacRelease'
+        run: |
+          brew install ffmpeg
+          cmake -S . -B build-runtime -DGPR_BUILD_RENDER_TOOLS=ON -DGPR_BUILD_RENDER_TESTS=ON -DGPR_BUILD_MOV_TOOLS=ON -DGPR_BUILD_MOV_TESTS=ON
+          cmake --build build-runtime --target gpr_render gpr_prores gpr_mov --parallel 4
+          ctest --test-dir build-runtime -R '^(stock_prores|stock_mov)$' --output-on-failure
+      - name: Optional native Core ML contracts
+        if: matrix.name == 'MacRelease'
+        run: |
+          python -m pip install torch==2.8.0 coremltools==9.0
+          python tests/stock_coreml_test.py --sdk build-runtime/source/app/gpr_tools/gpr_tools \
+            --decoder build-runtime/source/app/stock_video/stock_video --renderer build-runtime/gpr_render \
+            --encoder build-runtime/gpr_prores --probe "$(command -v ffprobe)" --receipt stock-coreml-receipt.json
+      - name: Optional MPSGraph and custom Metal contracts
+        if: matrix.name == 'MacRelease'
+        run: |
+          xcrun -sdk macosx metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
+          cmake -S . -B build-runtime -DGPR_BUILD_METAL_TOOLS=ON
+          cmake --build build-runtime --target gpr_metal gpr_reconstruct --parallel 4
+          python tests/stock_metal_test.py --sdk build-runtime/source/app/gpr_tools/gpr_tools \
+            --bridge build-runtime/gpr_mov --library build-runtime/source/app/stock_metal/libgpr_metal.dylib \
+            --kernels build-runtime/source/app/stock_metal/gpr_stock.metallib \
+            --decoder build-runtime/source/app/stock_video/stock_video --renderer build-runtime/gpr_render \
+            --encoder build-runtime/gpr_prores --probe "$(command -v ffprobe)" --receipt stock-metal-receipt.json
+          python tests/stock_native_test.py --sdk build-runtime/source/app/gpr_tools/gpr_tools \
+            --native build-runtime/source/app/stock_metal/gpr_reconstruct \
+            --library build-runtime/source/app/stock_metal/libgpr_metal.dylib \
+            --kernels build-runtime/source/app/stock_metal/gpr_stock.metallib \
+            --decoder build-runtime/source/app/stock_video/stock_video --bridge build-runtime/gpr_mov \
+            --renderer build-runtime/gpr_render --encoder build-runtime/gpr_prores \
+            --probe "$(command -v ffprobe)" --receipt stock-native-receipt.json
+      - name: Stripped builds, relocated packages and public C/C++ clients
+        if: matrix.type == 'Release'
+        run: python tests/build_profiles.py --work-dir profile-check --full-build build-runtime
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.type == 'Release'
+        with:
+          name: stock-raw-media-${{ matrix.name }}
+          path: |
+            profile-check/**/archives/*.zip
+            profile-check/**/*.log
+            profile-check/receipt.json
+            stock-coreml-receipt.json
+            stock-metal-receipt.json
+            stock-native-receipt.json
+            build-runtime/Testing/Temporary/LastTest.log
+            build-runtime/Testing/Temporary/LastTestsFailed.log
+          if-no-files-found: error
+  windows:
+    name: WindowsNativePackages
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Native zlib dependency
+        shell: pwsh
+        run: '& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install zlib:x64-windows'
+      - name: Stripped builds, relocated packages and public C/C++ clients
+        shell: pwsh
+        run: |
+          $toolchain = "$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          python tests/build_profiles.py --work-dir profile-check `
+            --cmake-arg="-DCMAKE_TOOLCHAIN_FILE=$toolchain" --cmake-arg="-DVCPKG_TARGET_TRIPLET=x64-windows"
+      - name: Diagnose native failure with MSVC AddressSanitizer
+        if: failure()
+        shell: pwsh
+        run: |
+          $toolchain = "$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $asan = Get-ChildItem "$vs/VC/Tools/MSVC/*/bin/Hostx64/x64/clang_rt.asan_dynamic-x86_64.dll" | Select-Object -Last 1
+          $env:PATH = "$($asan.DirectoryName);$env:PATH"
+          cmake -S . -B profile-check/asan `
+            "-DCMAKE_TOOLCHAIN_FILE=$toolchain" -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DGPR_BUILD_SDK=OFF -DGPR_BUILD_STILL_APPS=OFF -DGPR_BUILD_LEGACY_CLI=OFF `
+            -DGPR_BUILD_DECODER=OFF -DGPR_ENABLE_VIDEO=ON -DGPR_BUILD_VIDEO_TESTS=ON -DGPR_ENABLE_IPO=OFF `
+            '-DCMAKE_C_FLAGS=/fsanitize=address /Zi' '-DCMAKE_CXX_FLAGS=/fsanitize=address /Zi' `
+            '-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG /INCREMENTAL:NO'
+          cmake --build profile-check/asan --config Release --target capture_lifecycle_test --parallel 4
+          & ./profile-check/asan/Release/capture_lifecycle_test.exe ./profile-check/asan/diagnostic.gvid 2>&1 | Tee-Object profile-check/asan/diagnostic.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: stock-raw-media-WindowsNative
+          path: |
+            profile-check/**/archives/*.zip
+            profile-check/**/*.log
+            profile-check/receipt.json
+          if-no-files-found: error

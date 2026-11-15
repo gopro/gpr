@@ -1,0 +1,90 @@
+{
+  "schema": "gpr.stock_preview_recompute_audit.v1",
+  "complete": true,
+  "driver_sha256": "d7a7bb58fd563cf6ebd58b91aeba68921ee861617a126605e3ee3df5d11b3438",
+  "payload_comparisons": 1664,
+  "reconstructed_frame_comparisons": 512,
+  "plane_comparisons": 1536,
+  "production_source_changed": false,
+  "accepted_runtime_change": false,
+  "acceptance_timing": false,
+  "reserve_only_producer_field_correction": "all_reconstructed_planes_exact=true was a copied unused aggregate, contradicted by null frame fields and no reconstruction. Ignore aggregate; no plane verification is claimed for reservation control.",
+  "all_source_harness_driver_binary_bindings_verified": true,
+  "production_encoder_source_unchanged": true,
+  "production_pi_capture_sha256": "c576f5662ac605cc5719ae536308e9ff71cdcec4f4e714343a5a919a5711687c",
+  "coefficient_contract_pairs": 576,
+  "conclusion": "Reject both recomputation proposals. Reservation alone is close to ordinary compact encode; material cost remains in actual retained-band processing, not the full-storage reservation alone. No sustained capture gate was run or closed.",
+  "measurements": [
+    {
+      "study": "isolated",
+      "sources": [
+        {
+          "source": 0,
+          "medians_ms": {
+            "none": 27.4986185,
+            "retain": 34.4425145,
+            "reconstruct": 43.2332035,
+            "recompute-retain": 37.810008,
+            "recompute-reconstruct": 46.680189
+          }
+        },
+        {
+          "source": 1,
+          "medians_ms": {
+            "none": 25.5720465,
+            "retain": 32.4095995,
+            "reconstruct": 41.21927,
+            "recompute-retain": 35.821278500000005,
+            "recompute-reconstruct": 44.7529315
+          }
+        }
+      ]
+    },
+    {
+      "study": "isolated-v2",
+      "sources": [
+        {
+          "source": 0,
+          "medians_ms": {
+            "none": 28.011120499999997,
+            "retain": 34.839535,
+            "reconstruct": 43.633418500000005,
+            "recompute-retain": 37.741795,
+            "recompute-reconstruct": 46.470048500000004
+          }
+        },
+        {
+          "source": 1,
+          "medians_ms": {
+            "none": 25.744585,
+            "retain": 32.2429415,
+            "reconstruct": 41.324669,
+            "recompute-retain": 35.563055500000004,
+            "recompute-reconstruct": 44.5635235
+          }
+        }
+      ]
+    },
+    {
+      "study": "reserve-only",
+      "sources": [
+        {
+          "source": 0,
+          "medians_ms": {
+            "none": 27.316840499999998,
+            "retain": 34.507478000000006,
+            "reserve-only": 27.393738999999997
+          }
+        },
+        {
+          "source": 1,
+          "medians_ms": {
+            "none": 26.069799,
+            "retain": 32.6860175,
+            "reserve-only": 26.1732345
+          }
+        }
+      ]
+    }
+  ]
+}

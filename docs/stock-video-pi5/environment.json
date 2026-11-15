@@ -1,0 +1,13 @@
+{
+  "platform": "Linux-6.6.51+rpt-rpi-2712-aarch64-with-glibc2.36",
+  "cpu_model": "Raspberry Pi 5 Model B Rev 1.0",
+  "governor": "performance",
+  "temperature_end": "temp=57.6'C",
+  "throttled_end": "throttled=0x80000",
+  "clock_end": "frequency(0)=2400023808",
+  "filesystem": "ext4 on USB SSD /dev/sda1",
+  "run_date": "2026-10-27",
+  "source_base": "7cb8b61af1c347ab19f80a918f4d976572413cc3",
+  "compiler": "GCC 12.2.0, Release O3, IPO, NEON",
+  "notes": "Four CPUs, performance governor. 0x80000 is a historical soft-temperature flag; no active low-bit throttling at observation. Not sensor capture, microSD, preview or CNN timing."
+}

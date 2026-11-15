@@ -1,0 +1,225 @@
+{
+  "schema": "gpr.clean_sheet_pipeline.v2_full_throttle_fp32",
+  "created_utc": "2026-11-13T22:57:29.369391+00:00",
+  "hardware": "Apple M5 Max (18-core CPU, 40-core GPU, 128 GB unified memory, Native FP32)",
+  "mission1_analytical_optics": {
+    "schema": "gpr.clean_sheet.mission1_analytical_optics.v2",
+    "created_utc": "2026-11-13T22:22:29.250695+00:00",
+    "val_patch_count": 192,
+    "bicubic_mse": 2134.741724158352,
+    "box2_consistent_mse": 2017.5298595169177,
+    "box2_gain_db": 0.24525367568322518,
+    "polar_psf_lca_box2_mse": 2017.426063739135,
+    "polar_psf_lca_box2_gain_db": 0.24547711273881193,
+    "closed_form_polar_psf_lca_weights": [
+      [
+        0.0009352933848276734,
+        -0.0005231855320744216,
+        0.0008978552068583667,
+        0.0005393251776695251,
+        0.0010152898030355573,
+        4.712572263088077e-05
+      ],
+      [
+        0.00028614181792363524,
+        -0.0005798872443847358,
+        -0.0004133402253501117,
+        -2.65502658294281e-05,
+        0.00029552594060078263,
+        -0.002043569227680564
+      ],
+      [
+        0.00042871962068602443,
+        -0.0006208910490386188,
+        0.0005889121093787253,
+        0.00034718206734396517,
+        0.0017222269671037793,
+        -0.0009389666956849396
+      ],
+      [
+        0.0016103687230497599,
+        0.00035750053939409554,
+        0.0013249695766717196,
+        0.0014317375607788563,
+        -0.0005518314428627491,
+        -0.002078782534226775
+      ]
+    ],
+    "cell_mean_error_counts": 0.0
+  },
+  "deliverable_1_bundled_pair": {
+    "cleanup_checkpoint": {
+      "path": "/Volumes/OWC_8TB/gpr_work/artifacts/m5_max_clean_sheet_20261113/clean_sheet_cleanup_1x.pt",
+      "sha256": "9de03f8203f4cb1bb264087cd922b04c1b0e1169684a064d0aeb3a2a6c97f48a"
+    },
+    "sr_checkpoint": {
+      "path": "/Volumes/OWC_8TB/gpr_work/artifacts/m5_max_clean_sheet_20261113/clean_sheet_sr_2x.pt",
+      "sha256": "cf6e428f4f33eb4284c4e6665b8b4ab94f5b0d8e649d0da82dfe6ee4f6fc9dc2",
+      "residual_scale": 0.00020312500000000002,
+      "zero_dc_superpixel_projected": true
+    },
+    "validation_results": {
+      "eta_sr": 0.65,
+      "gain_db_vs_supplied": 0.8786218254142317,
+      "gain_db_at_unit_scale": 1.1073,
+      "raw_regressions": [],
+      "tone_regressions": [],
+      "eligible": true,
+      "scores": {
+        "regions": {
+          "pooled": {
+            "overall": 3863.732938194275,
+            "shadow": 1957.8135259789112,
+            "highlight": 20617.855828570682,
+            "detail": 22505.11403748561
+          },
+          "nikon:20250727_ForestFire": {
+            "overall": 8774.967442512512,
+            "shadow": 8558.973225181588,
+            "highlight": 33628.40101166288,
+            "detail": 39781.10619740223
+          },
+          "nikon:LRT_20250730_05__ColoradoSky": {
+            "overall": 6639.87745308876,
+            "shadow": 311.6424344328128,
+            "highlight": 57233.3788415512,
+            "detail": 55689.54712252669
+          },
+          "camera:mission1_home_interior": {
+            "overall": 1301.2732651233673,
+            "shadow": 351.5577441114878,
+            "highlight": 4076.2878560731306,
+            "detail": 5813.7558052584745
+          }
+        },
+        "tone_proxy_mse": {
+          "pooled": 0.00014200606040049024,
+          "nikon:20250727_ForestFire": 0.0005040585382403151,
+          "nikon:LRT_20250730_05__ColoradoSky": 0.00011776035307775601,
+          "camera:mission1_home_interior": 2.9403803561460034e-05
+        }
+      }
+    },
+    "full_image_8k_gate_results": [
+      {
+        "image": "Z8Z_0001",
+        "width": 8280,
+        "height": 5520,
+        "sr_gain_db": 0.6608939802764766,
+        "sr_regressions": [
+          "shadow_bottom_decile"
+        ],
+        "sr_rmse": 58.98703685337933,
+        "cas_gain_db": 0.6004917388183912,
+        "cas_regressions": [],
+        "cas_rmse": 59.39866613363306,
+        "bicubic_rmse": 63.65042084015544,
+        "positive_active_gain_both_modes": true
+      },
+      {
+        "image": "Z8Z_0067",
+        "width": 8280,
+        "height": 5520,
+        "sr_gain_db": 0.3733985427916906,
+        "sr_regressions": [
+          "shadow_bottom_decile"
+        ],
+        "sr_rmse": 19.116570039137816,
+        "cas_gain_db": 0.47258914291598586,
+        "cas_regressions": [],
+        "cas_rmse": 18.899505551208616,
+        "bicubic_rmse": 19.95629427718402,
+        "positive_active_gain_both_modes": true
+      },
+      {
+        "image": "Z8Z_5323",
+        "width": 8280,
+        "height": 5520,
+        "sr_gain_db": 0.004054191785471062,
+        "sr_regressions": [
+          "shadow_bottom_decile"
+        ],
+        "sr_rmse": 105.12682949609037,
+        "cas_gain_db": 0.08956467895714582,
+        "cas_regressions": [
+          "shadow_bottom_decile"
+        ],
+        "cas_rmse": 104.09695896303259,
+        "bicubic_rmse": 105.17590953608034,
+        "positive_active_gain_both_modes": true
+      },
+      {
+        "image": "Z8Z_6693",
+        "width": 8280,
+        "height": 5520,
+        "sr_gain_db": 0.005905340048926178,
+        "sr_regressions": [],
+        "sr_rmse": 151.94523279476965,
+        "cas_gain_db": 0.06395979353967363,
+        "cas_regressions": [
+          "shadow_bottom_decile",
+          "detail_top_decile"
+        ],
+        "cas_rmse": 150.93305277535654,
+        "bicubic_rmse": 152.0485720493552,
+        "positive_active_gain_both_modes": true
+      }
+    ],
+    "all_8k_dngs_positive_gain": true
+  },
+  "deliverable_2_wavelet_w96": {
+    "checkpoint": {
+      "path": "/Volumes/OWC_8TB/gpr_work/artifacts/m5_max_clean_sheet_20261113/clean_sheet_wavelet_w96.pt",
+      "sha256": "bd5dc352e94b118b012eb304a41e96c9f3a559a4cceccb4309f38208f68933b7"
+    },
+    "validation_results": {
+      "step": 1200,
+      "gain_db_vs_bicubic": 1.5570974881199404,
+      "pooled_mse": 3344.9890752315523,
+      "raw_regressions": [],
+      "tone_regressions": [],
+      "eligible": true,
+      "scores": {
+        "regions": {
+          "pooled": {
+            "overall": 3344.9890752315523,
+            "shadow": 1932.931058455718,
+            "highlight": 16116.514219719531,
+            "detail": 18232.696994716905
+          },
+          "nikon:20250727_ForestFire": {
+            "overall": 8388.912970542908,
+            "shadow": 8524.135644870013,
+            "highlight": 29081.806263730046,
+            "detail": 35672.992793663514
+          },
+          "nikon:LRT_20250730_05__ColoradoSky": {
+            "overall": 5021.910755634308,
+            "shadow": 313.7867971450089,
+            "highlight": 41887.944712830016,
+            "detail": 42289.71449190279
+          },
+          "camera:mission1_home_interior": {
+            "overall": 1104.7072166601818,
+            "shadow": 320.82572365611105,
+            "highlight": 3217.054846251094,
+            "detail": 4522.985285345306
+          },
+          "mission1:mission1_home_interior": {
+            "overall": 1104.7072166601818,
+            "shadow": 320.82572365611105,
+            "highlight": 3217.054846251094,
+            "detail": 4522.985285345306
+          }
+        },
+        "tone_proxy_mse": {
+          "pooled": 0.0001418750290289002,
+          "nikon:20250727_ForestFire": 0.0005038316395105843,
+          "nikon:LRT_20250730_05__ColoradoSky": 0.000114541773655219,
+          "camera:mission1_home_interior": 3.0333910659565947e-05,
+          "mission1:mission1_home_interior": 3.0333910659565947e-05
+        }
+      }
+    }
+  }
+}

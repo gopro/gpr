@@ -1,0 +1,76 @@
+{
+  "complete": true,
+  "scope": "Independent source binding/event/accounting/deadline audit; original clip bytes/calibration/CRC/pixels/END3 checked by archived verifier before deletion, not rechecked from deleted clips.",
+  "frames_verified_before_clip_deletion": 2347,
+  "streamed_fixed_repeats_passed": false,
+  "runs": [
+    {
+      "index": 0,
+      "mode": "baseline",
+      "frames": 548,
+      "durable_fps": 18.1598,
+      "encode_median_ms": 40.4288,
+      "late_writes": 548,
+      "late_previews": 548,
+      "workspace_bytes": 104257536,
+      "peak_rss_bytes": 597753856,
+      "floor": {
+        "recording": false,
+        "preview": false,
+        "preview_late_deliveries": 548,
+        "deadline_ms": 50.0
+      }
+    },
+    {
+      "index": 1,
+      "mode": "streamed",
+      "frames": 600,
+      "durable_fps": 19.9965,
+      "encode_median_ms": 37.718,
+      "late_writes": 154,
+      "late_previews": 171,
+      "workspace_bytes": 97936896,
+      "peak_rss_bytes": 570507264,
+      "floor": {
+        "recording": false,
+        "preview": false,
+        "preview_late_deliveries": 171,
+        "deadline_ms": 50.0
+      }
+    },
+    {
+      "index": 2,
+      "mode": "streamed",
+      "frames": 600,
+      "durable_fps": 19.998,
+      "encode_median_ms": 35.3749,
+      "late_writes": 44,
+      "late_previews": 47,
+      "workspace_bytes": 97936896,
+      "peak_rss_bytes": 570507264,
+      "floor": {
+        "recording": false,
+        "preview": false,
+        "preview_late_deliveries": 47,
+        "deadline_ms": 50.0
+      }
+    },
+    {
+      "index": 3,
+      "mode": "baseline",
+      "frames": 599,
+      "durable_fps": 19.9643,
+      "encode_median_ms": 36.3029,
+      "late_writes": 76,
+      "late_previews": 76,
+      "workspace_bytes": 104257536,
+      "peak_rss_bytes": 597770240,
+      "floor": {
+        "recording": false,
+        "preview": false,
+        "preview_late_deliveries": 76,
+        "deadline_ms": 50.0
+      }
+    }
+  ]
+}

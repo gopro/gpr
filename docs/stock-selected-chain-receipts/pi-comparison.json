@@ -1,0 +1,34 @@
+{
+  "schema": "gpr.selected_chain_pi_comparison.v1",
+  "complete": true,
+  "passed": true,
+  "quality_approval": false,
+  "declared_cpu_mps_bound_counts": 1,
+  "torch_pi": "2.14.1+cpu",
+  "pi_workflow_wall_s": 200.9229493830353,
+  "frames": [
+    {
+      "index": 0,
+      "cpu_raw_sha256": "3cba6d7191c62050b9ba62b56660e9f59437da0daf2910f07729c45f2e04fd7f",
+      "decoded_input_sha256": "6555fcf0c4715b15e55e2e2b91c565b559b3701fcfa34201b09b37214af41472",
+      "max_cpu_mps_counts": 1,
+      "different_cpu_mps_samples": 196,
+      "samples": 50331648,
+      "max_cpu_native_hybrid_counts": 1,
+      "passed_declared_bound": true,
+      "cpu_inference_s": 97.99632553569973
+    },
+    {
+      "index": 1,
+      "cpu_raw_sha256": "7b0a38c2a1a183192a7e6c2314ae339ca54dd168235871512aacd5f9307e4f3e",
+      "decoded_input_sha256": "1f421c6e09da0ad3a90376c702ac998d783578ed5d1cf881e22ff32e51b9ff85",
+      "max_cpu_mps_counts": 1,
+      "different_cpu_mps_samples": 223,
+      "samples": 50331648,
+      "max_cpu_native_hybrid_counts": 1,
+      "passed_declared_bound": true,
+      "cpu_inference_s": 98.9489912725985
+    }
+  ],
+  "scope": "Fresh capture supplied-model cross-host execution/count agreement; no lossless sensor target, motion/quality/tier or sustained rate claim."
+}

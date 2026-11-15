@@ -1,0 +1,8 @@
+{
+  "source_files_verified": 384,
+  "platform": "Linux-6.6.51+rpt-rpi-2712-aarch64-with-glibc2.36",
+  "compiler": "c++ (Debian 12.2.0-14+deb12u1) 12.2.0\nCopyright (C) 2022 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "binary_sha256": "a246064d6c0dfb5adeab33ee753ec255fecf73610361e8ce68e694f3917dcdbf",
+  "temperature": "temp=54.3'C\n",
+  "throttled": "throttled=0x80000\n"
+}

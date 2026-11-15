@@ -1,0 +1,37 @@
+{
+  "fields": [
+    "sizeof_gpr_exif_info",
+    "sizeof_gpr_light_source",
+    "offsetof_light_source",
+    "offsetof_gps_info"
+  ],
+  "platform": "Pi 5 Linux ARM64 GCC 12.2",
+  "cc": {
+    "before": [
+      756,
+      4,
+      316,
+      384
+    ],
+    "after": [
+      756,
+      4,
+      316,
+      384
+    ]
+  },
+  "c++": {
+    "before": [
+      756,
+      4,
+      316,
+      384
+    ],
+    "after": [
+      756,
+      4,
+      316,
+      384
+    ]
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "base": "d3d96ec49970a7edc8736d07ed39b3964ca4dc10",
+  "preceding_head": "170802d44c28cde77dfdb9c31bb45244297c21a8",
+  "by_root": {
+    ".github": [
+      1,
+      231,
+      0
+    ],
+    ".gitignore": [
+      1,
+      2,
+      0
+    ],
+    "CMakeLists.txt": [
+      1,
+      307,
+      28
+    ],
+    "README.md": [
+      1,
+      8,
+      0
+    ],
+    "cmake": [
+      3,
+      159,
+      0
+    ],
+    "docs": [
+      167,
+      25425,
+      0
+    ],
+    "models": [
+      4,
+      113,
+      0
+    ],
+    "source": [
+      79,
+      7361,
+      449
+    ],
+    "tests": [
+      50,
+      5349,
+      0
+    ],
+    "tools": [
+      29,
+      4683,
+      60
+    ]
+  },
+  "archive_members": 1669,
+  "original_member_bytes": 39590761,
+  "compressed_bytes": 5474319,
+  "readable_receipt_links": 576,
+  "archive_git_object_byte_comparison": "passed",
+  "restored_member_digest_comparison": "passed",
+  "negative_extraction_checks": [
+    "corrupted archive rejected before writes",
+    "conflicting destination rejected before writes"
+  ],
+  "staged_diff_before_adding_this_receipt": {
+    "files": 336,
+    "added_lines": 43638,
+    "deleted_lines": 537
+  },
+  "before_consolidation": {
+    "files": 1939,
+    "added_lines": 687796,
+    "deleted_lines": 537
+  },
+  "packages": {
+    "package_receipt": {
+      "schema": "gpr.build_profiles.v1",
+      "platform": "macOS-26.7.1-arm64-arm-64bit",
+      "profiles": [
+        {
+          "profile": "capture",
+          "sdk_sources_present": false,
+          "encoder": true,
+          "decoder": false,
+          "producer_removed_before_consumer": true,
+          "archive_sha256": "3d4e593ec25164006206398287b7bc13f80f7ef16e8e63c3394d865d4f0a8d5a",
+          "source_digest": "48ba8cf0eaa3b7e2132c82d31fabc6b7271ce635562b5ccc48c042b59b29bdbc",
+          "seconds": 7.20494425
+        },
+        {
+          "profile": "preview",
+          "sdk_sources_present": false,
+          "encoder": false,
+          "decoder": true,
+          "producer_removed_before_consumer": true,
+          "archive_sha256": "9a54fa49dfda6bad822146d13c97c3cd94a224206175ce5fe5ed0066f188a8b8",
+          "source_digest": "97ffefb053b40755034aef3c4cbd40dbe00233e8b97e443b679b26cbb9f2782c",
+          "seconds": 6.8878327079999995
+        },
+        {
+          "profile": "camera",
+          "sdk_sources_present": false,
+          "encoder": true,
+          "decoder": true,
+          "producer_removed_before_consumer": true,
+          "archive_sha256": "8eb44f495913e993b9e3673365df44bb64eab2b1c14a2abee6ed1f08ad447452",
+          "source_digest": "061650e096671e214ae017f5f982c815bee7d08eea192cd872c0b240eec03780",
+          "seconds": 10.134742541999998
+        }
+      ]
+    },
+    "installed_archive_verification": [
+      {
+        "profile": "capture",
+        "verification": {
+          "source_revision": "170802d44c28cde77dfdb9c31bb45244297c21a8",
+          "archives": 63,
+          "files": 1669,
+          "uncompressed_bytes": 39590761,
+          "extracted_to": null
+        }
+      },
+      {
+        "profile": "preview",
+        "verification": {
+          "source_revision": "170802d44c28cde77dfdb9c31bb45244297c21a8",
+          "archives": 63,
+          "files": 1669,
+          "uncompressed_bytes": 39590761,
+          "extracted_to": null
+        }
+      },
+      {
+        "profile": "camera",
+        "verification": {
+          "source_revision": "170802d44c28cde77dfdb9c31bb45244297c21a8",
+          "archives": 63,
+          "files": 1669,
+          "uncompressed_bytes": 39590761,
+          "extracted_to": null
+        }
+      }
+    ]
+  },
+  "preceding_hosted_validation": {
+    "conclusion": "success",
+    "headSha": "170802d44c28cde77dfdb9c31bb45244297c21a8",
+    "jobs": [
+      {
+        "conclusion": "success",
+        "name": "FFmpegStockDecoder"
+      },
+      {
+        "conclusion": "success",
+        "name": "MOV-Release"
+      },
+      {
+        "conclusion": "success",
+        "name": "LinuxSanitizers"
+      },
+      {
+        "conclusion": "success",
+        "name": "WindowsNativePackages"
+      },
+      {
+        "conclusion": "success",
+        "name": "MOV-Debug"
+      },
+      {
+        "conclusion": "success",
+        "name": "MacRelease"
+      },
+      {
+        "conclusion": "success",
+        "name": "LinuxRelease"
+      }
+    ],
+    "status": "completed"
+  }
+}
