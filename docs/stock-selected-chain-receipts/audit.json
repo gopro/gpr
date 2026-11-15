@@ -1,0 +1,115 @@
+{
+  "schema": "gpr.selected_video_chain_audit.v1",
+  "complete": true,
+  "quality_approval": false,
+  "frames": [
+    {
+      "index": 0,
+      "input_payload_sha256": "5ec51ef866e4fcf02796b8de02980f3aa2baae63a1cc8d8f2685d757ce483418",
+      "model_sha256": "f7bda0449b94be4ebd3617297b9dee04506b00e38788dba2d0b04eb71fdaa2f4",
+      "native_model_counts_sha256": "4735eb76368525d714d107613b04dce9d472366553b637283d613969cb0fe149",
+      "max_native_torch_difference": 1,
+      "differing_samples": 375682,
+      "samples": 50331648,
+      "independent_tiff_pixels": [
+        {
+          "file": "native-restored/000000.dng",
+          "pixel_sha256": "4735eb76368525d714d107613b04dce9d472366553b637283d613969cb0fe149"
+        },
+        {
+          "file": "upres/000000-timelapse/model-output.dng",
+          "pixel_sha256": "4735eb76368525d714d107613b04dce9d472366553b637283d613969cb0fe149"
+        },
+        {
+          "file": "upres/000000-timelapse/decoded-full.dng",
+          "pixel_sha256": "318dd32554db19547f406ba1f1de944d83df49507458890436cc8a3b9a5f7629"
+        },
+        {
+          "file": "torch-restored/000000.dng",
+          "pixel_sha256": "4fe74e7cd5cdbdb848793c20faa7e713899ae8c3d2747a491aa25832ea662243"
+        },
+        {
+          "file": "extracted/000000.dng",
+          "pixel_sha256": "6555fcf0c4715b15e55e2e2b91c565b559b3701fcfa34201b09b37214af41472"
+        }
+      ],
+      "historical_q5_payload_exact": true,
+      "supported_calibration_exact": true,
+      "metadata_omissions": [
+        {
+          "group": "image",
+          "code": 700,
+          "reason": "opaque XMP may contain stale pixel/crop geometry after reconstruction"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "input_payload_sha256": "54ed9418b498bc7e05e10f0f84b3e7f7f26a51a176ebba816f86b81ab02eb0d5",
+      "model_sha256": "f7bda0449b94be4ebd3617297b9dee04506b00e38788dba2d0b04eb71fdaa2f4",
+      "native_model_counts_sha256": "34868b2ca2006a1edbc3ae74b10985d87c747b11f1e974b70eac44081d08b9c2",
+      "max_native_torch_difference": 1,
+      "differing_samples": 414898,
+      "samples": 50331648,
+      "independent_tiff_pixels": [
+        {
+          "file": "native-restored/000001.dng",
+          "pixel_sha256": "34868b2ca2006a1edbc3ae74b10985d87c747b11f1e974b70eac44081d08b9c2"
+        },
+        {
+          "file": "upres/000001-timelapse/model-output.dng",
+          "pixel_sha256": "34868b2ca2006a1edbc3ae74b10985d87c747b11f1e974b70eac44081d08b9c2"
+        },
+        {
+          "file": "upres/000001-timelapse/decoded-full.dng",
+          "pixel_sha256": "51f700d31140e4f858d91a18508f71bd090bdd510617af5feacbf6724ae6ce69"
+        },
+        {
+          "file": "torch-restored/000001.dng",
+          "pixel_sha256": "ca566da19f841353ec8a4bf162547c12be15e2de177b07e4c478f77674a4074c"
+        },
+        {
+          "file": "extracted/000001.dng",
+          "pixel_sha256": "1f421c6e09da0ad3a90376c702ac998d783578ed5d1cf881e22ff32e51b9ff85"
+        }
+      ],
+      "historical_q5_payload_exact": true,
+      "supported_calibration_exact": true,
+      "metadata_omissions": [
+        {
+          "group": "image",
+          "code": 700,
+          "reason": "opaque XMP may contain stale pixel/crop geometry after reconstruction"
+        }
+      ]
+    }
+  ],
+  "capture_sha256": "ef577cab300cde06299b39b7e8ae770c86da1e7e01349fa89001821668911c38",
+  "mov_roundtrips_exact": true,
+  "prores": {
+    "file": "direct-native-2x-prores.mov",
+    "bytes": 45400115,
+    "sha256": "9e828b1658fbdede4c5571290d76b649056317551b9f17af4ef424338426ca23",
+    "width": 8192,
+    "height": 6144,
+    "pixel_format": "yuv422p10le",
+    "packets": [
+      {
+        "pts": 0,
+        "dts": 0,
+        "duration": 52769887,
+        "flags": "K__"
+      },
+      {
+        "pts": 52769887,
+        "dts": 52769887,
+        "duration": 50000000,
+        "flags": "K__"
+      }
+    ],
+    "capture_relative_pts_exact": true,
+    "independently_decoded_all_frames": true
+  },
+  "timelapse_timestamps": "synthetic_nominal_20fps",
+  "scope": "Two-frame integration/exactness and existing32-count backend agreement check. Not a quality improvement, motion, sensortruth, sustained throughput or physical camera approval."
+}

@@ -1,4 +1,51 @@
+# Editable RAW stills and video on stock VC-5
+
+Keep Bayer RAW and camera calibration when capturing. Choose the desktop
+rendering, cleanup and output resolution later.
+
+This fork rebuilds the still/video feature suite on the stock-compatible
+encoder from PRs #99/#100. It adds three connected workflows:
+
+| Workflow | What you can do |
+|---|---|
+| **RAW photography** | Encode high-bit-depth Bayer stills with an explicit compression preset; retain supported calibration and editable DNG/GPR output. |
+| **RAW video** | Record independently compressed Bayer frames with timestamps and calibration, show a native preview, and recover editable frames or wrap the recording in MOV. |
+| **Desktop finishing** | Render calibrated ProRes or optionally run offline 1x cleanup / 2x reconstruction, keeping editable RAW outputs. |
+
+The camera path does not require a CNN. Reconstruction is an optional desktop
+step; a working inference engine does not establish restored image quality.
+The stock codec remains lossy, including its historical logarithmic conversion.
+
+## Start here
+
+- **[MISSION 1 / HERO PRO Product & Marketing Proposal (`GPR_PRODUCT_PROPOSAL.md`)](GPR_PRODUCT_PROPOSAL.md)** — How these tools translate into 6 ship-ready, marketable customer features (**HyperBurst RAW™**, **SmartRAW™ Auto**, **Sparse-8K™**, **CineRAW™ `.GVID` 4K Video**, **Fixed-Lens Optical AI™**, and **TrueGrain™ Synthesis**) with GoPro Labs QR commands and Pi 5 / M5 Max receipts
+- [High-Bitrate 12 MP vs. Sparse-8K Wavelets & Scene-Adaptive Auto Mode](docs/stock-sparse-8k-and-auto-mode.md)
+- [Clean-Sheet Zero-DC Neural Restoration & Fixed-Lens Optical Physics](docs/stock-clean-sheet-m5-max.md)
+- [Feature overview, supported scope and finish line](docs/stock-raw-media-overview.md)
+- [Build and run the core workflow](docs/stock-raw-media-rebuild.md#core-workflow)
+- [Capture API](docs/stock-capture-api.md) · [Desktop workflow](docs/stock-upres-workflow.md) · [Native reconstruction](docs/stock-native-runtime.md)
+- [PR review order and eight-commit cleanup plan](docs/stock-review-plan.md)
+
+## Current limits
+
+The still, recording, preview and desktop software paths are implemented and
+have Mac/Pi validation. Native 12 MP recording plus preview still misses the
+strict 20 fps / zero-late-delivery gate. The supplied 1x model has scoped
+positive results; 2x remains a research candidate with modest gains. Useful
+broad 2x detail, motion quality and restored compression tiers are not approved.
+Sensor delivery, a physical rear display, SD durability and camera firmware
+integration remain unverified. No deployed GoPro firmware claim follows.
+
+This is a separate [fork draft PR #101](https://github.com/dcliftreaves/gpr/pull/101).
+Existing feature/validation PRs remain open. Old codec/model size and quality
+claims are not carried over to this architecture.
+
+---
+
 # GPR Introduction
+
+The reference below describes the original GPR SDK. The fork's added workflows
+and current validation boundaries are described above.
 
 The General Purpose Raw (GPR) is 12-bit raw image coding format that is based on [Adobe DNG®](https://helpx.adobe.com/photoshop/digital-negative.html) standard. Image compression is a balance of speed, file size and photo quality, and typically one can only choose two. GPR was designed to provide a better tradeoff for all three parameters than what's possible with DNG or any other raw format. The intention of GPR is not to compete with DNG, rather to be as close as possible to DNG. This guarantees compatibility with applications that already understand DNG, but provide an alternate compression scheme in situations where compression and encoding/decoding speed matter.
 

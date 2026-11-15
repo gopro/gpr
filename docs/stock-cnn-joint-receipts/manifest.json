@@ -1,0 +1,70 @@
+{
+  "schema": "gpr.stock_cnn_joint_receipts.v1",
+  "members": [
+    {
+      "path": "audit.json",
+      "size": 14940,
+      "sha256": "bec3cff8f6a19a995caa769f35987d982557b5e375aacf1ba38da60a8b19a4e2"
+    },
+    {
+      "path": "audit_stock_cnn_joint.py",
+      "size": 7311,
+      "sha256": "6677ff389f3e9ea03e34b212e11a125cb72a197e752b388dcbd33c5bf49e6d0b"
+    },
+    {
+      "path": "baseline.json",
+      "size": 3268,
+      "sha256": "4c31554ad7036e0fbd5fa63c455f0e6b2218c9396b3bb769453eeb1b0492f679"
+    },
+    {
+      "path": "initial-grid-check/initial.stderr",
+      "size": 505,
+      "sha256": "8ccf95c88f66b3b34faa15b969e56293adfaa6f853927589acbdee2bd855af6c"
+    },
+    {
+      "path": "initial-grid-check/train_stock_cnn_joint.py",
+      "size": 14062,
+      "sha256": "2c415def68a4ca17df60c891a1888d315eb3359b012fca2814a22ab8ba37735e"
+    },
+    {
+      "path": "logs/stock_cnn_joint.stderr",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "logs/stock_cnn_joint.stdout",
+      "size": 4977,
+      "sha256": "fa3451737d6fa144bc134227a4a8582a7538f712173be9385ec0d0ad8337335e"
+    },
+    {
+      "path": "logs/stock_cnn_joint_audit.stderr",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "logs/stock_cnn_joint_audit.stdout",
+      "size": 205,
+      "sha256": "56ed2299bd6108260099ad6ae6337f4b57a9e43ffca00ed9333b507878ca65ee"
+    },
+    {
+      "path": "protocol.json",
+      "size": 18266,
+      "sha256": "73b6bf685f6fa698b1db9ff97524baed22ffee4570eae89c831789778084281f"
+    },
+    {
+      "path": "train_stock_cnn_joint.py",
+      "size": 14800,
+      "sha256": "d568b8672adbddf33c2f69f05f338af315ff2094032632106cf95391eab89b41"
+    },
+    {
+      "path": "training.json",
+      "size": 15204,
+      "sha256": "dafd4508da6237051857793decd480f54b7444f8cdb969920baeb50ab33f03ee"
+    }
+  ],
+  "archive": {
+    "path": "evidence.tar.gz",
+    "size": 25918,
+    "sha256": "dfc63dedd0651732e4890ae53d1a7c77f3fcbe09bd394856571b4e78b177abc9"
+  }
+}

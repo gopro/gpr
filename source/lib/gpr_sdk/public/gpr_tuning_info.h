@@ -51,6 +51,16 @@
         PIXEL_FORMAT_GBRG_12 = 3,                           // GBRG 12bit pixels packed into 16bits
         
         PIXEL_FORMAT_GBRG_12P = 4,                          // GBRG 12bit pixels packed into 12bits
+        /* Word-packed additions: existing values and structure layout stay stable. */
+        PIXEL_FORMAT_RGGB_16 = 5,
+        PIXEL_FORMAT_GBRG_16 = 6,
+        PIXEL_FORMAT_GBRG_14 = 7,
+        PIXEL_FORMAT_GRBG_12 = 8,
+        PIXEL_FORMAT_GRBG_14 = 9,
+        PIXEL_FORMAT_GRBG_16 = 10,
+        PIXEL_FORMAT_BGGR_12 = 11,
+        PIXEL_FORMAT_BGGR_14 = 12,
+        PIXEL_FORMAT_BGGR_16 = 13,
         
     } GPR_PIXEL_FORMAT;
 
@@ -66,6 +76,8 @@
 
     typedef struct
     {
+        /* Color-site values: green in the red row and green in the blue row.
+         * SDK metadata read/write maps these to the selected physical CFA. */
         int32_t r_black;
         
         int32_t g_r_black;

@@ -1,0 +1,141 @@
+{
+  "schema": "gpr.stock_video.inspect.v1",
+  "clip_sha256": "8374b79c39e33375f03982210cceb89afc579887e4dd13c518b3d1a1c666b67f",
+  "header": {
+    "width": 4096,
+    "height": 3072,
+    "fps_num": 30,
+    "fps_den": 1,
+    "quality": 3,
+    "bayer": "RGGB",
+    "sample_bits": 14,
+    "codec": "stock_vc5",
+    "version": 2
+  },
+  "frames": [
+    {
+      "index": 0,
+      "pts_ns": 0,
+      "bytes": 3632104,
+      "sha256": "5ec51ef866e4fcf02796b8de02980f3aa2baae63a1cc8d8f2685d757ce483418",
+      "raw_sha256": "6555fcf0c4715b15e55e2e2b91c565b559b3701fcfa34201b09b37214af41472",
+      "cnn_s": 1.5814106250181794,
+      "cnn_sha256": "9805b06643f3540f1201981a95519e5f7491cc492a4466a1e3627604da9482d3"
+    },
+    {
+      "index": 1,
+      "pts_ns": 33333333,
+      "bytes": 3153500,
+      "sha256": "54ed9418b498bc7e05e10f0f84b3e7f7f26a51a176ebba816f86b81ab02eb0d5",
+      "raw_sha256": "1f421c6e09da0ad3a90376c702ac998d783578ed5d1cf881e22ff32e51b9ff85",
+      "cnn_s": 0.18760425003711134,
+      "cnn_sha256": "bb2882e0ee5824b9f46ab753c72b2bf5ea307b664e27df55937dfced604ec80c"
+    },
+    {
+      "index": 2,
+      "pts_ns": 66666666,
+      "bytes": 3632104,
+      "sha256": "5ec51ef866e4fcf02796b8de02980f3aa2baae63a1cc8d8f2685d757ce483418"
+    },
+    {
+      "index": 3,
+      "pts_ns": 100000000,
+      "bytes": 3153500,
+      "sha256": "54ed9418b498bc7e05e10f0f84b3e7f7f26a51a176ebba816f86b81ab02eb0d5"
+    }
+  ],
+  "cnn": {
+    "checkpoint_sha256": "df22af432710bddabd223047c2db2d0edf2808dd17c4341694a974e045ec87cd",
+    "architecture_sha256": "4018312eac15e6d73188e6df9d33644b78c0df9f0babc02cd021c8615a4fb5b4",
+    "checkpoint_schema": "build",
+    "device": "mps",
+    "quality_status": "unvalidated_for_stock_video",
+    "package_note": "Existing stock-Q3 BIBO1x checkpoint; inference on decoded Bayer is supported, improvement on the tested replay inputs is not established."
+  },
+  "frame_count": 4,
+  "required_MBps": 101.78502,
+  "comparison_to_replayed_raw": [
+    {
+      "input": "GP011728",
+      "stock_psnr_db": 62.73521442397956,
+      "cnn_psnr_db": 52.484603866973984,
+      "cnn_changed_samples": 12433404,
+      "cnn_min": 0,
+      "cnn_max": 16383,
+      "delta_psnr_db": -10.25061055700558
+    },
+    {
+      "input": "GPAB1094",
+      "stock_psnr_db": 69.95133964110792,
+      "cnn_psnr_db": 52.11455956703738,
+      "cnn_changed_samples": 12474060,
+      "cnn_min": 0,
+      "cnn_max": 15739,
+      "delta_psnr_db": -17.83678007407054
+    }
+  ],
+  "host": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+  "comparison_note": "Reference is RAW decoded from supplied GPR, not original sensor RAW. Two images only, no motion or temporal-quality validation.",
+  "final_adapter_validation": {
+    "schema": "gpr.stock_video.inspect.v1",
+    "clip_sha256": "8374b79c39e33375f03982210cceb89afc579887e4dd13c518b3d1a1c666b67f",
+    "header": {
+      "width": 4096,
+      "height": 3072,
+      "fps_num": 30,
+      "fps_den": 1,
+      "quality": 3,
+      "bayer": "RGGB",
+      "sample_bits": 14,
+      "codec": "stock_vc5",
+      "version": 2
+    },
+    "frames": [
+      {
+        "index": 0,
+        "pts_ns": 0,
+        "bytes": 3632104,
+        "sha256": "5ec51ef866e4fcf02796b8de02980f3aa2baae63a1cc8d8f2685d757ce483418",
+        "raw_sha256": "6555fcf0c4715b15e55e2e2b91c565b559b3701fcfa34201b09b37214af41472",
+        "cnn_s": 0.39679349993821234,
+        "cnn_sha256": "9805b06643f3540f1201981a95519e5f7491cc492a4466a1e3627604da9482d3",
+        "reference_sha256": "bc58754c48a16e232d7bc7de91f680b40cb2766b4350ae641427a0c9b9936d21",
+        "stock_psnr_db": 62.73521442397956,
+        "cnn_psnr_db": 52.484603866973984
+      },
+      {
+        "index": 1,
+        "pts_ns": 33333333,
+        "bytes": 3153500,
+        "sha256": "54ed9418b498bc7e05e10f0f84b3e7f7f26a51a176ebba816f86b81ab02eb0d5",
+        "raw_sha256": "1f421c6e09da0ad3a90376c702ac998d783578ed5d1cf881e22ff32e51b9ff85",
+        "cnn_s": 0.18879341694992036,
+        "cnn_sha256": "bb2882e0ee5824b9f46ab753c72b2bf5ea307b664e27df55937dfced604ec80c",
+        "reference_sha256": "17777a9324025519e8c03497d0197beb98eb386ee0a5e447427013e3f3c2b054",
+        "stock_psnr_db": 69.95133964110792,
+        "cnn_psnr_db": 52.11455956703738
+      },
+      {
+        "index": 2,
+        "pts_ns": 66666666,
+        "bytes": 3632104,
+        "sha256": "5ec51ef866e4fcf02796b8de02980f3aa2baae63a1cc8d8f2685d757ce483418"
+      },
+      {
+        "index": 3,
+        "pts_ns": 100000000,
+        "bytes": 3153500,
+        "sha256": "54ed9418b498bc7e05e10f0f84b3e7f7f26a51a176ebba816f86b81ab02eb0d5"
+      }
+    ],
+    "cnn": {
+      "checkpoint_sha256": "df22af432710bddabd223047c2db2d0edf2808dd17c4341694a974e045ec87cd",
+      "architecture_sha256": "4018312eac15e6d73188e6df9d33644b78c0df9f0babc02cd021c8615a4fb5b4",
+      "checkpoint_schema": "build",
+      "device": "mps",
+      "quality_status": "unvalidated_for_stock_video"
+    },
+    "frame_count": 4,
+    "required_MBps": 101.78502
+  }
+}

@@ -1,0 +1,36 @@
+Internal ctest changing into directory: /mnt/ssd/gpr_work/stock-raw-media-runtime/build-runtime
+Test project /mnt/ssd/gpr_work/stock-raw-media-runtime/build-runtime
+    Start 1: preview_contract
+1/6 Test #1: preview_contract .................   Passed    0.01 sec
+    Start 2: preview_cli
+2/6 Test #2: preview_cli ......................   Passed    0.07 sec
+    Start 3: capture_lifecycle
+3/6 Test #3: capture_lifecycle ................   Passed    0.02 sec
+    Start 4: capture_c_api
+4/6 Test #4: capture_c_api ....................   Passed    0.06 sec
+    Start 5: gvid3_conformance
+5/6 Test #5: gvid3_conformance ................   Passed    0.11 sec
+    Start 6: gvid2_compatibility
+6/6 Test #6: gvid2_compatibility ..............   Passed    0.07 sec
+
+100% tests passed, 0 tests failed out of 6
+
+Total Test time (real) =   0.34 sec
+Internal ctest changing into directory: /mnt/ssd/gpr_work/stock-raw-media-runtime/build-runtime-asan
+Test project /mnt/ssd/gpr_work/stock-raw-media-runtime/build-runtime-asan
+    Start 1: preview_contract
+1/6 Test #1: preview_contract .................   Passed    4.58 sec
+    Start 2: preview_cli
+2/6 Test #2: preview_cli ......................   Passed   58.63 sec
+    Start 3: capture_lifecycle
+3/6 Test #3: capture_lifecycle ................   Passed    4.62 sec
+    Start 4: capture_c_api
+4/6 Test #4: capture_c_api ....................   Passed    4.75 sec
+    Start 5: gvid3_conformance
+5/6 Test #5: gvid3_conformance ................   Passed    4.71 sec
+    Start 6: gvid2_compatibility
+6/6 Test #6: gvid2_compatibility ..............   Passed    0.07 sec
+
+100% tests passed, 0 tests failed out of 6
+
+Total Test time (real) =  77.36 sec

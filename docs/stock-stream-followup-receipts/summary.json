@@ -1,0 +1,252 @@
+{
+  "source": "3b2c0f028659add9b6f8976b7f1985292e2e7c6b",
+  "runtime_changes": false,
+  "source_ci": "https://github.com/dcliftreaves/gpr/actions/runs/41184771455",
+  "source_ci_all_seven_pass": true,
+  "color": {
+    "complete": true,
+    "decision": "Reject this extra-color-thread prototype; keep production implementation unchanged.",
+    "scope": "Independent hashes/event order/warmup/medians audit. Harness compares actual payloads, all reconstructed planes and calibrated RGB every iteration; no capture/storage timing claim.",
+    "exact_iterations": 256,
+    "sources": [
+      {
+        "source": 0,
+        "modes": {
+          "post-color": {
+            "wall_median_ms": 45.162477499999994,
+            "encode_median_ms": 39.0004395,
+            "block_wall_medians_ms": [
+              49.488621,
+              49.655029,
+              44.774087,
+              44.856661
+            ]
+          },
+          "progressive-color": {
+            "wall_median_ms": 56.526097,
+            "encode_median_ms": 56.525523,
+            "block_wall_medians_ms": [
+              57.779425,
+              56.161123,
+              57.089868,
+              55.227658
+            ]
+          }
+        },
+        "progressive_slower_every_block": true
+      },
+      {
+        "source": 1,
+        "modes": {
+          "post-color": {
+            "wall_median_ms": 49.975715,
+            "encode_median_ms": 43.390916000000004,
+            "block_wall_medians_ms": [
+              42.544636,
+              43.890695,
+              51.57822,
+              51.500276
+            ]
+          },
+          "progressive-color": {
+            "wall_median_ms": 53.3793185,
+            "encode_median_ms": 53.378439,
+            "block_wall_medians_ms": [
+              53.568615,
+              53.237078,
+              53.035355,
+              53.121929
+            ]
+          }
+        },
+        "progressive_slower_every_block": true
+      }
+    ]
+  },
+  "shared_full_unpack": {
+    "complete": true,
+    "exact_iterations": 256,
+    "decision": "Reject existing full-frame unpack fallback as faster configuration; does not isolate a new shared-green-cache design.",
+    "sources": [
+      {
+        "source": 0,
+        "modes": {
+          "streamed-unpack": {
+            "wall_median_ms": 45.434599000000006,
+            "encode_median_ms": 38.879993,
+            "block_medians_ms": [
+              45.628877,
+              43.853741,
+              45.524192,
+              45.626803
+            ]
+          },
+          "shared-full-unpack": {
+            "wall_median_ms": 72.768877,
+            "encode_median_ms": 66.1431875,
+            "block_medians_ms": [
+              75.293589,
+              72.784136,
+              72.763062,
+              64.243459
+            ]
+          }
+        }
+      },
+      {
+        "source": 1,
+        "modes": {
+          "streamed-unpack": {
+            "wall_median_ms": 45.639219999999995,
+            "encode_median_ms": 39.2762075,
+            "block_medians_ms": [
+              46.519547,
+              40.627972,
+              47.164549,
+              47.046401
+            ]
+          },
+          "shared-full-unpack": {
+            "wall_median_ms": 69.39064350000001,
+            "encode_median_ms": 62.80888950000001,
+            "block_medians_ms": [
+              69.318513,
+              69.374755,
+              69.675348,
+              69.349681
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "trailing_entropy": {
+    "complete": true,
+    "decision": "Reject trailing-zero group prototype before whole-encoder integration; all candidate runs slower on both hosts.",
+    "results": {
+      "mac": {
+        "median_seconds": {
+          "baseline": 0.054274,
+          "trailing": 0.0655845
+        },
+        "slower_percent": 20.839628551424248
+      },
+      "pi": {
+        "median_seconds": {
+          "baseline": 0.263077314,
+          "trailing": 0.28320680099999995
+        },
+        "slower_percent": 7.651548016033005
+      }
+    }
+  },
+  "shared_greens": {
+    "complete": true,
+    "exact_iterations": 512,
+    "decision": "Reject both whole-height shared-green cache variants; every candidate block slower than every matched control. No full-encoder speed or ABI claim.",
+    "variants": [
+      {
+        "variant": "packed-ready",
+        "sources": [
+          {
+            "source": 0,
+            "modes": {
+              "channel-assembly": {
+                "median_ms": 12.919861000000001,
+                "block_medians_ms": [
+                  12.831195,
+                  13.033158,
+                  13.047806,
+                  12.777157
+                ]
+              },
+              "shared-greens": {
+                "median_ms": 25.4663415,
+                "block_medians_ms": [
+                  25.460851,
+                  25.425591,
+                  25.717611,
+                  25.399814
+                ]
+              }
+            }
+          },
+          {
+            "source": 1,
+            "modes": {
+              "channel-assembly": {
+                "median_ms": 12.1806365,
+                "block_medians_ms": [
+                  12.617527,
+                  12.201766,
+                  12.724397,
+                  10.887854
+                ]
+              },
+              "shared-greens": {
+                "median_ms": 27.6864795,
+                "block_medians_ms": [
+                  27.704396,
+                  27.746304,
+                  27.603155,
+                  27.680156
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "variant": "padded-ready",
+        "sources": [
+          {
+            "source": 0,
+            "modes": {
+              "channel-assembly": {
+                "median_ms": 12.5174155,
+                "block_medians_ms": [
+                  12.368619,
+                  12.701953,
+                  12.536508,
+                  12.774991
+                ]
+              },
+              "shared-greens": {
+                "median_ms": 27.675081499999997,
+                "block_medians_ms": [
+                  27.816638,
+                  27.798693,
+                  27.626433,
+                  27.578525
+                ]
+              }
+            }
+          },
+          {
+            "source": 1,
+            "modes": {
+              "channel-assembly": {
+                "median_ms": 12.333998000000001,
+                "block_medians_ms": [
+                  12.331396,
+                  12.463712,
+                  12.350396,
+                  12.301934
+                ]
+              },
+              "shared-greens": {
+                "median_ms": 27.123357,
+                "block_medians_ms": [
+                  27.251006,
+                  27.138987,
+                  27.118931,
+                  26.805783
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

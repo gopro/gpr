@@ -1,0 +1,133 @@
+{
+  "schema": "gpr.clean_sheet.native_runtime_verification.v1",
+  "gp011728_12mp_base_psnr_db": 62.7352,
+  "gp011689_50mp_bicubic_psnr_db": 56.9514,
+  "runs": [
+    {
+      "case": "GP011728_12MP_1x_Cleanup",
+      "scale": 1,
+      "input_shape": [
+        3072,
+        4096
+      ],
+      "output_shape": [
+        3072,
+        4096
+      ],
+      "backend": "coreml",
+      "checkpoint": "models/stock-q3-rggb14-cleanup/selected.pt",
+      "baseline_psnr_db": 62.7352,
+      "psnr_db": 63.2331,
+      "gain_vs_baseline_db": 0.4979,
+      "torch_mps_psnr_db": 63.2331,
+      "max_abs_count_diff_vs_torch": 1,
+      "latency_ms": 1552.46,
+      "torch_required": false
+    },
+    {
+      "case": "GP011728_12MP_1x_Cleanup",
+      "scale": 1,
+      "input_shape": [
+        3072,
+        4096
+      ],
+      "output_shape": [
+        3072,
+        4096
+      ],
+      "backend": "mpsgraph",
+      "checkpoint": "models/stock-q3-rggb14-cleanup/selected.pt",
+      "baseline_psnr_db": 62.7352,
+      "psnr_db": 63.2325,
+      "gain_vs_baseline_db": 0.4973,
+      "torch_mps_psnr_db": 63.2331,
+      "max_abs_count_diff_vs_torch": 1,
+      "latency_ms": 2729.74,
+      "torch_required": false
+    },
+    {
+      "case": "GP011728_12MP_1x_Cleanup",
+      "scale": 1,
+      "input_shape": [
+        3072,
+        4096
+      ],
+      "output_shape": [
+        3072,
+        4096
+      ],
+      "backend": "hybrid",
+      "checkpoint": "models/stock-q3-rggb14-cleanup/selected.pt",
+      "baseline_psnr_db": 62.7352,
+      "psnr_db": 63.2325,
+      "gain_vs_baseline_db": 0.4973,
+      "torch_mps_psnr_db": 63.2331,
+      "max_abs_count_diff_vs_torch": 1,
+      "latency_ms": 1166.43,
+      "torch_required": false
+    },
+    {
+      "case": "GP011689_50MP_2x_ZeroDC_SR",
+      "scale": 2,
+      "input_shape": [
+        3072,
+        4096
+      ],
+      "output_shape": [
+        6144,
+        8192
+      ],
+      "backend": "coreml",
+      "checkpoint": "models/stock-q3-rggb14-sr-diagnostic/selected.pt",
+      "baseline_psnr_db": 56.9514,
+      "psnr_db": 57.8621,
+      "gain_vs_baseline_db": 0.9106,
+      "torch_mps_psnr_db": 57.8621,
+      "max_abs_count_diff_vs_torch": 1,
+      "latency_ms": 1074.55,
+      "torch_required": false
+    },
+    {
+      "case": "GP011689_50MP_2x_ZeroDC_SR",
+      "scale": 2,
+      "input_shape": [
+        3072,
+        4096
+      ],
+      "output_shape": [
+        6144,
+        8192
+      ],
+      "backend": "mpsgraph",
+      "checkpoint": "models/stock-q3-rggb14-sr-diagnostic/selected.pt",
+      "baseline_psnr_db": 56.9514,
+      "psnr_db": 57.8621,
+      "gain_vs_baseline_db": 0.9106,
+      "torch_mps_psnr_db": 57.8621,
+      "max_abs_count_diff_vs_torch": 6,
+      "latency_ms": 825.4,
+      "torch_required": false
+    },
+    {
+      "case": "GP011689_50MP_2x_ZeroDC_SR",
+      "scale": 2,
+      "input_shape": [
+        3072,
+        4096
+      ],
+      "output_shape": [
+        6144,
+        8192
+      ],
+      "backend": "hybrid",
+      "checkpoint": "models/stock-q3-rggb14-sr-diagnostic/selected.pt",
+      "baseline_psnr_db": 56.9514,
+      "psnr_db": 57.8621,
+      "gain_vs_baseline_db": 0.9107,
+      "torch_mps_psnr_db": 57.8621,
+      "max_abs_count_diff_vs_torch": 6,
+      "latency_ms": 673.5,
+      "torch_required": false
+    }
+  ]
+}

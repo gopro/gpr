@@ -1,0 +1,51 @@
+{
+  "schema": "gpr.mission1.optical_stackup_in_camera_benchmark.v1",
+  "vc5_opponent_channel_highpass": {
+    "channel_0_YG_luma": {
+      "hp_rms_counts": 210.28939819335938,
+      "stage0_nonzero_fraction": 0.7432632446289062
+    },
+    "channel_1_CR_lca": {
+      "hp_rms_counts": 63.37883758544922,
+      "stage0_nonzero_fraction": 0.48179372151692706
+    },
+    "channel_2_CB_lca": {
+      "hp_rms_counts": 63.52509307861328,
+      "stage0_nonzero_fraction": 0.5073979695638021
+    },
+    "channel_3_CG_raw_crosstalk": {
+      "hp_rms_counts": 55.36296463012695,
+      "stage0_nonzero_fraction": 0.2559611002604167
+    },
+    "channel_3_CG_after_cra_coring": {
+      "hp_rms_counts": 50.73128890991211,
+      "stage0_nonzero_fraction": 0.17565536499023438,
+      "symbol_thrashing_reduction_pct": 31.37419521500676
+    }
+  },
+  "in_camera_feasibility_matrix": {
+    "tier_1_streaming_neon_vc5_compression": {
+      "runs_in_camera_on_mission1": true,
+      "backwards_compatible_stock_vc5": true,
+      "latency_12mp_ms": 28.88,
+      "latency_50mp_ms": 95.74,
+      "speedup_vs_stock_50mp": "6.2x (95.7 ms vs 594 ms)"
+    },
+    "tier_2_analytical_optical_stackup_and_cra_filter": {
+      "runs_in_camera_on_mission1": true,
+      "measured_4thread_cpu_ms_12mp": 10.649449983611703,
+      "estimated_fused_neon_unpack_ms_12mp": 1.4,
+      "measured_m5_max_gpu_2x_box2_ms": 6.86537295114249,
+      "psnr_gain_mission1_db": 0.2455,
+      "neural_weights": 0
+    },
+    "tier_3_neural_zero_dc_1x_2x_sr": {
+      "runs_in_camera_on_mission1_cpu": false,
+      "runs_in_camera_with_npu_or_desktop_gpu": true,
+      "mission1_cpu_50mp_s": 86.29,
+      "m5_max_gpu_12mp_to_50mp_ms": 185.0,
+      "psnr_gain_bundled_vs_supplied_db": 0.8786,
+      "psnr_gain_hybrid_w96_vs_bicubic_db": 1.5571
+    }
+  }
+}

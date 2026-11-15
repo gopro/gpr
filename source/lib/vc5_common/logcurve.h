@@ -30,6 +30,7 @@ extern "C" {
 	extern uint16_t EncoderLogCurve[];
 	
 	extern uint16_t DecoderLogCurve[];
+    extern uint8_t DecoderGamma8Curve[];
 
 	void SetupDecoderLogCurve(void);
 

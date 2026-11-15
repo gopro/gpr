@@ -68,6 +68,28 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
         
         output_row1_ptr = (uint16_t *)output_row_ptr;
         output_row2_ptr = (uint16_t *)(output_row_ptr + output_half_pitch);
+
+        if (output_format == PIXEL_FORMAT_RAW_RGGB_14 && output_bit_depth == 14)
+        {
+            for (column = 0; column < width; column++)
+            {
+                int32_t GS = GS_input_row_ptr[column];
+                int32_t RG = RG_input_row_ptr[column] - midpoint;
+                int32_t BG = BG_input_row_ptr[column] - midpoint;
+                int32_t GD = GD_input_row_ptr[column] - midpoint;
+
+                int32_t R  = clamp_uint(RG * 2 + GS, 12);
+                int32_t B  = clamp_uint(BG * 2 + GS, 12);
+                int32_t G1 = clamp_uint(GS + GD,     12);
+                int32_t G2 = clamp_uint(GS - GD,     12);
+
+                output_row1_ptr[2 * column + 0] = (uint16_t)(DecoderLogCurve[R]  >> 2);
+                output_row1_ptr[2 * column + 1] = (uint16_t)(DecoderLogCurve[G1] >> 2);
+                output_row2_ptr[2 * column + 0] = (uint16_t)(DecoderLogCurve[G2] >> 2);
+                output_row2_ptr[2 * column + 1] = (uint16_t)(DecoderLogCurve[B]  >> 2);
+            }
+            continue;
+        }
         
         // Pack the rows of Bayer components into the BYR4 pattern
         for (column = 0; column < width; column++)
@@ -85,8 +107,9 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
             RG -= midpoint;
             BG -= midpoint;
             
-            R = (RG << 1) + GS;
-            B = (BG << 1) + GS;
+            // Differences may be negative; signed left shift is undefined in C.
+            R = RG * 2 + GS;
+            B = BG * 2 + GS;
             G1 = GS + GD;
             G2 = GS - GD;
             
@@ -110,6 +133,7 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
             {
                 case PIXEL_FORMAT_RAW_RGGB_12:
                 case PIXEL_FORMAT_RAW_RGGB_14:
+                case PIXEL_FORMAT_RAW_RGGB_16:
                     output_row1_ptr[2 * column + 0] = (uint16_t)R;
                     output_row1_ptr[2 * column + 1] = (uint16_t)G1;
                     output_row2_ptr[2 * column + 0] = (uint16_t)G2;
@@ -118,12 +142,29 @@ CODEC_ERROR PackComponentsToRAW(const UNPACKED_IMAGE *image,
                     
                 case PIXEL_FORMAT_RAW_GBRG_12:
                 case PIXEL_FORMAT_RAW_GBRG_14:
+                case PIXEL_FORMAT_RAW_GBRG_16:
                     output_row1_ptr[2 * column + 0] = (uint16_t)G1;
                     output_row1_ptr[2 * column + 1] = (uint16_t)B;
                     output_row2_ptr[2 * column + 0] = (uint16_t)R;
                     output_row2_ptr[2 * column + 1] = (uint16_t)G2;
                     break;
                     
+                case PIXEL_FORMAT_RAW_GRBG_12:
+                case PIXEL_FORMAT_RAW_GRBG_14:
+                case PIXEL_FORMAT_RAW_GRBG_16:
+                    output_row1_ptr[2 * column + 0] = (uint16_t)G1;
+                    output_row1_ptr[2 * column + 1] = (uint16_t)R;
+                    output_row2_ptr[2 * column + 0] = (uint16_t)B;
+                    output_row2_ptr[2 * column + 1] = (uint16_t)G2;
+                    break;
+                case PIXEL_FORMAT_RAW_BGGR_12:
+                case PIXEL_FORMAT_RAW_BGGR_14:
+                case PIXEL_FORMAT_RAW_BGGR_16:
+                    output_row1_ptr[2 * column + 0] = (uint16_t)B;
+                    output_row1_ptr[2 * column + 1] = (uint16_t)G1;
+                    output_row2_ptr[2 * column + 0] = (uint16_t)G2;
+                    output_row2_ptr[2 * column + 1] = (uint16_t)R;
+                    break;
                 default:
                     assert(0);
                     break;

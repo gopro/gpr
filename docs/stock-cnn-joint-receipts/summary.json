@@ -1,0 +1,118 @@
+{
+  "schema": "gpr.stock_cnn_joint_summary.v1",
+  "complete": true,
+  "training_protocol_sha256": "73b6bf685f6fa698b1db9ff97524baed22ffee4570eae89c831789778084281f",
+  "training_updates": 1200,
+  "validation_patches": 320,
+  "independently_rescored_settings": 9,
+  "independent_tone_guard_decisions": true,
+  "cases": [
+    {
+      "case": "sr-only",
+      "checkpoints": [
+        {
+          "step": 200,
+          "gain_db_vs_supplied": 0.03270363692106305,
+          "eligible": false,
+          "raw_regressions": [
+            "bicubic:pooled:shadow",
+            "bicubic:nikon:20250727_ForestFire:shadow",
+            "bicubic:nikon:LRT_20250730_05__ColoradoSky:shadow",
+            "supplied:pooled:shadow",
+            "supplied:nikon:20250727_ForestFire:shadow",
+            "supplied:nikon:LRT_20250730_05__ColoradoSky:shadow"
+          ],
+          "tone_proxy_regressions": []
+        },
+        {
+          "step": 400,
+          "gain_db_vs_supplied": 0.07369246791915326,
+          "eligible": false,
+          "raw_regressions": [
+            "bicubic:pooled:shadow",
+            "bicubic:nikon:20250727_ForestFire:shadow",
+            "bicubic:nikon:LRT_20250730_05__ColoradoSky:shadow",
+            "supplied:pooled:shadow",
+            "supplied:nikon:20250727_ForestFire:shadow",
+            "supplied:nikon:LRT_20250730_05__ColoradoSky:shadow"
+          ],
+          "tone_proxy_regressions": []
+        }
+      ]
+    },
+    {
+      "case": "frozen-cleanup",
+      "checkpoints": [
+        {
+          "step": 200,
+          "gain_db_vs_supplied": 0.03982722865249448,
+          "eligible": false,
+          "raw_regressions": [
+            "bicubic:pooled:shadow",
+            "bicubic:nikon:20250727_ForestFire:shadow",
+            "bicubic:nikon:LRT_20250730_05__ColoradoSky:shadow",
+            "bicubic:camera:mission1_home_interior:shadow",
+            "supplied:pooled:shadow",
+            "supplied:nikon:20250727_ForestFire:shadow",
+            "supplied:nikon:20250727_ForestFire:detail",
+            "supplied:nikon:LRT_20250730_05__ColoradoSky:shadow",
+            "supplied:camera:mission1_home_interior:shadow"
+          ],
+          "tone_proxy_regressions": []
+        },
+        {
+          "step": 400,
+          "gain_db_vs_supplied": 0.10963799170066875,
+          "eligible": false,
+          "raw_regressions": [
+            "bicubic:pooled:shadow",
+            "bicubic:nikon:20250727_ForestFire:shadow",
+            "bicubic:nikon:LRT_20250730_05__ColoradoSky:shadow",
+            "supplied:pooled:shadow",
+            "supplied:nikon:20250727_ForestFire:shadow",
+            "supplied:nikon:LRT_20250730_05__ColoradoSky:shadow"
+          ],
+          "tone_proxy_regressions": []
+        }
+      ]
+    },
+    {
+      "case": "joint-cleanup",
+      "checkpoints": [
+        {
+          "step": 200,
+          "gain_db_vs_supplied": 0.05819480713176903,
+          "eligible": false,
+          "raw_regressions": [
+            "bicubic:pooled:shadow",
+            "bicubic:nikon:20250727_ForestFire:shadow",
+            "bicubic:nikon:LRT_20250730_05__ColoradoSky:shadow",
+            "supplied:pooled:shadow",
+            "supplied:nikon:20250727_ForestFire:shadow",
+            "supplied:nikon:LRT_20250730_05__ColoradoSky:shadow"
+          ],
+          "tone_proxy_regressions": []
+        },
+        {
+          "step": 400,
+          "gain_db_vs_supplied": 0.1439397853383783,
+          "eligible": false,
+          "raw_regressions": [
+            "bicubic:pooled:shadow",
+            "bicubic:nikon:20250727_ForestFire:shadow",
+            "bicubic:nikon:LRT_20250730_05__ColoradoSky:shadow",
+            "supplied:pooled:shadow",
+            "supplied:nikon:20250727_ForestFire:shadow",
+            "supplied:nikon:LRT_20250730_05__ColoradoSky:shadow"
+          ],
+          "tone_proxy_regressions": []
+        }
+      ]
+    }
+  ],
+  "selected": null,
+  "whole_image_evaluation": false,
+  "rendered_evaluation": false,
+  "final_reference_evaluation": false,
+  "production_models_changed": false
+}

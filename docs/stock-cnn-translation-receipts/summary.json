@@ -1,0 +1,215 @@
+{
+  "schema": "gpr.stock_cnn_translation_audit.v1",
+  "complete": true,
+  "driver_sha256": "b49306bb0cfa4a6485fe95b95c8db9e27b659a3ac5eb2691cb27a0e8811bac3e",
+  "parent_results_sha256": "f77922efdafd5c055577f1fce58d1b1cb11d09c29c4d6eda74a7544a5c26338d",
+  "transform_samples_independently_exact": true,
+  "comparison_metrics_independently_exact": true,
+  "comparisons": [
+    {
+      "source": 0,
+      "offset": [
+        0,
+        2
+      ],
+      "mode": "bicubic",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 0,
+      "offset": [
+        0,
+        2
+      ],
+      "mode": "cnn",
+      "max_abs_counts": 148,
+      "rmse_counts": 1.8625258037063428
+    },
+    {
+      "source": 0,
+      "offset": [
+        0,
+        2
+      ],
+      "mode": "learned-residual-change",
+      "max_abs_counts": 148,
+      "rmse_counts": 1.8625258037063428
+    },
+    {
+      "source": 0,
+      "offset": [
+        2,
+        0
+      ],
+      "mode": "bicubic",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 0,
+      "offset": [
+        2,
+        0
+      ],
+      "mode": "cnn",
+      "max_abs_counts": 207,
+      "rmse_counts": 2.2787793540812706
+    },
+    {
+      "source": 0,
+      "offset": [
+        2,
+        0
+      ],
+      "mode": "learned-residual-change",
+      "max_abs_counts": 207,
+      "rmse_counts": 2.2787793540812706
+    },
+    {
+      "source": 0,
+      "offset": [
+        0,
+        16
+      ],
+      "mode": "bicubic",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 0,
+      "offset": [
+        0,
+        16
+      ],
+      "mode": "cnn",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 0,
+      "offset": [
+        0,
+        16
+      ],
+      "mode": "learned-residual-change",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 1,
+      "offset": [
+        0,
+        2
+      ],
+      "mode": "bicubic",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 1,
+      "offset": [
+        0,
+        2
+      ],
+      "mode": "cnn",
+      "max_abs_counts": 83,
+      "rmse_counts": 2.128028154580271
+    },
+    {
+      "source": 1,
+      "offset": [
+        0,
+        2
+      ],
+      "mode": "learned-residual-change",
+      "max_abs_counts": 83,
+      "rmse_counts": 2.128028154580271
+    },
+    {
+      "source": 1,
+      "offset": [
+        2,
+        0
+      ],
+      "mode": "bicubic",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 1,
+      "offset": [
+        2,
+        0
+      ],
+      "mode": "cnn",
+      "max_abs_counts": 120,
+      "rmse_counts": 2.621651144293846
+    },
+    {
+      "source": 1,
+      "offset": [
+        2,
+        0
+      ],
+      "mode": "learned-residual-change",
+      "max_abs_counts": 120,
+      "rmse_counts": 2.621651144293846
+    },
+    {
+      "source": 1,
+      "offset": [
+        0,
+        16
+      ],
+      "mode": "bicubic",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 1,
+      "offset": [
+        0,
+        16
+      ],
+      "mode": "cnn",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    },
+    {
+      "source": 1,
+      "offset": [
+        0,
+        16
+      ],
+      "mode": "learned-residual-change",
+      "max_abs_counts": 0,
+      "rmse_counts": 0.0
+    }
+  ],
+  "cpu_control": [
+    {
+      "offset": [
+        0,
+        0
+      ],
+      "output_sha256": "8702a1872766f42be4c1209108d1f41d9d9948e0510a11776579cafaa6cc7f25",
+      "max_cpu_mps_count_difference": 1,
+      "differing_samples": 395,
+      "inference_s": 2.1574900000123307
+    },
+    {
+      "offset": [
+        0,
+        2
+      ],
+      "output_sha256": "0d91fb2d3c55a3618c3b35440ac6f0616a7b76e35c1f73c37099a8f526f96ad9",
+      "max_cpu_mps_count_difference": 1,
+      "differing_samples": 419,
+      "inference_s": 2.174578290898353
+    }
+  ],
+  "cpu_aligned_translation_max_counts": 148,
+  "cpu_aligned_translation_rmse_counts": 1.8625244504762886,
+  "quality_approval": false
+}

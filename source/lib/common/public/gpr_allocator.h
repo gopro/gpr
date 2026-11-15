@@ -22,6 +22,7 @@
 #define GPR_ALLOCATOR_H
 
 #include "gpr_platform.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +43,24 @@ extern "C" {
         gpr_free        Free;               // Callback function to free memory
         
     } gpr_allocator;
+
+    /* Preserve caller allocator ownership while aligning hot codec buffers.
+     * Pair only with gpr_aligned_free; never pass the adjusted pointer to Free. */
+    static inline void *gpr_aligned_alloc(const gpr_allocator *allocator, size_t bytes)
+    {
+        const size_t overhead = 63 + sizeof(void *);
+        if (bytes > SIZE_MAX - overhead) return NULL;
+        void *base = allocator->Alloc(bytes + overhead);
+        if (base == NULL) return NULL;
+        uintptr_t address = ((uintptr_t)base + overhead) & ~(uintptr_t)63;
+        ((void **)address)[-1] = base;
+        return (void *)address;
+    }
+
+    static inline void gpr_aligned_free(const gpr_allocator *allocator, void *pointer)
+    {
+        if (pointer != NULL) allocator->Free(((void **)pointer)[-1]);
+    }
 
 #ifdef __cplusplus
 }

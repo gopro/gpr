@@ -1,0 +1,13 @@
+{"event":"frame","index":0,"timestamp_ns":12746620179270662,"bytes":3632104,"encode_ms":27.5645,"write_ms":3.95342,"capture_to_written_ms":32.5066,"deadline_missed":false}
+{"event":"frame","index":1,"timestamp_ns":12746620179301255,"bytes":3153500,"encode_ms":32.4661,"write_ms":7.55706,"capture_to_written_ms":69.3269,"deadline_missed":true}
+{"event":"frame","index":2,"timestamp_ns":12746620179314088,"bytes":3632104,"encode_ms":32.3391,"write_ms":3.95066,"capture_to_written_ms":98.9396,"deadline_missed":true}
+{"event":"frame","index":3,"timestamp_ns":12746620179322495,"bytes":3153500,"encode_ms":32.4301,"write_ms":3.25336,"capture_to_written_ms":131.354,"deadline_missed":true}
+{"event":"frame","index":4,"timestamp_ns":12746620179331329,"bytes":3632104,"encode_ms":32.317,"write_ms":7.7839,"capture_to_written_ms":169.061,"deadline_missed":true}
+{"event":"frame","index":5,"timestamp_ns":12746620216052125,"bytes":3153500,"encode_ms":32.3257,"write_ms":7.31008,"capture_to_written_ms":164.981,"deadline_missed":true}
+{"event":"frame","index":6,"timestamp_ns":12746620248732795,"bytes":3632104,"encode_ms":32.0836,"write_ms":3.87268,"capture_to_written_ms":161.843,"deadline_missed":true}
+{"event":"frame","index":7,"timestamp_ns":12746620278377029,"bytes":3153500,"encode_ms":32.512,"write_ms":3.33257,"capture_to_written_ms":164.853,"deadline_missed":true}
+{"event":"frame","index":8,"timestamp_ns":12746620310812495,"bytes":3632104,"encode_ms":32.0939,"write_ms":7.86471,"capture_to_written_ms":169.92,"deadline_missed":true}
+{"event":"frame","index":9,"timestamp_ns":12746620348591313,"bytes":3153500,"encode_ms":32.4372,"write_ms":3.37433,"capture_to_written_ms":160.868,"deadline_missed":true}
+{"event":"frame","index":10,"timestamp_ns":12746620381268224,"bytes":3632104,"encode_ms":33.7308,"write_ms":8.02121,"capture_to_written_ms":167.474,"deadline_missed":true}
+{"event":"frame","index":11,"timestamp_ns":12746620410734865,"bytes":3153500,"encode_ms":32.5714,"write_ms":1.84717,"capture_to_written_ms":165.099,"deadline_missed":true}
+{"event":"summary","schema":"gpr.capture_replay.v1","attempts":12,"accepted":12,"written":12,"overruns":0,"queue":4,"inflight_high_water":4,"leased":true,"fps_num":30,"fps_den":1,"quality":3,"buffered_fps":30.2557,"durable_fps":23.2414,"encode_median_ms":32.3391,"write_p95_ms":7.86471,"capture_to_written_p95_ms":169.061,"deadline_misses":11,"final_fsync_s":0.119701,"submit_s":0.263846,"queue_wait_s":0.263611,"setup_s":0.21692,"workspace_peak_bytes":97936896,"workspace_fallback_peak_bytes":0,"peak_rss_bytes":510656512,"payload_bytes":40713624,"complete":true}

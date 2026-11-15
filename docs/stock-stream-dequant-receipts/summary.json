@@ -1,0 +1,76 @@
+{
+  "complete": true,
+  "scope": "Independent source binding/event/accounting/deadline audit; original clip bytes/calibration/CRC/pixels/END3 checked by archived verifier before deletion, not rechecked from deleted clips.",
+  "frames_verified_before_clip_deletion": 2370,
+  "streamed_fixed_repeats_passed": false,
+  "runs": [
+    {
+      "index": 0,
+      "mode": "baseline",
+      "frames": 571,
+      "durable_fps": 18.9305,
+      "encode_median_ms": 37.99,
+      "late_writes": 571,
+      "late_previews": 571,
+      "workspace_bytes": 97936896,
+      "peak_rss_bytes": 570490880,
+      "floor": {
+        "recording": false,
+        "preview": false,
+        "preview_late_deliveries": 571,
+        "deadline_ms": 50.0
+      }
+    },
+    {
+      "index": 1,
+      "mode": "streamed",
+      "frames": 600,
+      "durable_fps": 19.9979,
+      "encode_median_ms": 34.0009,
+      "late_writes": 3,
+      "late_previews": 1,
+      "workspace_bytes": 97936896,
+      "peak_rss_bytes": 570441728,
+      "floor": {
+        "recording": false,
+        "preview": false,
+        "preview_late_deliveries": 1,
+        "deadline_ms": 50.0
+      }
+    },
+    {
+      "index": 2,
+      "mode": "streamed",
+      "frames": 600,
+      "durable_fps": 19.9985,
+      "encode_median_ms": 34.9259,
+      "late_writes": 29,
+      "late_previews": 28,
+      "workspace_bytes": 97936896,
+      "peak_rss_bytes": 570490880,
+      "floor": {
+        "recording": false,
+        "preview": false,
+        "preview_late_deliveries": 28,
+        "deadline_ms": 50.0
+      }
+    },
+    {
+      "index": 3,
+      "mode": "baseline",
+      "frames": 599,
+      "durable_fps": 19.9589,
+      "encode_median_ms": 37.1617,
+      "late_writes": 111,
+      "late_previews": 121,
+      "workspace_bytes": 97936896,
+      "peak_rss_bytes": 571031552,
+      "floor": {
+        "recording": false,
+        "preview": false,
+        "preview_late_deliveries": 121,
+        "deadline_ms": 50.0
+      }
+    }
+  ]
+}

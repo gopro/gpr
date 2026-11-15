@@ -17,6 +17,164 @@
  */
 
 #include "headers.h"
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
+
+/*
+	Prefix lookup table for fast VLC decoding.
+
+	Instead of linear-searching through 264 codebook entries per codeword,
+	peek the top VLC_PEEK_BITS bits from the bitstream buffer and use them
+	as an index into this table.  Entries with bits > 0 are direct hits;
+	entries with bits == 0 require fallback to the original linear search.
+*/
+#define VLC_PEEK_BITS 12
+
+typedef struct {
+	uint8_t  bits;    /* Codeword length in bits (0 = not in table) */
+	uint8_t  value;   /* Unsigned coefficient magnitude */
+	uint16_t count;   /* Run length */
+} VLC_LOOKUP;
+
+static VLC_LOOKUP vlc_table[1 << VLC_PEEK_BITS];  /* 4096 entries, 16KB */
+#if defined(_WIN32)
+static INIT_ONCE vlc_init_once = INIT_ONCE_STATIC_INIT;
+#else
+static pthread_once_t vlc_init_once = PTHREAD_ONCE_INIT;
+#endif
+static int vlc_fast_disabled = 0;
+
+/*!
+	@brief Build the prefix lookup table from a codebook
+
+	For each codebook entry with codeword size <= VLC_PEEK_BITS, fill all
+	table slots whose top bits match the codeword.  A codeword of N bits
+	maps to 2^(PEEK-N) table entries (the "don't care" suffix bits).
+*/
+static void InitVLCTable(const CODEBOOK *codebook)
+{
+	int codebook_length = codebook->length;
+	const RLV *entries = (const RLV *)((const uint8_t *)codebook + sizeof(CODEBOOK));
+	int table_size = 1 << VLC_PEEK_BITS;
+
+	/* Clear the table (bits=0 means "not found") */
+	memset(vlc_table, 0, sizeof(vlc_table));
+
+	for (int i = 0; i < codebook_length; i++)
+	{
+		int size = entries[i].size;
+		if (size < 1 || size > VLC_PEEK_BITS)
+			continue;
+
+		uint32_t codeword = entries[i].bits;
+		int fill_count = 1 << (VLC_PEEK_BITS - size);
+		int base_index = (int)(codeword << (VLC_PEEK_BITS - size));
+
+		VLC_LOOKUP entry;
+		entry.bits  = (uint8_t)size;
+		entry.value = (uint8_t)entries[i].value;
+		entry.count = (uint16_t)entries[i].count;
+
+		for (int j = 0; j < fill_count; j++)
+		{
+			vlc_table[base_index + j] = entry;
+		}
+	}
+}
+
+/* Platform-specific callback for thread-safe VLC table initialization. */
+#if defined(_WIN32)
+static BOOL CALLBACK InitVLCTableOnce(PINIT_ONCE once, PVOID parameter, PVOID *context)
+{
+	(void)once;
+	(void)parameter;
+	(void)context;
+	InitVLCTable(decoder_codeset_17.codebook);
+	if (getenv("VLC_NO_FAST") != NULL)
+		vlc_fast_disabled = 1;
+	return TRUE;
+}
+#else
+static void InitVLCTableOnce(void)
+{
+	InitVLCTable(decoder_codeset_17.codebook);
+	if (getenv("VLC_NO_FAST") != NULL)
+		vlc_fast_disabled = 1;
+}
+#endif
+
+/*!
+	@brief Fast combined RLV + sign bit decode using prefix lookup table
+
+	Peeks VLC_PEEK_BITS bits from the bitstream buffer and does a single
+	table lookup.  If the codeword is found and fits in the available bits,
+	consumes the bits and reads the sign bit inline.
+
+	When the buffer is empty, refills before peeking.  When the buffer has
+	fewer than VLC_PEEK_BITS bits, peeks anyway (zero-padded) and validates
+	that the found codeword fits within the available bits.  Falls back to
+	GetRun() only when the codeword is genuinely longer than available bits
+	or not in the table.
+*/
+CODEC_ERROR GetRunFast(BITSTREAM *stream, CODEBOOK *codebook, RUN *run)
+{
+	/* The reference decoder currently supports codebook 17 only.  Keep the
+	   generic fallback correct if another codebook is introduced later. */
+	if (codebook != decoder_codeset_17.codebook)
+		return GetRun(stream, codebook, run);
+
+	/* Thread-safe one-time initialization of the lookup table */
+#if defined(_WIN32)
+	InitOnceExecuteOnce(&vlc_init_once, InitVLCTableOnce, NULL, NULL);
+#else
+	pthread_once(&vlc_init_once, InitVLCTableOnce);
+#endif
+
+	/* Bypass fast path if disabled via VLC_NO_FAST env var */
+	if (vlc_fast_disabled)
+		return GetRun(stream, codebook, run);
+
+	/* Refill if buffer is completely empty */
+	if (stream->count == 0)
+		GetBuffer(stream);
+
+	/* Peek top VLC_PEEK_BITS bits from buffer (zero-padded if count < PEEK).
+	   The buffer is left-aligned in 32 bits; unused low bits are already 0. */
+	uint32_t peek = stream->buffer >> (32 - VLC_PEEK_BITS);
+	VLC_LOOKUP *entry = &vlc_table[peek];
+
+	/* Validate: codeword must be in table AND fit within available bits.
+	   When count < PEEK_BITS, the zero-padded peek may yield a wrong entry
+	   for codewords longer than count, but we catch that with the size check. */
+	if (entry->bits == 0 || entry->bits > stream->count)
+		return GetRun(stream, codebook, run);
+
+	/* Consume codeword bits from the buffer */
+	stream->buffer <<= entry->bits;
+	stream->count -= entry->bits;
+	run->count = entry->count;
+
+	/* Handle sign bit inline for non-zero magnitude values */
+	int32_t value = (int32_t)entry->value;
+	if (value != 0)
+	{
+		/* Refill buffer if empty */
+		if (stream->count == 0)
+			GetBuffer(stream);
+
+		/* Read 1-bit sign: top bit of buffer */
+		if (stream->buffer >> 31)
+			value = -value;
+		stream->buffer <<= 1;
+		stream->count--;
+	}
+	run->value = value;
+
+	return CODEC_ERROR_OKAY;
+}
 
 /*!
 	@brief Parse a run length coded magnitude in the bitstream

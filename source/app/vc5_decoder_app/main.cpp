@@ -149,25 +149,36 @@ int main(int argc, char *argv[])
     TIMER timer; // Performance timer
     InitTimer(&timer);
 
-    for (i = 0; i < DECODER_RUN_COUNT; i++)
+    int decoder_run_count = DECODER_RUN_COUNT;
+    if (const char *runs_env = getenv("GPR_BENCH_RUNS")) {
+        int parsed = atoi(runs_env);
+        if (parsed > 0 && parsed <= 1000) {
+            decoder_run_count = parsed;
+        }
+    }
+
+    for (i = 0; i < decoder_run_count; i++)
     { // Decode all frames
 
         gpr_buffer raw_image = { NULL, 0  };
-        gpr_rgb_buffer rgb_image = { NULL, 0, 0, 0  };
 
         StartTimer(&timer);
         
         LogPrint("%d ", i);
         
-        vc5_decoder_process( &vc5_decoder_params, &vc5_image, &raw_image, &rgb_image );
+        CODEC_ERROR decode_error = vc5_decoder_process( &vc5_decoder_params, &vc5_image, &raw_image, NULL );
         
         StopTimer(&timer);
         
         fflush(stdout);
 
-        assert( raw_image.buffer && raw_image.size > 0 );
+        if( decode_error != CODEC_ERROR_OKAY || !raw_image.buffer || !raw_image.size )
+        {
+            LogPrint("VC-5 decode failed: %d", decode_error);
+            return -1;
+        }
 
-        if( write_to_file( &raw_image, args.output_file_path.c_str() ) )
+        if( i + 1 == decoder_run_count && write_to_file( &raw_image, args.output_file_path.c_str() ) )
         {
             LogPrint("Error writing bitstream to location %s", args.output_file_path.c_str() );
             return -1;
@@ -178,13 +189,9 @@ int main(int argc, char *argv[])
             vc5_decoder_params.mem_free(raw_image.buffer);
         }
         
-        if( rgb_image.buffer )
-        {
-            vc5_decoder_params.mem_free(rgb_image.buffer);
-        }
     }
     
-    LogPrint("Decoding %.3f secs per frame", TimeSecs(&timer) / DECODER_RUN_COUNT );
+    LogPrint("Decoding %.3f secs per frame", TimeSecs(&timer) / decoder_run_count );
     
     if( args.log_curve_file_path != "" )
     {

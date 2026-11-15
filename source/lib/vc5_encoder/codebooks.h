@@ -44,6 +44,7 @@ extern "C" {
         const MAGS_TABLE *mags_table;		//!< Table for encoding coefficient magnitudes
         
         const RUNS_TABLE *runs_table;		//!< Table for encoding runs of zeros
+        const uint64_t *signed_codes;
         
     } ENCODER_CODESET;
     

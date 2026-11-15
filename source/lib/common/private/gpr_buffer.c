@@ -49,6 +49,8 @@ int read_from_file(gpr_buffer* buffer, const char* file_path, gpr_malloc malloc_
     if (fread(buffer->buffer, 1, buffer->size, fIN) != buffer->size)
     {
         free_function(buffer->buffer);
+        buffer->buffer = NULL;
+        buffer->size = 0;
         fputs ("Reading error", stderr);
         fclose(fIN);
         return -1;

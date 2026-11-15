@@ -1,0 +1,40 @@
+{
+  "schema": "gpr.selected_chain_pi_dng_audit.v1",
+  "complete": true,
+  "quality_approval": false,
+  "driver_sha256": "c467b932d592d208e8be943e55e8d5b2bee80efc004bbb527278d25a2157f1d7",
+  "frames": [
+    {
+      "index": 0,
+      "output_sha256": "3cba6d7191c62050b9ba62b56660e9f59437da0daf2910f07729c45f2e04fd7f",
+      "tiff_pixels_exact": true,
+      "supported_calibration_exact": true,
+      "pts_ns": 12986826315484443,
+      "decoded_input_sha256": "6555fcf0c4715b15e55e2e2b91c565b559b3701fcfa34201b09b37214af41472",
+      "cnn_s": 97.99632553569973,
+      "omissions": [
+        {
+          "group": "image",
+          "code": 700,
+          "reason": "opaque XMP may contain stale pixel/crop geometry after reconstruction"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "output_sha256": "7b0a38c2a1a183192a7e6c2314ae339ca54dd168235871512aacd5f9307e4f3e",
+      "tiff_pixels_exact": true,
+      "supported_calibration_exact": true,
+      "pts_ns": 12986826368254330,
+      "decoded_input_sha256": "1f421c6e09da0ad3a90376c702ac998d783578ed5d1cf881e22ff32e51b9ff85",
+      "cnn_s": 98.9489912725985,
+      "omissions": [
+        {
+          "group": "image",
+          "code": 700,
+          "reason": "opaque XMP may contain stale pixel/crop geometry after reconstruction"
+        }
+      ]
+    }
+  ]
+}

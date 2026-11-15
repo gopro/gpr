@@ -218,7 +218,7 @@ STATIC CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, P
     even += highpass[column];
     
     // Remove any scaling used during encoding
-    even <<= descale_shift;
+    even *= (1 << descale_shift);
     
     // The lowpass result should be a positive number
     //assert(0 <= even && even <= INT16_MAX);
@@ -234,7 +234,7 @@ STATIC CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, P
     odd -= highpass[column];
     
     // Remove any scaling used during encoding
-    odd <<= descale_shift;
+    odd *= (1 << descale_shift);
     
     // The lowpass result should be a positive number
     //assert(0 <= odd && odd <= INT16_MAX);
@@ -262,7 +262,7 @@ STATIC CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, P
         even += highpass[column];
         
         // Remove any scaling used during encoding
-        even <<= descale_shift;
+        even *= (1 << descale_shift);
         
         // The lowpass result should be a positive number
         //assert(0 <= even && even <= INT16_MAX);
@@ -281,7 +281,7 @@ STATIC CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, P
         odd -= highpass[column];
         
         // Remove any scaling used during encoding
-        odd <<= descale_shift;
+        odd *= (1 << descale_shift);
         
         // The lowpass result should be a positive number
         //assert(0 <= odd && odd <= INT16_MAX);
@@ -308,7 +308,7 @@ STATIC CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, P
     even += highpass[column];
     
     // Remove any scaling used during encoding
-    even <<= descale_shift;
+    even *= (1 << descale_shift);
     
     // The lowpass result should be a positive number
     //assert(0 <= even && even <= INT16_MAX);
@@ -329,7 +329,7 @@ STATIC CODEC_ERROR InvertHorizontalDescale16s(PIXEL *lowpass, PIXEL *highpass, P
         odd -= highpass[column];
         
         // Remove any scaling used during encoding
-        odd <<= descale_shift;
+        odd *= (1 << descale_shift);
         
         // The lowpass result should be a positive number
         //assert(0 <= odd && odd <= INT16_MAX);
@@ -415,6 +415,19 @@ CODEC_ERROR InvertSpatialQuant16s(gpr_allocator *allocator,
     lowhigh_line[2] = (PIXEL *)allocator->Alloc(buffer_row_size);
     highlow_line = (PIXEL *)allocator->Alloc(buffer_row_size);
     highhigh_line = (PIXEL *)allocator->Alloc(buffer_row_size);
+    if (!even_lowpass || !even_highpass || !odd_lowpass || !odd_highpass ||
+        !lowhigh_line[0] || !lowhigh_line[1] || !lowhigh_line[2] || !highlow_line || !highhigh_line) {
+        if (even_lowpass) allocator->Free(even_lowpass);
+        if (even_highpass) allocator->Free(even_highpass);
+        if (odd_lowpass) allocator->Free(odd_lowpass);
+        if (odd_highpass) allocator->Free(odd_highpass);
+        if (lowhigh_line[0]) allocator->Free(lowhigh_line[0]);
+        if (lowhigh_line[1]) allocator->Free(lowhigh_line[1]);
+        if (lowhigh_line[2]) allocator->Free(lowhigh_line[2]);
+        if (highlow_line) allocator->Free(highlow_line);
+        if (highhigh_line) allocator->Free(highhigh_line);
+        return CODEC_ERROR_OUTOFMEMORY;
+    }
     
     // Convert pitch from bytes to pixels
     lowlow_pitch /= sizeof(PIXEL);
@@ -825,6 +838,19 @@ CODEC_ERROR InvertSpatialQuantDescale16s(gpr_allocator *allocator,
     lowhigh_line[2] = (PIXEL *)allocator->Alloc(buffer_row_size);
     highlow_line = (PIXEL *)allocator->Alloc(buffer_row_size);
     highhigh_line = (PIXEL *)allocator->Alloc(buffer_row_size);
+    if (!even_lowpass || !even_highpass || !odd_lowpass || !odd_highpass ||
+        !lowhigh_line[0] || !lowhigh_line[1] || !lowhigh_line[2] || !highlow_line || !highhigh_line) {
+        if (even_lowpass) allocator->Free(even_lowpass);
+        if (even_highpass) allocator->Free(even_highpass);
+        if (odd_lowpass) allocator->Free(odd_lowpass);
+        if (odd_highpass) allocator->Free(odd_highpass);
+        if (lowhigh_line[0]) allocator->Free(lowhigh_line[0]);
+        if (lowhigh_line[1]) allocator->Free(lowhigh_line[1]);
+        if (lowhigh_line[2]) allocator->Free(lowhigh_line[2]);
+        if (highlow_line) allocator->Free(highlow_line);
+        if (highhigh_line) allocator->Free(highhigh_line);
+        return CODEC_ERROR_OUTOFMEMORY;
+    }
     
     // Convert pitch from bytes to pixels
     lowlow_pitch /= sizeof(PIXEL);
@@ -1186,3 +1212,71 @@ CODEC_ERROR InvertSpatialQuantDescale16s(gpr_allocator *allocator,
     return CODEC_ERROR_OKAY;
 }
 
+
+/* Row-wise inverse building block for a bounded preview pipeline. The three
+ * LL/LH rows are ordered top-to-bottom; HL/HH belong to the center output pair.
+ * The caller supplies 9*input_width scratch samples and may omit the odd row
+ * when the physical output height is odd. No allocation or band ownership. */
+CODEC_ERROR gpr_preview_inverse_row_dequantized(const PIXEL *const ll[3],
+    const PIXEL *const lh[3],const PIXEL *hl,const PIXEL *hh,
+    DIMENSION width,DIMENSION output_width,int mode,uint16_t prescale,
+    PIXEL *scratch,PIXEL *even_output,PIXEL *odd_output)
+{
+    if (!ll || !lh || !hl || !hh || !scratch || !even_output ||
+        width<3 || (output_width!=2*width && output_width!=2*width-1) ||
+        mode<0 || mode>2 || (prescale!=0 && prescale!=2))
+        return CODEC_ERROR_BAD_ARGUMENT;
+    for (int r=0;r<3;++r) if (!ll[r] || !lh[r]) return CODEC_ERROR_BAD_ARGUMENT;
+    const PIXEL *const *dlh=lh;
+    const PIXEL *dhl=hl,*dhh=hh;
+    PIXEL *el=scratch,*eh=scratch+width;
+    PIXEL *ol=scratch+2*width,*oh=scratch+3*width;
+    for (int x=0;x<width;++x) {
+        int32_t le,lo,he,ho;
+        if (mode==0) {
+            le=(11*ll[0][x]-4*ll[1][x]+ll[2][x]+4)>>3;
+            lo=(5*ll[0][x]+4*ll[1][x]-ll[2][x]+4)>>3;
+            he=(11*dlh[0][x]-4*dlh[1][x]+dlh[2][x]+4)>>3;
+            ho=(5*dlh[0][x]+4*dlh[1][x]-dlh[2][x]+4)>>3;
+        } else if (mode==2) {
+            le=(5*ll[2][x]+4*ll[1][x]-ll[0][x]+4)>>3;
+            lo=(11*ll[2][x]-4*ll[1][x]+ll[0][x]+4)>>3;
+            he=(5*dlh[2][x]+4*dlh[1][x]-dlh[0][x]+4)>>3;
+            ho=(11*dlh[2][x]-4*dlh[1][x]+dlh[0][x]+4)>>3;
+        } else {
+            le=((ll[0][x]-ll[2][x]+4)>>3)+ll[1][x];
+            lo=((-ll[0][x]+ll[2][x]+4)>>3)+ll[1][x];
+            he=((dlh[0][x]-dlh[2][x]+4)>>3)+dlh[1][x];
+            ho=((-dlh[0][x]+dlh[2][x]+4)>>3)+dlh[1][x];
+        }
+        el[x]=ClampPixel((le+dhl[x])>>1);ol[x]=ClampPixel((lo-dhl[x])>>1);
+        eh[x]=ClampPixel((he+dhh[x])>>1);oh[x]=ClampPixel((ho-dhh[x])>>1);
+    }
+    if (prescale==2) {
+        InvertHorizontalDescale16s(el,eh,even_output,width,output_width,prescale);
+        if (odd_output) InvertHorizontalDescale16s(ol,oh,odd_output,width,output_width,prescale);
+    } else {
+        InvertHorizontal16s(el,eh,even_output,width,output_width);
+        if (odd_output) InvertHorizontal16s(ol,oh,odd_output,width,output_width);
+    }
+    return CODEC_ERROR_OKAY;
+}
+
+CODEC_ERROR gpr_preview_inverse_row(const PIXEL *const ll[3],
+    const PIXEL *const lh[3],const PIXEL *hl,const PIXEL *hh,
+    DIMENSION width,DIMENSION output_width,int mode,uint16_t prescale,
+    const QUANT quant[4],PIXEL *scratch,PIXEL *even_output,PIXEL *odd_output)
+{
+    if (!ll || !lh || !hl || !hh || !scratch || !quant || !even_output || width<3)
+        return CODEC_ERROR_BAD_ARGUMENT;
+    for (int b=0;b<4;++b) if (!quant[b]) return CODEC_ERROR_BAD_ARGUMENT;
+    for (int r=0;r<3;++r) if (!ll[r] || !lh[r]) return CODEC_ERROR_BAD_ARGUMENT;
+    PIXEL *dlh[3]={scratch,scratch+width,scratch+2*width};
+    PIXEL *dhl=scratch+3*width,*dhh=scratch+4*width;
+    for (int r=0;r<3;++r) DequantizeBandRow16s((PIXEL *)lh[r],width,quant[LH_BAND],dlh[r]);
+    DequantizeBandRow16s((PIXEL *)hl,width,quant[HL_BAND],dhl);
+    DequantizeBandRow16s((PIXEL *)hh,width,quant[HH_BAND],dhh);
+    const PIXEL *rows[3]={dlh[0],dlh[1],dlh[2]};
+    return gpr_preview_inverse_row_dequantized(ll,rows,dhl,dhh,width,output_width,
+        mode,prescale,scratch+5*width,even_output,odd_output);
+}

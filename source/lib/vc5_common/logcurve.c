@@ -19,12 +19,18 @@
  */
 
 #include "common.h"
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <pthread.h>
+#endif
 
 uint16_t EncoderLogCurve[LOG_CURVE_TABLE_LENGTH];
 
 uint16_t DecoderLogCurve[LOG_CURVE_TABLE_LENGTH];
+uint8_t DecoderGamma8Curve[65536];
 
-void SetupDecoderLogCurve(void)
+static void InitDecoderLogCurve(void)
 {
     int i;
     const int log_table_size = sizeof(DecoderLogCurve) / sizeof(DecoderLogCurve[0]);
@@ -39,9 +45,14 @@ void SetupDecoderLogCurve(void)
         
         DecoderLogCurve[i]  = minimum( (int)output, max_16_bit );
     }
+    /* Same integer result as the legacy per-pixel sqrtf/clamp, computed once. */
+    for (i = 0; i < 65536; ++i) {
+        int value = (int)sqrtf((float)i);
+        DecoderGamma8Curve[i] = (uint8_t)minimum(value, 255);
+    }
 }
 
-void SetupEncoderLogCurve(void)
+static void InitEncoderLogCurve(void)
 {
     int i;
     const int max_input_val = LOG_CURVE_TABLE_LENGTH - 1;
@@ -55,4 +66,24 @@ void SetupEncoderLogCurve(void)
         EncoderLogCurve[i]  = ( (uint16_t)output );
     }
 }
+
+/* Preserve the historical arithmetic but initialize each shared table once.
+ * Preview and still-thumbnail decoding can run alongside capture. */
+#if defined(_WIN32)
+static INIT_ONCE decoder_curve_once = INIT_ONCE_STATIC_INIT;
+static INIT_ONCE encoder_curve_once = INIT_ONCE_STATIC_INIT;
+static BOOL CALLBACK DecoderCurveOnce(PINIT_ONCE once, PVOID arg, PVOID *ctx) {
+    (void)once; (void)arg; (void)ctx; InitDecoderLogCurve(); return TRUE;
+}
+static BOOL CALLBACK EncoderCurveOnce(PINIT_ONCE once, PVOID arg, PVOID *ctx) {
+    (void)once; (void)arg; (void)ctx; InitEncoderLogCurve(); return TRUE;
+}
+void SetupDecoderLogCurve(void) { InitOnceExecuteOnce(&decoder_curve_once, DecoderCurveOnce, NULL, NULL); }
+void SetupEncoderLogCurve(void) { InitOnceExecuteOnce(&encoder_curve_once, EncoderCurveOnce, NULL, NULL); }
+#else
+static pthread_once_t decoder_curve_once = PTHREAD_ONCE_INIT;
+static pthread_once_t encoder_curve_once = PTHREAD_ONCE_INIT;
+void SetupDecoderLogCurve(void) { pthread_once(&decoder_curve_once, InitDecoderLogCurve); }
+void SetupEncoderLogCurve(void) { pthread_once(&encoder_curve_once, InitEncoderLogCurve); }
+#endif
 

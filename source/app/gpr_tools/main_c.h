@@ -18,6 +18,7 @@
 
 #ifndef MAIN_C_H
 #define MAIN_C_H
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,7 +26,7 @@ extern "C" {
 
     int dng_convert_main(const char*  input_file_path, unsigned int input_width, unsigned int input_height, size_t input_pitch, size_t input_skip_rows, const char* input_pixel_format,
                          const char*  output_file_path, const char*  exiftool_file_path, const char* gpmf_file_path, const char* rgb_file_resolution, int rgb_file_bits,
-                         const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height );
+                         const char*  jpg_preview_file_path, int jpg_preview_file_width, int jpg_preview_file_height, int quality, bool enable_preview );
     
 #ifdef __cplusplus
 }

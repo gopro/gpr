@@ -1,0 +1,337 @@
+{
+  "complete": true,
+  "adopted": "four workers claim32-row blocks",
+  "rejected": "three fixed row partitions",
+  "profile": {
+    "complete": true,
+    "driver_sha256": "86c2e6b9d8b2969fca5c1ee598d32a28c26947c14c307e8082c14ed014bc225c",
+    "profile_protocol_sha256": "2d5126ff0ee3fbf232a0896790c56d64f1831de40885850841b4b11ad26549ee",
+    "frames_verified_before_clip_deletion": 120,
+    "profile_records": 480,
+    "warmup_frames_excluded": 4,
+    "sources": [
+      {
+        "source": 0,
+        "frames": 58,
+        "api_render_median_ms": 11.71165,
+        "worker_envelope_median_ms": 11.592122,
+        "sum_cpu_divided_by4_median_ms": 6.4891158749999995,
+        "workers": [
+          {
+            "first_row": 0,
+            "cpu_median_ms": 7.850092500000001,
+            "wall_median_ms": 7.8544775,
+            "start_lag_median_ms": 0.0603615,
+            "finish_lag_median_ms": 3.6123855000000002,
+            "core_begin_counts": {
+              "0": 0,
+              "1": 37,
+              "2": 20,
+              "3": 1
+            }
+          },
+          {
+            "first_row": 192,
+            "cpu_median_ms": 7.0913330000000006,
+            "wall_median_ms": 7.099576,
+            "start_lag_median_ms": 0.0,
+            "finish_lag_median_ms": 4.4169905,
+            "core_begin_counts": {
+              "0": 30,
+              "1": 11,
+              "2": 7,
+              "3": 10
+            }
+          },
+          {
+            "first_row": 384,
+            "cpu_median_ms": 6.6628609999999995,
+            "wall_median_ms": 6.671926,
+            "start_lag_median_ms": 0.040148,
+            "finish_lag_median_ms": 4.8091775000000005,
+            "core_begin_counts": {
+              "0": 28,
+              "1": 8,
+              "2": 21,
+              "3": 1
+            }
+          },
+          {
+            "first_row": 576,
+            "cpu_median_ms": 4.348027,
+            "wall_median_ms": 4.354713,
+            "start_lag_median_ms": 7.175548,
+            "finish_lag_median_ms": 0.0,
+            "core_begin_counts": {
+              "0": 25,
+              "1": 8,
+              "2": 21,
+              "3": 4
+            }
+          }
+        ]
+      },
+      {
+        "source": 1,
+        "frames": 58,
+        "api_render_median_ms": 11.461400000000001,
+        "worker_envelope_median_ms": 11.328204,
+        "sum_cpu_divided_by4_median_ms": 6.298419125000001,
+        "workers": [
+          {
+            "first_row": 0,
+            "cpu_median_ms": 7.1349350000000005,
+            "wall_median_ms": 7.139502,
+            "start_lag_median_ms": 0.06563,
+            "finish_lag_median_ms": 4.07998,
+            "core_begin_counts": {
+              "0": 0,
+              "1": 37,
+              "2": 20,
+              "3": 1
+            }
+          },
+          {
+            "first_row": 192,
+            "cpu_median_ms": 6.9373985000000005,
+            "wall_median_ms": 6.946880500000001,
+            "start_lag_median_ms": 0.0,
+            "finish_lag_median_ms": 4.3088415,
+            "core_begin_counts": {
+              "0": 38,
+              "1": 6,
+              "2": 8,
+              "3": 6
+            }
+          },
+          {
+            "first_row": 384,
+            "cpu_median_ms": 6.8945,
+            "wall_median_ms": 6.9018345,
+            "start_lag_median_ms": 0.0480835,
+            "finish_lag_median_ms": 4.3058325,
+            "core_begin_counts": {
+              "0": 20,
+              "1": 13,
+              "2": 23,
+              "3": 2
+            }
+          },
+          {
+            "first_row": 576,
+            "cpu_median_ms": 4.095287000000001,
+            "wall_median_ms": 4.10073,
+            "start_lag_median_ms": 7.1484095,
+            "finish_lag_median_ms": 0.0,
+            "core_begin_counts": {
+              "0": 24,
+              "1": 11,
+              "2": 19,
+              "3": 4
+            }
+          }
+        ]
+      }
+    ],
+    "scope": "Instrumented diagnostic only. Worker loop CPU/wall excludes thread creation/join and prints; sibling/API timings can include print interference. CPU/4 is arithmetic headroom, not an attainable guarantee. Cause of delayed start not isolated; no sustained-rate approval."
+  },
+  "comparisons": {
+    "complete": true,
+    "driver_sha256": "a0e92ca8b82f8e4c7ee77e57bfb846500d1b7967f30adcc594b423f74db25c10",
+    "comparisons": [
+      {
+        "variant": "three",
+        "frames_verified_before_deletion": 2399,
+        "strict_combined_floor_passed": false,
+        "runs": [
+          {
+            "index": 0,
+            "mode": "baseline",
+            "frames": 600,
+            "durable_fps": 19.998,
+            "encode_median_ms": 32.26,
+            "render_median_ms": 11.2689,
+            "late_writes": 8,
+            "late_previews": 6,
+            "final_fsync_s": 0.00863135,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 6,
+              "deadline_ms": 50.0
+            }
+          },
+          {
+            "index": 1,
+            "mode": "streamed",
+            "frames": 600,
+            "durable_fps": 19.9964,
+            "encode_median_ms": 32.2734,
+            "render_median_ms": 9.61439,
+            "late_writes": 42,
+            "late_previews": 38,
+            "final_fsync_s": 0.0111148,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 38,
+              "deadline_ms": 50.0
+            }
+          },
+          {
+            "index": 2,
+            "mode": "streamed",
+            "frames": 599,
+            "durable_fps": 19.9634,
+            "encode_median_ms": 32.5893,
+            "render_median_ms": 10.0455,
+            "late_writes": 43,
+            "late_previews": 40,
+            "final_fsync_s": 0.0110091,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 40,
+              "deadline_ms": 50.0
+            }
+          },
+          {
+            "index": 3,
+            "mode": "baseline",
+            "frames": 600,
+            "durable_fps": 19.9951,
+            "encode_median_ms": 31.594,
+            "render_median_ms": 9.9915,
+            "late_writes": 37,
+            "late_previews": 37,
+            "final_fsync_s": 0.0136018,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 37,
+              "deadline_ms": 50.0
+            }
+          }
+        ]
+      },
+      {
+        "variant": "dynamic",
+        "frames_verified_before_deletion": 2400,
+        "strict_combined_floor_passed": false,
+        "runs": [
+          {
+            "index": 0,
+            "mode": "baseline",
+            "frames": 600,
+            "durable_fps": 19.9977,
+            "encode_median_ms": 32.6534,
+            "render_median_ms": 11.3278,
+            "late_writes": 7,
+            "late_previews": 24,
+            "final_fsync_s": 0.00873926,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 24,
+              "deadline_ms": 50.0
+            }
+          },
+          {
+            "index": 1,
+            "mode": "streamed",
+            "frames": 600,
+            "durable_fps": 19.9969,
+            "encode_median_ms": 33.2301,
+            "render_median_ms": 9.51589,
+            "late_writes": 7,
+            "late_previews": 1,
+            "final_fsync_s": 0.0107467,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 1,
+              "deadline_ms": 50.0
+            }
+          },
+          {
+            "index": 2,
+            "mode": "streamed",
+            "frames": 600,
+            "durable_fps": 19.9977,
+            "encode_median_ms": 32.146,
+            "render_median_ms": 7.58222,
+            "late_writes": 19,
+            "late_previews": 15,
+            "final_fsync_s": 0.0111036,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 15,
+              "deadline_ms": 50.0
+            }
+          },
+          {
+            "index": 3,
+            "mode": "baseline",
+            "frames": 600,
+            "durable_fps": 19.9934,
+            "encode_median_ms": 32.5812,
+            "render_median_ms": 9.5503,
+            "late_writes": 32,
+            "late_previews": 30,
+            "final_fsync_s": 0.0163714,
+            "floor": {
+              "recording": false,
+              "preview": false,
+              "preview_late_deliveries": 30,
+              "deadline_ms": 50.0
+            }
+          }
+        ]
+      }
+    ],
+    "scope": "Source/protocol/event/accounting/deadline audit; byte/calibration/PTS/pixelCRC/END3 checks completed by bound verifier before clip deletion. Saved clip identities cannot recreate deleted bytes. No sustained approval."
+  },
+  "packages": {
+    "schema": "gpr.build_profiles.v1",
+    "platform": "macOS-26.7.1-arm64-arm-64bit",
+    "profiles": [
+      {
+        "profile": "capture",
+        "sdk_sources_present": false,
+        "encoder": true,
+        "decoder": false,
+        "producer_removed_before_consumer": true,
+        "archive_sha256": "86f6c8f499e81c905c993209b670ebf979ca73dad30aad0c2295f9df36c62630",
+        "source_digest": "c4f7f4a0accf5a208df540ffb5ed05e4a2b120a78830935e3372e8adc0690252",
+        "seconds": 6.738692917
+      },
+      {
+        "profile": "preview",
+        "sdk_sources_present": false,
+        "encoder": false,
+        "decoder": true,
+        "producer_removed_before_consumer": true,
+        "archive_sha256": "d692d653db0c565190f41e5f7af6b91b73dd687d5cac87d47c946fac23b1732a",
+        "source_digest": "595e7dff6513bcb99b505382deb06ea31cbb4457f0d5614a2c94592fa1455fbe",
+        "seconds": 6.805437542
+      },
+      {
+        "profile": "camera",
+        "sdk_sources_present": false,
+        "encoder": true,
+        "decoder": true,
+        "producer_removed_before_consumer": true,
+        "archive_sha256": "faa76b35c20eba892e9eda828dbec67b3c7d73377d62304e3a3f724055977225",
+        "source_digest": "7938d510afb428f16773b70d8191481c7036166d63e3c22aced6ba0aeef4895c",
+        "seconds": 12.416116666999999
+      },
+      {
+        "profile": "full",
+        "relocated_sdk_consumer": true,
+        "source_digest": "0ea80bf25bf5251a6764d8bfc24bcf674f3bd9bcf29da7db59d50a060e9d8d10",
+        "archive_sha256": "c2160cd22d4dd6a9eddd1d27ee3f8e55179a60510fde5580cebb2bdd83512d3c"
+      }
+    ]
+  }
+}

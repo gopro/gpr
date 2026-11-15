@@ -1,0 +1,109 @@
+{
+  "schema": "gpr.stock_cnn_followup_audit.v1",
+  "complete": true,
+  "script_sha256": "56033963564d888a86d44078aba2e3c7be250a2536af96dd225e0a3a09e4a2db",
+  "patch_family": 18,
+  "patch_qualified": 2,
+  "full_outputs_verified": 20,
+  "full_qualified": 1,
+  "render_gate_selected": null,
+  "cascade_raw_outputs_verified": 10,
+  "cascade_selected": null,
+  "independent_render_scores": 30,
+  "render_checks": [
+    {
+      "source_index": 0,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [
+        "y_prime_mse"
+      ],
+      "cascade_regressions": []
+    },
+    {
+      "source_index": 1,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [],
+      "cascade_regressions": []
+    },
+    {
+      "source_index": 2,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [],
+      "cascade_regressions": []
+    },
+    {
+      "source_index": 3,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [],
+      "cascade_regressions": []
+    },
+    {
+      "source_index": 4,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [
+        "rgb_mse"
+      ],
+      "cascade_regressions": [
+        "rgb_mse",
+        "y_prime_mse"
+      ]
+    },
+    {
+      "source_index": 5,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [
+        "rgb_mse",
+        "y_prime_mse"
+      ],
+      "cascade_regressions": [
+        "rgb_mse",
+        "y_prime_mse"
+      ]
+    },
+    {
+      "source_index": 6,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [
+        "rgb_mse",
+        "y_prime_mse"
+      ],
+      "cascade_regressions": [
+        "rgb_mse",
+        "y_prime_mse"
+      ]
+    },
+    {
+      "source_index": 7,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [
+        "rgb_mse"
+      ],
+      "cascade_regressions": [
+        "rgb_mse",
+        "y_prime_mse"
+      ]
+    },
+    {
+      "source_index": 8,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [
+        "rgb_mse"
+      ],
+      "cascade_regressions": [
+        "rgb_mse",
+        "y_prime_mse"
+      ]
+    },
+    {
+      "source_index": 9,
+      "independent_rgb_yprime_agreement": true,
+      "gate_regressions": [],
+      "cascade_regressions": [
+        "rgb_mse",
+        "y_prime_mse"
+      ]
+    }
+  ],
+  "cascade_initial_inference_outputs_unchanged": true,
+  "quality_approval": false
+}

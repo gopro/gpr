@@ -24,6 +24,7 @@
 #include "gpr_buffer.h"
 #include "gpr_rgb_buffer.h"
 #include "vc5_common.h"
+#include "vc5_preview.h"
 
 #ifdef __cplusplus
     extern "C" {
@@ -42,6 +43,16 @@
         
         VC5_DECODER_PIXEL_FORMAT_GBRG_14 = 3,               // GBRG 12bit pixels packed into 16bits
         
+        /* Appended values preserve the historical ABI and the earlier feature PR. */
+        VC5_DECODER_PIXEL_FORMAT_RGGB_16 = 4,
+        VC5_DECODER_PIXEL_FORMAT_GBRG_16 = 5,
+        VC5_DECODER_PIXEL_FORMAT_GRBG_12 = 6,
+        VC5_DECODER_PIXEL_FORMAT_GRBG_14 = 7,
+        VC5_DECODER_PIXEL_FORMAT_GRBG_16 = 8,
+        VC5_DECODER_PIXEL_FORMAT_BGGR_12 = 9,
+        VC5_DECODER_PIXEL_FORMAT_BGGR_14 = 10,
+        VC5_DECODER_PIXEL_FORMAT_BGGR_16 = 11,
+
         VC5_DECODER_PIXEL_FORMAT_DEFAULT = VC5_DECODER_PIXEL_FORMAT_RGGB_14,
         
     } VC5_DECODER_PIXEL_FORMAT;
@@ -75,7 +86,26 @@
                                     const gpr_buffer*               vc5_buffer,             /* vc5 input buffer. */
                                           gpr_buffer*               raw_buffer,             /* raw output buffer. */
                                           gpr_rgb_buffer*           rgb_buffer);            /* rgb output buffer */
+
+    /* Reduced-preview building block.  The returned plane contains host-endian
+       GS, RG, or BG wavelet samples for the requested channel. */
+    CODEC_ERROR vc5_decoder_process_wavelet_channel(
+                                    const vc5_decoder_parameters* decoding_parameters,
+                                    const gpr_buffer* vc5_buffer,
+                                    unsigned channel,
+                                    gpr_rgb_buffer* wavelet_buffer);
         
+
+    /* Reconstruct quarter-sensor GS/RG/BG planes from the encoder callback view.
+     * No entropy decode. Three initially empty outputs receive owned tightly
+     * packed host-endian int16_t planes, freed by the caller's mem_free.
+     * On failure no plane remains owned by the caller. Source views are borrowed
+     * for this synchronous call. Supports the stock RAW three-level profile. */
+    CODEC_ERROR vc5_decoder_reconstruct_preview(const vc5_preview_coefficients *coefficients,
+        gpr_malloc mem_alloc,gpr_free mem_free,gpr_rgb_buffer planes[3]);
+    /* Independent-channel variant for callers scheduling channels concurrently. */
+    CODEC_ERROR vc5_decoder_reconstruct_preview_channel(const vc5_preview_coefficients *coefficients,
+        unsigned channel,gpr_malloc mem_alloc,gpr_free mem_free,gpr_rgb_buffer *plane);
 
 #ifdef __cplusplus
     }

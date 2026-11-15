@@ -20,6 +20,7 @@
 
 #ifndef TYPES_H
 #define TYPES_H
+#include <stdint.h>
 
 //! Data type for Boolean variables
 typedef uint_fast8_t BOOLEAN;

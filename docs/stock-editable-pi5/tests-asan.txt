@@ -1,0 +1,20 @@
+Internal ctest changing into directory: /mnt/ssd/gpr_work/stock-raw-media-runtime/build-runtime-asan
+Test project /mnt/ssd/gpr_work/stock-raw-media-runtime/build-runtime-asan
+    Start 1: preview_contract
+1/7 Test #1: preview_contract .................   Passed    4.59 sec
+    Start 2: preview_cli
+2/7 Test #2: preview_cli ......................   Passed   58.67 sec
+    Start 3: capture_lifecycle
+3/7 Test #3: capture_lifecycle ................   Passed    4.65 sec
+    Start 4: capture_c_api
+4/7 Test #4: capture_c_api ....................   Passed    4.72 sec
+    Start 5: gvid3_conformance
+5/7 Test #5: gvid3_conformance ................   Passed    4.73 sec
+    Start 6: gvid2_compatibility
+6/7 Test #6: gvid2_compatibility ..............   Passed    0.07 sec
+    Start 7: raw_media
+7/7 Test #7: raw_media ........................   Passed   77.48 sec
+
+100% tests passed, 0 tests failed out of 7
+
+Total Test time (real) = 154.91 sec

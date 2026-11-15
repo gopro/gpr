@@ -1,0 +1,35 @@
+{
+  "conclusion": "success",
+  "headSha": "144a338956ab93df767e480c02b9209b669b8a8d",
+  "jobs": [
+    {
+      "conclusion": "success",
+      "name": "FFmpegStockDecoder"
+    },
+    {
+      "conclusion": "success",
+      "name": "MOV-Release"
+    },
+    {
+      "conclusion": "success",
+      "name": "LinuxSanitizers"
+    },
+    {
+      "conclusion": "success",
+      "name": "MOV-Debug"
+    },
+    {
+      "conclusion": "success",
+      "name": "WindowsNativePackages"
+    },
+    {
+      "conclusion": "success",
+      "name": "LinuxRelease"
+    },
+    {
+      "conclusion": "success",
+      "name": "MacRelease"
+    }
+  ],
+  "status": "completed"
+}

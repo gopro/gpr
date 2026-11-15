@@ -106,12 +106,12 @@ class dng_ref_counted_block
 
 		uint32 LogicalSize ()
 			{
-			return ((header *)fBuffer)->fSize;
+			return fBuffer ? ((header *)fBuffer)->fSize : 0;
 			}
 
 		void * Buffer ()
 			{
-			return (void *)((char *)fBuffer + sizeof (header));
+			return fBuffer ? (void *)((char *)fBuffer + sizeof (header)) : NULL;
 			}
 		
 		/// Return pointer to allocated memory as a const void *.
@@ -119,7 +119,7 @@ class dng_ref_counted_block
 
 		const void * Buffer () const
 			{
-			return (const void *)((char *)fBuffer + sizeof (header));
+			return fBuffer ? (const void *)((char *)fBuffer + sizeof (header)) : NULL;
 			}
 		
 		/// Return pointer to allocated memory as a char *.

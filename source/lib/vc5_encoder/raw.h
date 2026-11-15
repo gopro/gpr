@@ -22,12 +22,24 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+    /* Stock 12-bit log-domain transform for additional word-packed input formats. */
+    void UnpackImage_WordBayer(const PACKED_IMAGE *input, UNPACKED_IMAGE *output);
     
     void UnpackImage_14(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
 
     void UnpackImage_12(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
     
     void UnpackImage_12P(const PACKED_IMAGE *input, UNPACKED_IMAGE *output, ENABLED_PARTS enabled_parts, bool rggb );
+
+    /* Opt-in in-camera optical/Poisson soft-coring threshold in 12-bit log-difference
+     * units (0 when GPR_OPTICAL_CORING is unset or "0", preserving 100% stock VC-5 identity). */
+    int gpr_optical_coring_tau(void);
+
+    /* Opt-in Sparse-8K Stage-0 wavelet deadzone threshold in pre-quantized Stage-0
+     * highpass units (0 when GPR_SPARSE_8K is unset or "0", preserving 100% stock VC-5 identity).
+     * When enabled, the 12 MP wavelet hierarchy (LL1: Stage 1 + Stage 2) is preserved intact
+     * while Stage-0 ([0.25, 0.50] cyc/px 8K detail) encodes only sparse high-SNR innovation. */
+    int gpr_sparse_8k_tau(void);
     
 #ifdef __cplusplus
 }

@@ -31,10 +31,50 @@
  *  limitations under the License.
  */
 
+#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
 #include "headers.h"
+#include <time.h>
+#if defined(_WIN32)
+#include <windows.h>
+#include <malloc.h>
+#endif
+
+static double EncoderWallTime(void)
+{
+#if defined(_WIN32)
+    LARGE_INTEGER counter, frequency;
+    QueryPerformanceCounter(&counter);
+    QueryPerformanceFrequency(&frequency);
+    return (double)counter.QuadPart / (double)frequency.QuadPart;
+#else
+    struct timespec value;
+    clock_gettime(CLOCK_MONOTONIC, &value);
+    return value.tv_sec + value.tv_nsec * 1e-9;
+#endif
+}
+
+extern void UnpackChannelRow14(const PACKED_IMAGE *, int, int, PIXEL *);
+extern void FilterVerticalDirect(PIXEL **, PIXEL **, PIXEL **, int, int32_t *, int32_t *, int);
+static CODEC_ERROR EncodeHighpassIncremental(BITSTREAM *, ENCODER_CODESET *, PIXEL *,
+    DIMENSION, DIMENSION, DIMENSION, uint32_t *, bool);
+
+static int UseStreamingUnpack(const PACKED_IMAGE *input)
+{
+#if ENABLED(NEON)
+    return getenv("GPR_STREAM_UNPACK") != NULL &&
+        input->format == PIXEL_FORMAT_RAW_RGGB_14 && input->width % 8 == 0;
+#else
+    return 0;
+#endif
+}
 
 #if ENABLED(NEON)
 #include <arm_neon.h>
+#endif
+
+#if GPR_ENABLE_PARALLEL_CHANNELS || GPR_ENABLE_PARALLEL_UNPACK
+#include <pthread.h>
 #endif
 
 /*!
@@ -337,6 +377,7 @@ CODEC_ERROR InitEncoder(ENCODER *encoder, const gpr_allocator *allocator, const 
 CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCODER_PARAMETERS *parameters)
 {
 	CODEC_ERROR error = CODEC_ERROR_OKAY;
+    double start_wall = EncoderWallTime();
 
 	// Allocate data structures for the encoder state and the bitstream
 	ENCODER encoder;
@@ -348,6 +389,7 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 
 	// Unpack the image into a set of component arrays
 	error = ImageUnpackingProcess(image, &unpacked_image, parameters, &parameters->allocator);
+    if (getenv("GPR_PROFILE")) fprintf(stderr, "unpack_wall=%.6f\n", EncoderWallTime() - start_wall);
 	if (error != CODEC_ERROR_OKAY) {
 		return error;
 	}
@@ -362,18 +404,23 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 	}
 
 	// Encode the component arrays into the bitstream
-	error = EncodingProcess(&encoder, &unpacked_image, &bitstream, parameters);
+	error = EncodingProcess(&encoder, &unpacked_image, &bitstream, parameters,
+        UseStreamingUnpack(image) ? image : NULL);
+    if (getenv("GPR_PROFILE")) fprintf(stderr, "encoding_end_wall=%.6f\n", EncoderWallTime() - start_wall);
 	if (error != CODEC_ERROR_OKAY) {
 		return error;
 	}
     
+    if (parameters->preview_observer)
+        parameters->preview_observer(parameters->preview_user,encoder.transform);
+
     if( rgb_image != NULL && parameters->rgb_resolution == GPR_RGB_RESOLUTION_SIXTEENTH )
     { // Thumbnail
         SetupDecoderLogCurve();
 
         WaveletToRGB(parameters->allocator,
                      encoder.transform[0].wavelet[2]->data[LL_BAND], encoder.transform[1].wavelet[2]->data[LL_BAND], encoder.transform[2].wavelet[2]->data[LL_BAND],
-                     encoder.transform[0].wavelet[2]->width, encoder.transform[0].wavelet[2]->height, encoder.transform[0].wavelet[2]->width,
+                     encoder.transform[0].wavelet[2]->width, encoder.transform[0].wavelet[2]->height, encoder.transform[0].wavelet[2]->pitch / sizeof(PIXEL),
                      rgb_image, 14, 8, &parameters->rgb_gain );
     }
     
@@ -405,12 +452,15 @@ CODEC_ERROR EncodeImage(IMAGE *image, STREAM *stream, RGB_IMAGE *rgb_image, ENCO
 CODEC_ERROR EncodingProcess(ENCODER *encoder,
 							const UNPACKED_IMAGE *image,
 							BITSTREAM *bitstream,
-							const ENCODER_PARAMETERS *parameters)
+							const ENCODER_PARAMETERS *parameters,
+                            const PACKED_IMAGE *packed_input)
 {
 	CODEC_ERROR error = CODEC_ERROR_OKAY;
 
 	// Initialize the encoder using the parameters provided by the application
-	error = PrepareEncoder(encoder, image, parameters);
+	error = PrepareEncoder(encoder, image, parameters,
+        bitstream && bitstream->stream && bitstream->stream->type == STREAM_TYPE_MEMORY);
+    encoder->packed_input = packed_input;
 	assert(error == CODEC_ERROR_OKAY);
 	if (! (error == CODEC_ERROR_OKAY)) {
 		return error;
@@ -495,7 +545,8 @@ CODEC_ERROR EncodingProcess(ENCODER *encoder,
 */
 CODEC_ERROR PrepareEncoder(ENCODER *encoder,
 						   const UNPACKED_IMAGE *image,
-						   const ENCODER_PARAMETERS *parameters)
+						   const ENCODER_PARAMETERS *parameters,
+                           bool memory_stream)
 {
 	CODEC_ERROR error = CODEC_ERROR_OKAY;
 	VERSION version = VERSION_INITIALIZER(VC5_VERSION_MAJOR, VC5_VERSION_MINOR, VC5_VERSION_REVISION, 0);
@@ -520,8 +571,23 @@ CODEC_ERROR PrepareEncoder(ENCODER *encoder,
 	// Initialize the encoding parameters and the codec state
 	PrepareEncoderState(encoder, image, parameters);
 
+    /* Compact highpass rows are consumed immediately by channel workers.
+     * The serial/file path writes complete bands and needs full storage even
+     * when a caller leaves the fast-path environment requests enabled. */
+#if GPR_ENABLE_PARALLEL_CHANNELS
+    encoder->compact_bands = memory_stream && encoder->channel_count > 1 &&
+        getenv("GPR_BAND_STREAM") && getenv("GPR_COMPACT_BANDS");
+#else
+    (void)memory_stream;
+    encoder->compact_bands = false;
+#endif
+
+    encoder->retain_preview_bands=parameters->preview_observer!=NULL;
+    encoder->preview_row_observer=parameters->preview_row_observer;
+    encoder->preview_row_user=parameters->preview_row_user;
 	// Allocate the wavelet transforms
-	AllocEncoderTransforms(encoder);
+	error = AllocEncoderTransforms(encoder);
+    if (error != CODEC_ERROR_OKAY) return error;
 
 	// Initialize the quantizer
 	SetEncoderQuantization(encoder, parameters);
@@ -723,6 +789,54 @@ CODEC_ERROR PrepareEncoderTransforms(ENCODER *encoder)
 	return CODEC_ERROR_OKAY;
 }
 
+#if GPR_ENABLE_PARALLEL_UNPACK
+typedef struct _unpack_thread
+{
+    PACKED_IMAGE input;
+    UNPACKED_IMAGE output;
+    COMPONENT_ARRAY component[MAX_CHANNEL_COUNT];
+    ENABLED_PARTS enabled_parts;
+} UNPACK_THREAD;
+
+static void *UnpackImageThread(void *arg)
+{
+    UNPACK_THREAD *thread = (UNPACK_THREAD *)arg;
+
+    switch (thread->input.format)
+    {
+        case PIXEL_FORMAT_RAW_RGGB_14:
+            UnpackImage_14(&thread->input, &thread->output, thread->enabled_parts, true);
+            break;
+        case PIXEL_FORMAT_RAW_RGGB_12:
+            UnpackImage_12(&thread->input, &thread->output, thread->enabled_parts, true);
+            break;
+        case PIXEL_FORMAT_RAW_GBRG_12:
+            UnpackImage_12(&thread->input, &thread->output, thread->enabled_parts, false);
+            break;
+        case PIXEL_FORMAT_RAW_RGGB_12P:
+            UnpackImage_12P(&thread->input, &thread->output, thread->enabled_parts, true);
+            break;
+        case PIXEL_FORMAT_RAW_GBRG_12P:
+            UnpackImage_12P(&thread->input, &thread->output, thread->enabled_parts, false);
+            break;
+        case PIXEL_FORMAT_RAW_RGGB_16:
+        case PIXEL_FORMAT_RAW_GBRG_16:
+        case PIXEL_FORMAT_RAW_GBRG_14:
+        case PIXEL_FORMAT_RAW_GRBG_12:
+        case PIXEL_FORMAT_RAW_GRBG_14:
+        case PIXEL_FORMAT_RAW_GRBG_16:
+        case PIXEL_FORMAT_RAW_BGGR_12:
+        case PIXEL_FORMAT_RAW_BGGR_14:
+        case PIXEL_FORMAT_RAW_BGGR_16:
+            UnpackImage_WordBayer(&thread->input, &thread->output);
+            break;
+        default:
+            break;
+    }
+    return NULL;
+}
+#endif
+
 /*!
 	@brief Unpack the image into component arrays for encoding
 */
@@ -746,6 +860,14 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
     case PIXEL_FORMAT_RAW_GBRG_12:
     case PIXEL_FORMAT_RAW_GBRG_12P:
     case PIXEL_FORMAT_RAW_RGGB_16:
+    case PIXEL_FORMAT_RAW_GBRG_16:
+    case PIXEL_FORMAT_RAW_GBRG_14:
+    case PIXEL_FORMAT_RAW_GRBG_12:
+    case PIXEL_FORMAT_RAW_GRBG_14:
+    case PIXEL_FORMAT_RAW_GRBG_16:
+    case PIXEL_FORMAT_RAW_BGGR_12:
+    case PIXEL_FORMAT_RAW_BGGR_14:
+    case PIXEL_FORMAT_RAW_BGGR_16:
         channel_count = 4;
         max_channel_width = input->width / 2;
         max_channel_height = input->height / 2;
@@ -759,10 +881,77 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
 	}
 
 	// Allocate space for the component arrays
+    if (UseStreamingUnpack(input)) {
+        output->component_count = channel_count;
+        output->component_array_list = allocator->Alloc(channel_count * sizeof(COMPONENT_ARRAY));
+        if (!output->component_array_list) return CODEC_ERROR_OUTOFMEMORY;
+        memset(output->component_array_list, 0, channel_count * sizeof(COMPONENT_ARRAY));
+        for (int ch = 0; ch < channel_count; ch++) {
+            COMPONENT_ARRAY *component = &output->component_array_list[ch];
+            component->width = max_channel_width;
+            component->height = max_channel_height;
+            component->pitch = max_channel_width * sizeof(PIXEL);
+            component->bits_per_component = bits_per_component;
+        }
+        return CODEC_ERROR_OKAY;
+    }
 	AllocateComponentArrays(allocator, output, channel_count, max_channel_width, max_channel_height,
 		input->format, bits_per_component);
 
-    
+#if GPR_ENABLE_PARALLEL_UNPACK
+    {
+        enum { unpack_thread_count = 4 };
+        UNPACK_THREAD thread[unpack_thread_count] = {0};
+        pthread_t handle[unpack_thread_count];
+        int started[unpack_thread_count] = {0};
+        int rows_per_thread = (max_channel_height + unpack_thread_count - 1) / unpack_thread_count;
+        int thread_index;
+
+        for (thread_index = 0; thread_index < unpack_thread_count; thread_index++)
+        {
+            int channel;
+            int row_start = thread_index * rows_per_thread;
+            int row_end = row_start + rows_per_thread;
+            int stripe_height;
+
+            if (row_start >= max_channel_height) break;
+            if (row_end > max_channel_height) row_end = max_channel_height;
+            stripe_height = row_end - row_start;
+
+            thread[thread_index].input = *input;
+            thread[thread_index].input.height = stripe_height * 2;
+            thread[thread_index].input.offset = input->offset + row_start * 2 * input->pitch;
+            thread[thread_index].output.component_count = output->component_count;
+            thread[thread_index].output.component_array_list = thread[thread_index].component;
+            thread[thread_index].enabled_parts = enabled_parts;
+
+            for (channel = 0; channel < channel_count; channel++)
+            {
+                thread[thread_index].component[channel] = output->component_array_list[channel];
+                thread[thread_index].component[channel].height = stripe_height;
+                thread[thread_index].component[channel].data =
+                    (COMPONENT_VALUE *)((uint8_t *)output->component_array_list[channel].data +
+                                        row_start * output->component_array_list[channel].pitch);
+            }
+
+            started[thread_index] = (pthread_create(&handle[thread_index], NULL,
+                                                     UnpackImageThread,
+                                                     &thread[thread_index]) == 0);
+            if (!started[thread_index])
+            {
+                UnpackImageThread(&thread[thread_index]);
+            }
+        }
+
+        for (thread_index = 0; thread_index < unpack_thread_count; thread_index++)
+        {
+            if (started[thread_index])
+            {
+                pthread_join(handle[thread_index], NULL);
+            }
+        }
+    }
+#else
     // The configuration of component arrays is determined by the image format
     switch (input->format)
     {
@@ -785,12 +974,24 @@ CODEC_ERROR ImageUnpackingProcess(const PACKED_IMAGE *input,
         case PIXEL_FORMAT_RAW_GBRG_12P:
             UnpackImage_12P(input, output, enabled_parts, false );
             break;
+        case PIXEL_FORMAT_RAW_RGGB_16:
+        case PIXEL_FORMAT_RAW_GBRG_16:
+        case PIXEL_FORMAT_RAW_GBRG_14:
+        case PIXEL_FORMAT_RAW_GRBG_12:
+        case PIXEL_FORMAT_RAW_GRBG_14:
+        case PIXEL_FORMAT_RAW_GRBG_16:
+        case PIXEL_FORMAT_RAW_BGGR_12:
+        case PIXEL_FORMAT_RAW_BGGR_14:
+        case PIXEL_FORMAT_RAW_BGGR_16:
+            UnpackImage_WordBayer(input, output);
+            break;
             
         default:
             assert(0);
             return CODEC_ERROR_PIXEL_FORMAT;
             break;
     }
+#endif
     
 	return CODEC_ERROR_OKAY;
 }
@@ -1111,6 +1312,11 @@ static void ShiftHorizontalResultBuffers(PIXEL **buffer)
 
 typedef struct _recursive_transform_data
 {
+    ENCODER *encoder;
+    int stage;
+    const PACKED_IMAGE *packed_input;
+    PIXEL *unpack_row;
+    int channel;
     PIXEL       *input_ptr;
     DIMENSION   input_width;
     DIMENSION   input_height;
@@ -1129,6 +1335,66 @@ typedef struct _recursive_transform_data
     PIXEL       **highpass_buffer;
     
 } RECURSIVE_TRANSFORM_DATA;
+
+static void TransformVertical(RECURSIVE_TRANSFORM_DATA *data, int row, int mode)
+{
+    ENCODER *encoder = data->encoder;
+    int stage = data->stage;
+    if (encoder && encoder->row_stream[stage][1]) {
+        PIXEL *output[MAX_BAND_COUNT];
+        output[0] = (PIXEL *)((uint8_t *)data->output_ptr[0] + (size_t)(row/2) * data->output_pitch);
+        for (int band=1; band<MAX_BAND_COUNT; band++)
+            output[band] = (PIXEL *)((uint8_t *)data->output_ptr[band] +
+                (encoder->retain_preview_bands && stage>0 ? (size_t)(row/2)*data->output_pitch:0));
+        FilterVerticalDirect(data->lowpass_buffer, data->highpass_buffer, output,
+            data->output_width, data->midpoints, data->multipliers, mode);
+        for (int band=1; band<MAX_BAND_COUNT; band++) {
+            if (__builtin_expect(data->multipliers[band] == 0, 0)) {
+                encoder->row_pending[stage][band] += data->output_width;
+                continue;
+            }
+            CODEC_ERROR error = EncodeHighpassIncremental(encoder->row_stream[stage][band],
+                encoder->codeset, output[band], data->output_width, 1,
+                data->output_pitch, &encoder->row_pending[stage][band], false);
+            if (error != CODEC_ERROR_OKAY) encoder->row_error = error;
+        }
+    } else if (mode == 0) {
+        FilterVerticalTopRow(data->lowpass_buffer, data->highpass_buffer, data->output_ptr,
+            data->output_width, data->output_pitch, data->midpoints, data->multipliers, row);
+    } else if (mode == 1) {
+        FilterVerticalMiddleRow(data->lowpass_buffer, data->highpass_buffer, data->output_ptr,
+            data->output_width, data->output_pitch, data->midpoints, data->multipliers, row);
+    } else {
+        FilterVerticalBottomRow(data->lowpass_buffer, data->highpass_buffer, data->output_ptr,
+            data->output_width, data->output_pitch, data->midpoints, data->multipliers, row);
+    }
+    if (encoder && encoder->preview_row_observer && stage>0 && data->channel<3) {
+        vc5_preview_row view={0};
+        view.channel=data->channel;view.level=stage-1;view.row=row/2;
+        view.width=data->output_width;view.height=(data->input_height+1)/2;
+        view.prescale=data->prescale;
+        const WAVELET *wavelet=encoder->transform[data->channel].wavelet[stage];
+        for (unsigned band=0;band<4;++band) {
+            const size_t offset=band && encoder->row_stream[stage][1] &&
+                !encoder->retain_preview_bands ? 0:(size_t)(row/2)*data->output_pitch;
+            view.bands[band]=(const PIXEL *)((const uint8_t *)data->output_ptr[band]+offset);
+            view.quant[band]=wavelet->quant[band];
+            view.band_samples[band]=view.width;
+        }
+        encoder->preview_row_observer(encoder->preview_row_user,&view);
+    }
+}
+
+static PIXEL *GetTransformInputRow(RECURSIVE_TRANSFORM_DATA *data, int row)
+{
+    if (data->packed_input != NULL) {
+#if ENABLED(NEON)
+        UnpackChannelRow14(data->packed_input, row, data->channel, data->unpack_row);
+#endif
+        return data->unpack_row;
+    }
+    return (PIXEL *)((uint8_t *)data->input_ptr + (size_t)row * data->input_pitch);
+}
 
 #define RECURSIVE 1
 
@@ -1166,13 +1432,13 @@ static void ForwardWaveletTransformRecursive(RECURSIVE_TRANSFORM_DATA *transform
         
         for (row = 0; row < ROW_BUFFER_COUNT; row++)
         {
-            PIXEL *input_row_ptr = (PIXEL *)((uintptr_t)input_ptr + row * input_pitch);
+            PIXEL *input_row_ptr = GetTransformInputRow(&transform_data[wavelet_stage], row);
             
             FilterHorizontalRow(input_row_ptr, lowpass_buffer[row], highpass_buffer[row], input_width, prescale);
         }
         
         // Process the first row as a special case for the boundary condition
-        FilterVerticalTopRow(lowpass_buffer, highpass_buffer, output_ptr, output_width, output_pitch, midpoints, multipliers, input_row_index );
+        TransformVertical(&transform_data[wavelet_stage], input_row_index, 0);
         input_row_index += 2;
     }
     
@@ -1182,7 +1448,7 @@ static void ForwardWaveletTransformRecursive(RECURSIVE_TRANSFORM_DATA *transform
         // Check for errors in the row calculation
         assert((input_row_index % 2) == 0);
         
-        FilterVerticalMiddleRow(lowpass_buffer, highpass_buffer, output_ptr, output_width, output_pitch, midpoints, multipliers, input_row_index );
+        TransformVertical(&transform_data[wavelet_stage], input_row_index, 1);
 
         if (input_row_index < last_middle_row)
         {
@@ -1196,7 +1462,7 @@ static void ForwardWaveletTransformRecursive(RECURSIVE_TRANSFORM_DATA *transform
             {
                 int next_input_row = minimum( input_row_index + row, input_height - 1 );
                 
-                PIXEL *input_row_ptr = (PIXEL *)((uintptr_t)input_ptr + next_input_row * input_pitch);
+                PIXEL *input_row_ptr = GetTransformInputRow(&transform_data[wavelet_stage], next_input_row);
                 
                 FilterHorizontalRow(input_row_ptr, lowpass_buffer[row], highpass_buffer[row], input_width, prescale);
             }
@@ -1206,13 +1472,62 @@ static void ForwardWaveletTransformRecursive(RECURSIVE_TRANSFORM_DATA *transform
     // --- BOTTOM ROW
     if( input_row_index == bottom_input_row )
     {
-        FilterVerticalBottomRow(lowpass_buffer, highpass_buffer, output_ptr, output_width, output_pitch, midpoints, multipliers, input_row_index );
+        TransformVertical(&transform_data[wavelet_stage], input_row_index, 2);
     }
     
     if( wavelet_stage < (MAX_WAVELET_COUNT - 1) )
     {
         ForwardWaveletTransformRecursive( transform_data, wavelet_stage + 1, 0, 0xFFFF );
     }
+}
+
+/* Incremental stage scheduler. Each stage owns its six horizontal rows.
+   A downstream stage consumes only LL rows already produced upstream. */
+typedef struct {
+    uint32_t next_row;
+    uint32_t produced;
+} WAVELET_ROW_PROGRESS;
+
+static bool ForwardWaveletOneRow(RECURSIVE_TRANSFORM_DATA *data,
+    WAVELET_ROW_PROGRESS *progress, uint32_t available)
+{
+    const uint32_t height=data->input_height;
+    const uint32_t bottom=(height%2)==0 ? height-2:height-1;
+    const uint32_t row=progress->next_row;
+    if (row>bottom) return false;
+    const uint32_t required=row==0 || row==2 ? 6:
+        row==bottom ? height:minimum(row+4,height);
+    if (available<required) return false;
+    if (row==0) {
+        for (int i=0;i<ROW_BUFFER_COUNT;++i)
+            FilterHorizontalRow(GetTransformInputRow(data,i),
+                data->lowpass_buffer[i],data->highpass_buffer[i],
+                data->input_width,data->prescale);
+    } else if (row>=4 && row!=bottom) {
+        ShiftHorizontalResultBuffers(data->lowpass_buffer);
+        ShiftHorizontalResultBuffers(data->highpass_buffer);
+        for (int i=4;i<ROW_BUFFER_COUNT;++i) {
+            const uint32_t input=minimum(row+i-2,height-1);
+            FilterHorizontalRow(GetTransformInputRow(data,input),
+                data->lowpass_buffer[i],data->highpass_buffer[i],
+                data->input_width,data->prescale);
+        }
+    }
+    TransformVertical(data,row,row==0 ? 0:row==bottom ? 2:1);
+    progress->next_row+=2;
+    ++progress->produced;
+    return true;
+}
+
+static void ForwardWaveletPipelined(RECURSIVE_TRANSFORM_DATA *data)
+{
+    WAVELET_ROW_PROGRESS progress[MAX_WAVELET_COUNT]={{0}};
+    while (ForwardWaveletOneRow(&data[0],&progress[0],data[0].input_height)) {
+        for (int stage=1;stage<MAX_WAVELET_COUNT;++stage)
+            while (ForwardWaveletOneRow(&data[stage],&progress[stage],progress[stage-1].produced)) {}
+    }
+    for (int stage=0;stage<MAX_WAVELET_COUNT;++stage)
+        assert(progress[stage].produced==(data[stage].input_height+1)/2);
 }
 
 static void SetRecursiveTransformData(RECURSIVE_TRANSFORM_DATA* transform_data,
@@ -1263,9 +1578,24 @@ static void SetRecursiveTransformData(RECURSIVE_TRANSFORM_DATA* transform_data,
     transform_data->multipliers     = multipliers;
 }
 
-static void ForwardWaveletTransform(TRANSFORM *transform, const COMPONENT_ARRAY *input_image_component, PIXEL *lowpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT], PIXEL *highpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT], int midpoint_prequant)
+static void ForwardWaveletTransform(TRANSFORM *transform, const COMPONENT_ARRAY *input_image_component, PIXEL *lowpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT], PIXEL *highpass_buffer[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT], int midpoint_prequant, const PACKED_IMAGE *packed_input, int channel, ENCODER *encoder)
 {
-    RECURSIVE_TRANSFORM_DATA transform_data[MAX_WAVELET_COUNT];
+    RECURSIVE_TRANSFORM_DATA transform_data[MAX_WAVELET_COUNT] = {0};
+#if defined(_WIN32)
+    /* MSVC has no C VLAs. Preserve the same stack lifetime and alignment pad. */
+    PIXEL *unpack_storage = (PIXEL *)_alloca(((size_t)input_image_component->width + 32) * sizeof(PIXEL));
+#else
+    PIXEL unpack_storage[input_image_component->width + 32];
+#endif
+    PIXEL *unpack_row = (PIXEL *)(((uintptr_t)unpack_storage + 63) & ~(uintptr_t)63);
+    transform_data[0].packed_input = packed_input;
+    transform_data[0].unpack_row = unpack_row;
+    transform_data[0].channel = channel;
+    for (int stage=0; stage<MAX_WAVELET_COUNT; stage++) {
+        transform_data[stage].encoder = encoder;
+        transform_data[stage].stage = stage;
+        transform_data[stage].channel = channel;
+    }
     
     int32_t midpoints[MAX_WAVELET_COUNT][MAX_BAND_COUNT];      //!< Midpoint value for each band (applied during quantization)
     int32_t multipliers[MAX_WAVELET_COUNT][MAX_BAND_COUNT];	//!< Multiplier value for each band (applied during quantization)
@@ -1273,9 +1603,175 @@ static void ForwardWaveletTransform(TRANSFORM *transform, const COMPONENT_ARRAY 
     SetRecursiveTransformData( &transform_data[0], transform, input_image_component, midpoints[0], multipliers[0], lowpass_buffer, highpass_buffer, midpoint_prequant, 0 );
     SetRecursiveTransformData( &transform_data[1], transform, input_image_component, midpoints[1], multipliers[1], lowpass_buffer, highpass_buffer, midpoint_prequant, 1 );
     SetRecursiveTransformData( &transform_data[2], transform, input_image_component, midpoints[2], multipliers[2], lowpass_buffer, highpass_buffer, midpoint_prequant, 2 );
+    if (gpr_optical_coring_tau() > 0) {
+        const char *coring_env = getenv("GPR_OPTICAL_CORING");
+        const int coring_mode = coring_env ? atoi(coring_env) : 0;
+        /* Tier 1 (GPR_OPTICAL_CORING>=1): C_G (channel 3) green-phase difference
+         * deadzone across wavelet stages.
+         * Tier 2 (GPR_OPTICAL_CORING>=2): Also apply Stage-0 ([0.25, 0.50] cyc/px
+         * OLPF-attenuated highpass) deadzone across all channels. */
+        for (int band = 1; band < MAX_BAND_COUNT; band++) {
+            if (channel == 3) {
+                midpoints[0][band] = 0;
+                midpoints[1][band] = 0;
+                midpoints[2][band] = 0;
+            } else if (coring_mode >= 2) {
+                midpoints[0][band] = 0;
+            }
+        }
+    }
+    const int sparse_8k_tau = gpr_sparse_8k_tau();
+    if (sparse_8k_tau > 0) {
+        /* Sparse-8K Wavelet Hierarchy Mode (GPR_SPARSE_8K):
+         * Stage 1 and Stage 2 (LL1: the 12 MP 4096x3072 Bayer hierarchy with +6.02 dB
+         * shot-noise SNR gain and +1..2 stops DR) are preserved at full stock fidelity.
+         * Stage 0 ([0.25, 0.50] cyc/px 8K spatial innovation):
+         *   - Channel 3 (C_G = G1 - G2): Stage-0 highpass bands are zeroed (multiplier=0),
+         *     encoding only 12 MP C_G calibration while eliminating 8K diagonal shot noise.
+         *   - Channels 0, 1, 2 (Y_G, C_R, C_B): Stage-0 highpass bands use a negative
+         *     deadzone midpoint (-sparse_8k_tau) plus shadow illuminance gating in
+         *     FilterVerticalMiddle_8x_NEON_, so only bright, high-gradient 8K optical edges
+         *     emit non-zero wavelet symbols. */
+        for (int band = 1; band < MAX_BAND_COUNT; band++) {
+            if (channel == 3) {
+                multipliers[0][band] = 0;
+                midpoints[0][band] = 0;
+                midpoints[1][band] = 0;
+                midpoints[2][band] = 0;
+            } else {
+                const int band_tau = (band == HH_BAND) ? (sparse_8k_tau + (sparse_8k_tau >> 1)) : sparse_8k_tau;
+                midpoints[0][band] = -band_tau;
+            }
+        }
+    }
     
-    ForwardWaveletTransformRecursive( transform_data, 0, 0, 0xFFFF );
+    if ((encoder->preview_row_observer || getenv("GPR_PIPELINE_WAVELETS")) && transform_data[2].input_height>=6)
+        ForwardWaveletPipelined(transform_data);
+    else
+        ForwardWaveletTransformRecursive( transform_data, 0, 0, 0xFFFF );
 }
+
+#if GPR_ENABLE_PARALLEL_CHANNELS
+typedef struct _channel_encode_thread
+{
+    ENCODER *parent;
+    const COMPONENT_ARRAY *input_component;
+    int channel_number;
+    CODEC_STATE initial_codec_state;
+    CODEC_STATE final_codec_state;
+    uint8_t *output;
+    size_t capacity;
+    size_t size;
+    CODEC_ERROR error;
+    void *scratch;
+    void *band_workspace;
+    ENCODER prepared_encoder;
+    STREAM row_bytes[MAX_WAVELET_COUNT][MAX_BAND_COUNT];
+    BITSTREAM row_bits[MAX_WAVELET_COUNT][MAX_BAND_COUNT];
+    PIXEL *lowpass[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT];
+    PIXEL *highpass[MAX_WAVELET_COUNT][ROW_BUFFER_COUNT];
+} CHANNEL_ENCODE_THREAD;
+
+static void *EncodeChannelThread(void *arg)
+{
+    CHANNEL_ENCODE_THREAD *thread = (CHANNEL_ENCODE_THREAD *)arg;
+#if defined(__linux__)
+    cpu_set_t previous_affinity;
+    int pinned = 0;
+    if (getenv("GPR_PIN_CHANNELS") && sched_getaffinity(0,sizeof(previous_affinity),&previous_affinity)==0) {
+        int count=CPU_COUNT(&previous_affinity), wanted=count ? thread->channel_number%count : 0;
+        for (int cpu=0; cpu<CPU_SETSIZE; cpu++) {
+            if (CPU_ISSET(cpu,&previous_affinity) && wanted--==0) {
+                cpu_set_t affinity;
+                CPU_ZERO(&affinity); CPU_SET(cpu,&affinity);
+                pinned=sched_setaffinity(0,sizeof(affinity),&affinity)==0;
+                break;
+            }
+        }
+    }
+#endif
+    ENCODER encoder = *thread->parent;
+    STREAM byte_stream;
+    BITSTREAM bitstream;
+    STREAM (*row_bytes)[MAX_BAND_COUNT] = thread->row_bytes;
+    BITSTREAM (*row_bits)[MAX_BAND_COUNT] = thread->row_bits;
+    if (thread->band_workspace) {
+        uint8_t *cursor = thread->band_workspace;
+        for (int stage=0; stage<MAX_WAVELET_COUNT; stage++) {
+            WAVELET *wavelet = encoder.transform[thread->channel_number].wavelet[stage];
+            size_t capacity = ((size_t)wavelet->width * wavelet->height * 4 + 4096 + 63) & ~(size_t)63;
+            for (int band=1; band<MAX_BAND_COUNT; band++) {
+                CreateStreamBuffer(&row_bytes[stage][band], cursor, capacity);
+                InitBitstream(&row_bits[stage][band]);
+                AttachBitstream(&row_bits[stage][band], &row_bytes[stage][band]);
+                encoder.row_stream[stage][band] = &row_bits[stage][band];
+                cursor += capacity;
+            }
+        }
+    }
+
+    double worker_begin = EncoderWallTime();
+    encoder.codec = thread->initial_codec_state;
+    memcpy(encoder.lowpass_buffer, thread->lowpass, sizeof(encoder.lowpass_buffer));
+    memcpy(encoder.highpass_buffer, thread->highpass, sizeof(encoder.highpass_buffer));
+    ForwardWaveletTransform(&encoder.transform[thread->channel_number],
+        thread->input_component, encoder.lowpass_buffer, encoder.highpass_buffer,
+        encoder.midpoint_prequant, encoder.packed_input, thread->channel_number, &encoder);
+    if (thread->band_workspace) {
+        for (int stage=0; stage<MAX_WAVELET_COUNT; stage++) {
+            WAVELET *wavelet = encoder.transform[thread->channel_number].wavelet[stage];
+            for (int band=1; band<MAX_BAND_COUNT; band++) {
+                EncodeHighpassIncremental(&row_bits[stage][band], encoder.codeset, NULL,
+                    wavelet->width, 0, wavelet->pitch, &encoder.row_pending[stage][band], true);
+                AlignBitsSegment(&row_bits[stage][band]);
+                FlushBitstream(&row_bits[stage][band]);
+            }
+        }
+    }
+    double transform_end = EncoderWallTime();
+    if (thread->band_workspace && getenv("GPR_DIRECT_BANDS")) {
+        thread->prepared_encoder = encoder;
+        thread->error = encoder.row_error;
+        thread->size = 0;
+#if defined(__linux__)
+        if (pinned) sched_setaffinity(0,sizeof(previous_affinity),&previous_affinity);
+#endif
+        return NULL;
+    }
+    thread->size = 0;
+    thread->error = CreateStreamBuffer(&byte_stream, thread->output, thread->capacity);
+    if (thread->error != CODEC_ERROR_OKAY) return NULL;
+
+    thread->error = InitBitstream(&bitstream);
+    if (thread->error != CODEC_ERROR_OKAY) return NULL;
+    thread->error = AttachBitstream(&bitstream, &byte_stream);
+    if (thread->error != CODEC_ERROR_OKAY) return NULL;
+
+    thread->error = EncodeChannelHeader(&encoder, thread->channel_number, &bitstream);
+    if (thread->error != CODEC_ERROR_OKAY) return NULL;
+    thread->error = EncodeChannelSubbands(&encoder, thread->channel_number, &bitstream);
+    if (thread->error != CODEC_ERROR_OKAY) return NULL;
+    thread->error = EncodeChannelTrailer(&encoder, thread->channel_number, &bitstream);
+    if (thread->error != CODEC_ERROR_OKAY) return NULL;
+    if (!IsAlignedSegment(&bitstream))
+    {
+        thread->error = CODEC_ERROR_BITSTREAM;
+        return NULL;
+    }
+
+    thread->error = FlushBitstream(&bitstream);
+    if (thread->error == CODEC_ERROR_OKAY)
+    {
+        thread->size = byte_stream.byte_count;
+        thread->final_codec_state = encoder.codec;
+    }
+    if (getenv("GPR_PROFILE")) fprintf(stderr, "channel=%d transform_wall=%.6f entropy_wall=%.6f\n", thread->channel_number, transform_end - worker_begin, EncoderWallTime() - transform_end);
+#if defined(__linux__)
+    if (pinned) sched_setaffinity(0,sizeof(previous_affinity),&previous_affinity);
+#endif
+    return NULL;
+}
+#endif
 
 /*!
 	@brief Encode the portion of a sample that corresponds to a single layer
@@ -1318,14 +1814,183 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
     
     CODEC_STATE *codec = &encoder->codec;
     
-	// Compute the wavelet transform tree for each channel
+    // Each worker consumes its channel while the transformed coefficients
+    // are still hot, instead of transforming every channel before VLC.
+#if !GPR_ENABLE_PARALLEL_CHANNELS
 	for (channel_index = 0; channel_index < channel_count; channel_index++)
 	{
+        ForwardWaveletTransform(&encoder->transform[channel_index], &image->component_array_list[channel_index], encoder->lowpass_buffer, encoder->highpass_buffer, encoder->midpoint_prequant, encoder->packed_input, channel_index, encoder );
+    }
+#endif
+
+#if GPR_ENABLE_PARALLEL_CHANNELS
+    if (channel_count > 1 && stream->stream->type == STREAM_TYPE_MEMORY)
+    {
+        int channel_number = encoder->channel_order_table[0];
+        CHANNEL_ENCODE_THREAD thread[MAX_CHANNEL_COUNT] = {0};
+        pthread_t handle[MAX_CHANNEL_COUNT];
+        int started[MAX_CHANNEL_COUNT] = {0};
+        int parallel_ok = 1;
+        size_t channel_capacity =
+            (size_t)image->component_array_list[0].width *
+            (size_t)image->component_array_list[0].height * 4 + 65536;
+
+        if (stream->count > 0)
+        {
+            error = PutBuffer(stream);
+            if (error != CODEC_ERROR_OKAY) return error;
+        }
+
+        for (channel_index = 0; channel_index < channel_count; channel_index++)
+        {
+            thread[channel_index].parent = encoder;
+            thread[channel_index].channel_number = encoder->channel_order_table[channel_index];
+            thread[channel_index].input_component = &image->component_array_list[thread[channel_index].channel_number];
+            thread[channel_index].initial_codec_state = *codec;
+            if (channel_index > 0) {
+                int previous_channel = encoder->channel_order_table[channel_index - 1];
+                CODEC_STATE *state = &thread[channel_index].initial_codec_state;
+                state->channel_number = previous_channel + 1;
+                state->subband_number = 0;
+                state->channel_width = encoder->channel[previous_channel].width;
+                state->channel_height = encoder->channel[previous_channel].height;
+                state->bits_per_component = encoder->channel[previous_channel].bits_per_component;
+                state->lowpass_precision = encoder->channel[previous_channel].lowpass_precision;
+                state->band.quantization = encoder->transform[previous_channel].wavelet[0]->quant[HH_BAND];
+            }
+            thread[channel_index].capacity = channel_capacity;
+            int direct_bands = getenv("GPR_BAND_STREAM") && getenv("GPR_DIRECT_BANDS");
+            thread[channel_index].output = direct_bands ? NULL : encoder->allocator->Alloc(channel_capacity);
+            if (thread[channel_index].output == NULL && !direct_bands)
+            {
+                parallel_ok = 0;
+                break;
+            }
+            size_t scratch_bytes = 0;
+            for (int stage = 0; stage < MAX_WAVELET_COUNT; stage++) {
+                size_t row_bytes = ((size_t)encoder->transform[thread[channel_index].channel_number].wavelet[stage]->width * sizeof(PIXEL) + 63) & ~(size_t)63;
+                scratch_bytes += (row_bytes * 2 + 64) * ROW_BUFFER_COUNT;
+            }
+            thread[channel_index].scratch = gpr_aligned_alloc(encoder->allocator, scratch_bytes);
+            if (!thread[channel_index].scratch) { parallel_ok = 0; break; }
+            if (getenv("GPR_BAND_STREAM")) {
+                size_t capacity = 0;
+                for (int stage=0; stage<MAX_WAVELET_COUNT; stage++) {
+                    WAVELET *wavelet = encoder->transform[thread[channel_index].channel_number].wavelet[stage];
+                    capacity += (((size_t)wavelet->width * wavelet->height * 4 + 4096 + 63) & ~(size_t)63) * 3;
+                }
+                thread[channel_index].band_workspace = gpr_aligned_alloc(encoder->allocator, capacity);
+                if (!thread[channel_index].band_workspace) { parallel_ok = 0; break; }
+            }
+            uint8_t *scratch = thread[channel_index].scratch;
+            for (int stage = 0; stage < MAX_WAVELET_COUNT; stage++) {
+                size_t row_bytes = ((size_t)encoder->transform[thread[channel_index].channel_number].wavelet[stage]->width * sizeof(PIXEL) + 63) & ~(size_t)63;
+                for (int row = 0; row < ROW_BUFFER_COUNT; row++) {
+                    thread[channel_index].lowpass[stage][row] = (PIXEL *)scratch;
+                    thread[channel_index].highpass[stage][row] = (PIXEL *)(scratch + row_bytes + 64);
+                    scratch += row_bytes * 2 + 64;
+                }
+            }
+        }
+
+        if (parallel_ok)
+        {
+            for (channel_index = 1; channel_index < channel_count; channel_index++)
+            {
+                started[channel_index] = (pthread_create(&handle[channel_index], NULL,
+                                                          EncodeChannelThread,
+                                                          &thread[channel_index]) == 0);
+                if (!started[channel_index])
+                {
+                    EncodeChannelThread(&thread[channel_index]);
+                }
+            }
+            EncodeChannelThread(&thread[0]);
+            if (thread[0].error != CODEC_ERROR_OKAY) parallel_ok = 0;
+            for (channel_index = 0; channel_index < channel_count; channel_index++)
+            {
+                if (started[channel_index]) pthread_join(handle[channel_index], NULL);
+                if (thread[channel_index].error != CODEC_ERROR_OKAY) parallel_ok = 0;
+            }
+        }
+
+        if (parallel_ok)
+        {
+            STREAM *output_stream = stream->stream;
+            for (channel_index = 0; channel_index < channel_count; channel_index++)
+            {
+                size_t size = thread[channel_index].size;
+                channel_number = encoder->channel_order_table[channel_index];
+                if (thread[channel_index].band_workspace && getenv("GPR_DIRECT_BANDS")) {
+                    ENCODER *prepared = &thread[channel_index].prepared_encoder;
+                    prepared->codec = *codec;
+                    error = EncodeChannelHeader(prepared, channel_number, stream);
+                    if (error == CODEC_ERROR_OKAY) error = EncodeChannelSubbands(prepared, channel_number, stream);
+                    if (error == CODEC_ERROR_OKAY) error = EncodeChannelTrailer(prepared, channel_number, stream);
+                    if (error != CODEC_ERROR_OKAY) { parallel_ok=0; break; }
+                    *codec = prepared->codec;
+                    codec->channel_number = channel_number+1;
+                    codec->subband_number = 0;
+                    continue;
+                }
+                if (size > output_stream->location.memory.size - output_stream->byte_count)
+                {
+                    parallel_ok = 0;
+                    error = CODEC_ERROR_OUTOFMEMORY;
+                    break;
+                }
+                memcpy((uint8_t *)output_stream->location.memory.buffer + output_stream->byte_count,
+                       thread[channel_index].output, size);
+                output_stream->byte_count += size;
+                *codec = thread[channel_index].final_codec_state;
+                codec->channel_number = (channel_number + 1);
+                codec->subband_number = 0;
+                codec->band.quantization =
+                    encoder->transform[channel_number].wavelet[0]->quant[HH_BAND];
+            }
+        }
+
+        for (channel_index = 0; channel_index < channel_count; channel_index++)
+        {
+            gpr_aligned_free(encoder->allocator, thread[channel_index].scratch);
+            gpr_aligned_free(encoder->allocator, thread[channel_index].band_workspace);
+            if (thread[channel_index].output != NULL)
+            {
+                encoder->allocator->Free(thread[channel_index].output);
+            }
+        }
+
+        if (!parallel_ok)
+        {
+            if (error != CODEC_ERROR_OKAY) return error;
+            if (encoder->compact_bands) return CODEC_ERROR_OUTOFMEMORY;
+            for (channel_index = 0; channel_index < channel_count; channel_index++)
+            {
+                channel_number = encoder->channel_order_table[channel_index];
+                ForwardWaveletTransform(&encoder->transform[channel_number], &image->component_array_list[channel_number], encoder->lowpass_buffer, encoder->highpass_buffer, encoder->midpoint_prequant, encoder->packed_input, channel_number, encoder);
+                error = EncodeChannelHeader(encoder, channel_number, stream);
+                if (error != CODEC_ERROR_OKAY) return error;
+                error = EncodeChannelSubbands(encoder, channel_number, stream);
+                if (error != CODEC_ERROR_OKAY) return error;
+                error = EncodeChannelTrailer(encoder, channel_number, stream);
+                if (error != CODEC_ERROR_OKAY) return error;
+                assert(IsAlignedSegment(stream));
+                codec->channel_number = (channel_number + 1);
+                codec->subband_number = 0;
+            }
+        }
+    }
+    else
+#endif
+    {
+    for (channel_index = 0; channel_index < channel_count; channel_index++)
+    {
         int channel_number;
-        
-        ForwardWaveletTransform(&encoder->transform[channel_index], &image->component_array_list[channel_index], encoder->lowpass_buffer, encoder->highpass_buffer, encoder->midpoint_prequant );
 
         channel_number = encoder->channel_order_table[channel_index];
+#if GPR_ENABLE_PARALLEL_CHANNELS
+        ForwardWaveletTransform(&encoder->transform[channel_number], &image->component_array_list[channel_number], encoder->lowpass_buffer, encoder->highpass_buffer, encoder->midpoint_prequant, encoder->packed_input, channel_number, encoder);
+#endif
         
         // Encode the tag value pairs in the header for this channel
         error = EncodeChannelHeader(encoder, channel_number, stream);
@@ -1353,6 +2018,7 @@ CODEC_ERROR EncodeMultipleChannels(ENCODER *encoder, const UNPACKED_IMAGE *image
         codec->channel_number = (channel_number + 1);
         codec->subband_number = 0;
 	}
+    }
     
 #if VC5_ENABLED_PART(VC5_PART_LAYERS)
 	if (IsPartEnabled(encoder->enabled_parts, VC5_PART_LAYERS))
@@ -1671,8 +2337,12 @@ CODEC_ERROR AllocateEncoderHorizontalBuffers(ENCODER *encoder)
         
         for (row = 0; row < ROW_BUFFER_COUNT; row++)
         {
-            PIXEL *lowpass_buffer  = allocator->Alloc(channel_width * sizeof(PIXEL) * 2);
-            PIXEL *highpass_buffer = lowpass_buffer + channel_width;
+            size_t row_bytes = ((size_t)channel_width * sizeof(PIXEL) + 63) & ~(size_t)63;
+            /* Leave one line between low/high rows to avoid identical cache
+             * set indexing for power-of-two camera widths. */
+            PIXEL *lowpass_buffer = gpr_aligned_alloc(allocator, row_bytes * 2 + 64);
+            PIXEL *highpass_buffer = lowpass_buffer == NULL ? NULL :
+                (PIXEL *)((uint8_t *)lowpass_buffer + row_bytes + 64);
 
             assert(lowpass_buffer != NULL);
             if (! (lowpass_buffer != NULL)) {
@@ -1709,7 +2379,7 @@ CODEC_ERROR DeallocateEncoderHorizontalBuffers(ENCODER *encoder)
         
         for (row = 0; row < ROW_BUFFER_COUNT; row++)
         {
-            allocator->Free(encoder->lowpass_buffer[wavelet_index][row]);
+            gpr_aligned_free(allocator, encoder->lowpass_buffer[wavelet_index][row]);
         }
     }
     
@@ -1839,7 +2509,20 @@ CODEC_ERROR AllocEncoderTransforms(ENCODER *encoder)
 			//assert((wavelet_width % 2) == 0);
 
 			// Allocate the wavelet
-			wavelet = CreateWavelet(allocator, wavelet_width, wavelet_height);
+            if (encoder->compact_bands && !(encoder->retain_preview_bands && wavelet_index>0)) {
+                wavelet = allocator->Alloc(sizeof(WAVELET));
+                if (!wavelet) return CODEC_ERROR_OUTOFMEMORY;
+                InitWavelet(wavelet,wavelet_width,wavelet_height);
+                wavelet->pitch=((wavelet_width*sizeof(PIXEL)+63)&~(size_t)63)+64;
+                size_t bytes=(size_t)(wavelet_height+3)*wavelet->pitch;
+                uint8_t *data=gpr_aligned_alloc(allocator,bytes);
+                if (!data) { allocator->Free(wavelet); return CODEC_ERROR_OUTOFMEMORY; }
+                wavelet->data[0]=(PIXEL *)data;
+                for (int band=1; band<MAX_BAND_COUNT; band++)
+                    wavelet->data[band]=(PIXEL *)(data+(size_t)(wavelet_height+band-1)*wavelet->pitch);
+            } else {
+			    wavelet = CreateWavelet(allocator, wavelet_width, wavelet_height);
+            }
 			if (wavelet == NULL) {
 				return CODEC_ERROR_OUTOFMEMORY;
 			}
@@ -2213,7 +2896,22 @@ CODEC_ERROR EncodeHighpassBand(ENCODER *encoder, WAVELET *wavelet, int band, int
 	PutVideoSubbandHeader(encoder, subband, quantization, stream);
 
 	// Encode the highpass coefficients for this subband into the bitstream
-	error = EncodeHighpassBandRowRuns(stream, codeset, band_data, band_width, band_height, band_pitch);
+    BITSTREAM *prepared = NULL;
+    for (int stage=0; stage<MAX_WAVELET_COUNT; stage++) {
+        if (encoder->transform[codec->channel_number].wavelet[stage] == wavelet)
+            prepared = encoder->row_stream[stage][band];
+    }
+    if (prepared) {
+        if (stream->count) PutBuffer(stream);
+        STREAM *destination = stream->stream;
+        size_t bytes = prepared->stream->byte_count;
+        if (bytes > destination->location.memory.size - destination->byte_count) return CODEC_ERROR_OUTOFMEMORY;
+        memcpy((uint8_t *)destination->location.memory.buffer + destination->byte_count,
+            prepared->stream->location.memory.buffer, bytes);
+        destination->byte_count += bytes;
+    } else {
+	    error = EncodeHighpassBandRowRuns(stream, codeset, band_data, band_width, band_height, band_pitch);
+    }
 	if (error != CODEC_ERROR_OKAY) {
 		return error;
 	}
@@ -2299,42 +2997,13 @@ STATIC_INLINE VLE PutBitsCore(uint8_t** buffer, VLE stream_bits, uint32_t bits, 
     return stream_bits;
 }
 
-STATIC_INLINE VLE PutBitsCoreWithSign(uint8_t** buffer, VLE stream_bits, uint32_t bits, uint_fast8_t size, bool positive )
-{
-    stream_bits = PutBitsCore( buffer, stream_bits, bits, size );
-    
-    BITCOUNT unused_bit_count = bit_word_count - stream_bits.size;
-    
-    if ( unused_bit_count == 0 )
-    {
-        write_bits(buffer, stream_bits.bits);
-        *buffer += 4;
-        
-        stream_bits.size = 1;
-        
-        if( positive == false )
-            stream_bits.bits = 1 << (bit_word_count - 1);
-        else
-            stream_bits.bits = 0;
-    }
-    else
-    {
-        stream_bits.size += 1;
-        
-        if( positive == false )
-            stream_bits.bits |= (1 << (unused_bit_count - 1));
-    }
-    
-    return stream_bits;
-}
-
 /*!
 	@brief Encode the highpass band from the bitstream
 
 	This routine does not encode runs of zeros across row boundaries.
 */
-CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codeset, PIXEL *data,
-									  DIMENSION width, DIMENSION height, DIMENSION pitch)
+static CODEC_ERROR EncodeHighpassIncremental(BITSTREAM *stream, ENCODER_CODESET *codeset, PIXEL *data,
+    DIMENSION width, DIMENSION height, DIMENSION pitch, uint32_t *pending, bool final)
 {
 	CODEC_ERROR error = CODEC_ERROR_OKAY;
 
@@ -2362,14 +3031,13 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
 	assert(width <= pitch);
 
 	// Compute the number of values of padding at the end of each row
-	row_padding = pitch - width;
+	// Physical cache-line padding is not a logical coefficient in the stream.
+	row_padding = 0;
 
 	VLE *mags_table_entry = (VLE *)((uint8_t *)mags_table + sizeof(MAGS_TABLE));
 
-    VLE stream_bits;
-    
-    stream_bits.bits = stream->buffer;
-    stream_bits.size = stream->count;
+    uint64_t accumulator = (uint64_t)stream->buffer >> (32 - stream->count);
+    unsigned occupied = stream->count;
     
     struct _stream *bit_stream = stream->stream;
     
@@ -2378,7 +3046,7 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
     uint8_t* stream_buffer      = (uint8_t *)bit_stream->location.memory.buffer + bit_stream->byte_count;
     uint8_t* stream_buffer_orig = stream_buffer;
     
-	uint32_t count = 0;
+	uint32_t count = pending ? *pending : 0;
 	for (row = 0; row < height; row++)
 	{
 		uint32_t index = 0;			// Start at the beginning of the row
@@ -2388,12 +3056,59 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
 		{
 			// Loop invariant
 			assert(index < width);
+            if (count == 0 && index + 4 <= width && rowptr[index+3] != 0) {
+                // A nonzero final value bounds every zero run to three.
+                // Four independent table loads precede the serial packing.
+                uint64_t c0 = codeset->signed_codes[(uint16_t)rowptr[index]];
+                uint64_t c1 = codeset->signed_codes[(uint16_t)rowptr[index+1]];
+                uint64_t c2 = codeset->signed_codes[(uint16_t)rowptr[index+2]];
+                uint64_t c3 = codeset->signed_codes[(uint16_t)rowptr[index+3]];
+                unsigned n0=c0>>32, n1=c1>>32, n2=c2>>32, n3=c3>>32;
+                unsigned length=n0+n1+n2+n3;
+                if (length <= 32) {
+                    uint64_t bits01=((uint64_t)(uint32_t)c0<<n1)|(uint32_t)c1;
+                    uint64_t bits23=((uint64_t)(uint32_t)c2<<n3)|(uint32_t)c3;
+                    uint64_t bits=(bits01<<(n2+n3))|bits23;
+                    accumulator=(accumulator<<length)|bits;
+                    occupied+=length;
+                    if (occupied>=32) {
+                        occupied-=32;
+                        write_bits(&stream_buffer,(uint32_t)(accumulator>>occupied));
+                        stream_buffer+=4;
+                    }
+                } else {
+#define APPEND_TOKEN(c) do { \
+    unsigned length = (unsigned)((c) >> 32); \
+    accumulator = (accumulator << length) | (uint32_t)(c); \
+    occupied += length; \
+    if (occupied >= 32) { \
+        occupied -= 32; \
+        write_bits(&stream_buffer, (uint32_t)(accumulator >> occupied)); \
+        stream_buffer += 4; \
+    } \
+} while (0)
+                APPEND_TOKEN(c0);
+                APPEND_TOKEN(c1);
+                APPEND_TOKEN(c2);
+                APPEND_TOKEN(c3);
+#undef APPEND_TOKEN
+                }
+                index += 4;
+                if (index == width) break;
+                continue;
+            }
             
             {
                 PIXEL* start = rowptr + index;
                 PIXEL* end   = rowptr + width;
-                
-                for (; *(start) == 0 && start != end; start++)
+#if ENABLED(NEON)
+                while (start + 8 <= end) {
+                    uint16x8_t v = vld1q_u16((const uint16_t *)start);
+                    if (vmaxvq_u16(v) != 0) break;
+                    start += 8;
+                }
+#endif
+                for (; start != end && *(start) == 0; start++)
                 {
                     
                 }
@@ -2411,7 +3126,8 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
                 {
                     if( count < 12 )
                     {
-                        stream_bits = PutZeroBits(&stream_buffer, stream_bits, count );
+                        // Short zero runs are leading zero bits of the next
+                        // codeword; consume both with one reservoir update.
                         break;
                     }
                     else
@@ -2421,23 +3137,45 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
                         
                         RLC rlc_val = rlc[count_index];
                         
-                        stream_bits = PutBitsCore(&stream_buffer, stream_bits, rlc_val.bits, rlc_val.size );
+                        accumulator = (accumulator << rlc_val.size) | rlc_val.bits;
+                        occupied += rlc_val.size;
+                        if (occupied >= 32) {
+                            occupied -= 32;
+                            write_bits(&stream_buffer, (uint32_t)(accumulator >> occupied));
+                            stream_buffer += 4;
+                        }
                         
                         // Reduce the length of the run by the amount output
                         count -= rlc_val.count;
                     }
                 }
                 
-				count = 0;
                 
 				// The value zero is run length coded and handled by another routine
 				{
 					PIXEL value = rowptr[index++];
 					assert(value != 0);
                     
-                    PIXEL abs_value = minimum( abs(value), mags_table_length_minus_1 );
-                    
-                    stream_bits = PutBitsCoreWithSign(&stream_buffer, stream_bits, mags_table_entry[abs_value].bits, mags_table_entry[abs_value].size, value > 0 );
+                    uint64_t code = codeset->signed_codes[(uint16_t)value];
+                    unsigned size = (unsigned)(code >> 32) + count;
+                    if (size > 32) {
+                        accumulator <<= count;
+                        occupied += count;
+                        if (occupied >= 32) {
+                            occupied -= 32;
+                            write_bits(&stream_buffer, (uint32_t)(accumulator >> occupied));
+                            stream_buffer += 4;
+                        }
+                        size -= count;
+                    }
+                    count = 0;
+                    accumulator = (accumulator << size) | (uint32_t)code;
+                    occupied += size;
+                    if (occupied >= 32) {
+                        occupied -= 32;
+                        write_bits(&stream_buffer, (uint32_t)(accumulator >> occupied));
+                        stream_buffer += 4;
+                    }
 				}
 			}
 
@@ -2456,9 +3194,11 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
 		rowptr += pitch;
 	}
 
-	stream->count = stream_bits.size;
-	stream->buffer = stream_bits.bits;
+	stream->count = occupied;
+	stream->buffer = (uint32_t)(accumulator << (32 - occupied));
     bit_stream->byte_count += (stream_buffer - stream_buffer_orig);
+    if (pending) *pending = count;
+    if (!final) return CODEC_ERROR_OKAY;
     
 	// // Need to output a pending run of zeros?
 	if (count > 0)
@@ -2473,6 +3213,12 @@ CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codese
 	error = PutSpecial(stream, codebook, SPECIAL_MARKER_BAND_END);
 
 	return error;
+}
+
+CODEC_ERROR EncodeHighpassBandRowRuns(BITSTREAM *stream, ENCODER_CODESET *codeset, PIXEL *data,
+    DIMENSION width, DIMENSION height, DIMENSION pitch)
+{
+    return EncodeHighpassIncremental(stream, codeset, data, width, height, pitch, NULL, true);
 }
 
 CODEC_ERROR PutVideoSubbandTrailer(ENCODER *encoder, BITSTREAM *stream)

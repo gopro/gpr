@@ -71,6 +71,9 @@
 // =================================================================================================
 #include <stdlib.h>
 #include <stdint.h>
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
 
 #ifndef float_t
 typedef float float_t;

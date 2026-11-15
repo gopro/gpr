@@ -109,6 +109,23 @@ CODEC_ERROR PrepareCodebooks(const gpr_allocator *allocator, ENCODER_CODESET *cs
 
 	mags_table->length = mags_table_length;
 	cs->mags_table = mags_table;
+    uint64_t *signed_codes = allocator->Alloc(65536 * sizeof(uint64_t));
+    if (!signed_codes) {
+        allocator->Free(mags_table);
+        allocator->Free(runs_table);
+        cs->mags_table = NULL;
+        cs->runs_table = NULL;
+        return CODEC_ERROR_OUTOFMEMORY;
+    }
+    for (unsigned i=0; i<65536; i++) {
+        int value = (int16_t)i;
+        unsigned magnitude = value < 0 ? -value : value;
+        if (magnitude >= (unsigned)mags_table_length) magnitude = mags_table_length - 1;
+        VLE code = mags_table_entries[magnitude];
+        signed_codes[i] = ((uint64_t)(code.size + 1) << 32) | (code.bits << 1) | (value < 0);
+    }
+    cs->signed_codes = signed_codes;
+    signed_codes[0] = (uint64_t)1 << 32; // One literal zero bit in short runs.
 
 	// The codebooks have been initialized successfully
 	return CODEC_ERROR_OKAY;
@@ -121,6 +138,7 @@ CODEC_ERROR ReleaseCodebooks(gpr_allocator *allocator, ENCODER_CODESET *cs)
 {
 	allocator->Free( (void *)cs->runs_table );
 	allocator->Free( (void *)cs->mags_table);
+    allocator->Free((void *)cs->signed_codes);
 	return CODEC_ERROR_OKAY;
 }
 
